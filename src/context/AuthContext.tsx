@@ -58,6 +58,7 @@ interface ActiveStudentData {
   cheating_attempts: number;
   connected_at: string;
   last_activity: string;
+  has_completed?: boolean;
 }
 
 interface AuthContextType {
@@ -72,7 +73,7 @@ const defaultState: AppState = {
   isAuthenticated: false
 };
 
-// Store completed quiz names to prevent retakes
+// Store completed quiz names to prevent retakes (fallback local storage)
 const completedQuizzes = new Set<string>();
 
 // Stockage local des étudiants actifs (fallback si Supabase échoue)
@@ -83,6 +84,7 @@ interface ActiveStudent {
   cheating_attempts: number;
   connected_at: string;
   last_activity: string;
+  has_completed?: boolean;
 }
 
 const activeStudents: Record<string, ActiveStudent> = {};
@@ -133,6 +135,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkSupabaseConnection();
   }, [supabase]);
 
+  // Fonction pour vérifier si un étudiant a déjà terminé l'examen
+  const checkIfStudentHasCompleted = async (studentName: string): Promise<boolean> => {
+    // Vérifier d'abord dans le stockage local (fallback)
+    if (completedQuizzes.has(studentName.toLowerCase())) {
+      return true;
+    }
+    
+    // Si Supabase n'est pas disponible, utiliser uniquement le stockage local
+    if (!supabaseAvailable) {
+      return false;
+    }
+    
+    try {
+      // Vérifier dans Supabase si l'étudiant a déjà terminé l'examen
+      const { data, error } = await supabase
+        .from('active_students')
+        .select('has_completed')
+        .eq('student_name', studentName)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Erreur lors de la vérification du statut de l\'étudiant:', error);
+        return false;
+      }
+      
+      const studentData = data as ActiveStudentData | null;
+      
+      // Si l'étudiant existe et a déjà terminé, ajouter au stockage local
+      if (studentData && studentData.has_completed) {
+        completedQuizzes.add(studentName.toLowerCase());
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Erreur lors de la vérification du statut de l\'étudiant:', error);
+      return false;
+    }
+  };
+
   // Fonction pour enregistrer un étudiant dans Supabase ou localement
   const registerStudentInSupabase = async (student: Student, isAdmin: boolean) => {
     if (isAdmin) return; // Ne pas enregistrer les administrateurs
@@ -144,7 +186,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       status: 'connected',
       cheating_attempts: 0,
       connected_at: new Date().toISOString(),
-      last_activity: new Date().toISOString()
+      last_activity: new Date().toISOString(),
+      has_completed: false
     };
     
     // Si Supabase n'est pas disponible, ne pas essayer d'y accéder
@@ -195,7 +238,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             status: 'connected',
             cheating_attempts: 0,
             connected_at: new Date().toISOString(),
-            last_activity: new Date().toISOString()
+            last_activity: new Date().toISOString(),
+            has_completed: false
           });
           
         if (insertResponse.error) {
@@ -211,13 +255,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Fonction pour mettre à jour le statut d'un étudiant dans Supabase
-  const updateStudentStatus = async (student: Student, status: string) => {
+  const updateStudentStatus = async (student: Student, status: string, hasCompleted = false) => {
     if (!student) return;
     
     // Mettre à jour localement en premier (fallback)
     if (activeStudents[student.id]) {
       activeStudents[student.id].status = status as 'connected' | 'in_progress' | 'completed';
       activeStudents[student.id].last_activity = new Date().toISOString();
+      activeStudents[student.id].has_completed = hasCompleted;
     }
     
     // Si Supabase n'est pas disponible, ne pas essayer d'y accéder
@@ -231,7 +276,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .from('active_students')
         .update({
           status,
-          last_activity: new Date().toISOString()
+          last_activity: new Date().toISOString(),
+          has_completed: hasCompleted
         })
         .eq('student_id', student.id)
         .single();
@@ -268,10 +314,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (name: string, isAdmin = false): Promise<boolean> => {
     const trimmedName = name.trim();
     
-    // If user has already completed the quiz and is not an admin, prevent login
-    if (!isAdmin && completedQuizzes.has(trimmedName.toLowerCase())) {
-      toast.error("Vous avez déjà passé cette évaluation. Vous ne pouvez pas la repasser.");
-      return false;
+    // Vérifier si l'utilisateur a déjà passé l'examen
+    if (!isAdmin) {
+      const hasCompleted = await checkIfStudentHasCompleted(trimmedName);
+      if (hasCompleted) {
+        toast.error("Vous avez déjà passé cette évaluation. Vous ne pouvez pas la repasser.");
+        return false;
+      }
     }
 
     const student: Student = {
@@ -298,7 +347,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         completedQuizzes.add(appState.currentUser.name.toLowerCase());
         
         // Mettre à jour le statut de l'étudiant dans Supabase
-        await updateStudentStatus(appState.currentUser, 'completed');
+        await updateStudentStatus(appState.currentUser, 'completed', true);
       }
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
