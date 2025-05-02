@@ -31,6 +31,7 @@ const Quiz: React.FC = () => {
   // Set up visibility change detection for anti-cheating
   useEffect(() => {
     let cheatingToast: string | undefined;
+    let cheatingToastTimeout: ReturnType<typeof setTimeout> | undefined;
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden" && quizStatus === QuizStatus.IN_PROGRESS) {
@@ -43,6 +44,11 @@ const Quiz: React.FC = () => {
         // If there's an existing toast, dismiss it
         if (cheatingToast) {
           toast.dismiss(cheatingToast);
+        }
+        
+        // Clear any existing timeout
+        if (cheatingToastTimeout) {
+          clearTimeout(cheatingToastTimeout);
         }
         
         // Show new persistent toast
@@ -62,11 +68,17 @@ const Quiz: React.FC = () => {
           }
         );
       } else if (document.visibilityState === "visible" && cheatingToast) {
-        // When user returns to the tab, dismiss the toast after 3 seconds
-        setTimeout(() => {
+        // When user returns to the tab, dismiss the toast after 120 seconds (2 minutes)
+        // Clear any existing timeout first
+        if (cheatingToastTimeout) {
+          clearTimeout(cheatingToastTimeout);
+        }
+        
+        // Set new timeout for 2 minutes
+        cheatingToastTimeout = setTimeout(() => {
           toast.dismiss(cheatingToast);
           cheatingToast = undefined;
-        }, 3000);
+        }, 120000); // 120 secondes = 2 minutes
       }
     };
     
@@ -76,6 +88,9 @@ const Quiz: React.FC = () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (cheatingToast) {
         toast.dismiss(cheatingToast);
+      }
+      if (cheatingToastTimeout) {
+        clearTimeout(cheatingToastTimeout);
       }
     };
   }, [quizStatus, reportCheatingAttempt, alertSound]);
