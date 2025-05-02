@@ -113,7 +113,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Tenter une requête simple pour vérifier la connexion
         const response = await supabase
           .from('quiz_results')
-          .select('count(*)')
+          .select('*')
           .limit(1)
           .single();
           
