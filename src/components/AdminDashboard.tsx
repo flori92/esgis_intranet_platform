@@ -28,6 +28,7 @@ const AdminDashboard: React.FC = () => {
   const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
   const [activeStudents, setActiveStudents] = useState<ActiveStudent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Référence au client Supabase initialisé dans index.html
   const supabase = window.supabase;
@@ -35,7 +36,7 @@ const AdminDashboard: React.FC = () => {
   // Récupération des résultats depuis Supabase et mise en place de l'abonnement temps réel
   useEffect(() => {
     // Initialisation avec les résultats du contexte pour un affichage immédiat
-    setQuizResults(contextQuizResults);
+    setQuizResults(contextQuizResults || []);
     
     // Récupération des résultats depuis Supabase
     const fetchQuizResults = async () => {
@@ -50,7 +51,7 @@ const AdminDashboard: React.FC = () => {
         }
         
         if (data) {
-          setQuizResults(data);
+          setQuizResults(prevResults => [...prevResults, ...data]);
         }
       } catch (err) {
         console.error('Erreur inattendue:', err);
@@ -61,6 +62,26 @@ const AdminDashboard: React.FC = () => {
     const fetchActiveStudents = async () => {
       try {
         setLoading(true);
+        setError(null);
+        
+        // Vérifier si la table active_students existe
+        const { error: checkError } = await supabase
+          .from('active_students')
+          .select('count(*)', { count: 'exact', head: true })
+          .limit(1);
+          
+        if (checkError && checkError.code === '42P01') {
+          // La table n'existe pas, on utilise les données du contexte
+          console.log('Table active_students non trouvée, création automatique...');
+          setError("La table des étudiants actifs n'existe pas encore. Les étudiants connectés apparaîtront ici automatiquement.");
+          
+          // Créer la table active_students
+          await createActiveStudentsTable();
+          setLoading(false);
+          return;
+        }
+        
+        // Si la table existe, récupérer les données
         const { data, error } = await supabase
           .from('active_students')
           .select('*')
@@ -68,6 +89,7 @@ const AdminDashboard: React.FC = () => {
           
         if (error) {
           console.error('Erreur lors de la récupération des étudiants actifs:', error);
+          setError("Impossible de récupérer les étudiants actifs. Veuillez rafraîchir la page.");
           return;
         }
         
@@ -76,8 +98,58 @@ const AdminDashboard: React.FC = () => {
         }
       } catch (err) {
         console.error('Erreur inattendue:', err);
+        setError("Une erreur inattendue s'est produite. Veuillez rafraîchir la page.");
       } finally {
         setLoading(false);
+      }
+    };
+    
+    // Fonction pour créer la table active_students si elle n'existe pas
+    const createActiveStudentsTable = async () => {
+      try {
+        const createTableSQL = `
+          CREATE TABLE IF NOT EXISTS public.active_students (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            student_id TEXT NOT NULL,
+            student_name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'connected',
+            cheating_attempts INTEGER NOT NULL DEFAULT 0,
+            connected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            last_activity TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+          );
+          
+          -- Activation des politiques RLS
+          ALTER TABLE public.active_students ENABLE ROW LEVEL SECURITY;
+          
+          -- Politique pour permettre la lecture
+          CREATE POLICY "Lecture pour tous" ON public.active_students
+            FOR SELECT USING (true);
+          
+          -- Politique pour permettre l'insertion
+          CREATE POLICY "Insertion pour tous" ON public.active_students
+            FOR INSERT WITH CHECK (true);
+          
+          -- Politique pour permettre la mise à jour
+          CREATE POLICY "Mise à jour pour tous" ON public.active_students
+            FOR UPDATE USING (true);
+          
+          -- Activation des abonnements temps réel
+          ALTER PUBLICATION supabase_realtime ADD TABLE public.active_students;
+        `;
+        
+        // Exécuter le SQL via l'API RPC
+        const { error } = await supabase.rpc('exec_sql', { query: createTableSQL });
+        
+        if (error) {
+          console.error('Erreur lors de la création de la table:', error);
+          return false;
+        }
+        
+        console.log('Table active_students créée avec succès!');
+        return true;
+      } catch (err) {
+        console.error('Erreur lors de la création de la table:', err);
+        return false;
       }
     };
     
@@ -88,6 +160,7 @@ const AdminDashboard: React.FC = () => {
     const resultsSubscription = supabase
       .channel('public:quiz_results')
       .on('INSERT', (payload: { new: QuizResult }) => {
+        console.log('Nouveau résultat reçu:', payload.new);
         setQuizResults((currentResults) => [...currentResults, payload.new]);
       })
       .subscribe();
@@ -196,6 +269,11 @@ const AdminDashboard: React.FC = () => {
     }
   };
   
+  // Fonction pour convertir le score sur 20
+  const convertToScore20 = (score: number, maxScore: number) => {
+    return (score / maxScore) * 20;
+  };
+  
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
@@ -236,8 +314,83 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
         
-        {/* Section des étudiants actifs */}
+        {/* Section des résultats des étudiants */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+          <div className="p-6 border-b">
+            <h2 className="text-xl font-semibold text-gray-800">Résultats des étudiants</h2>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nom
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Note
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Pourcentage
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Triche
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {sortedResults.map((result: QuizResult) => {
+                  const scorePercentage = (result.score / result.maxScore) * 100;
+                  const scoreOn20 = convertToScore20(result.score, result.maxScore);
+                  const dateFormatted = new Date(result.completedAt).toLocaleString();
+                  
+                  return (
+                    <tr key={result.studentId} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{result.studentName}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className={`text-sm font-medium ${
+                          scorePercentage >= 80 ? "text-green-600" :
+                          scorePercentage >= 60 ? "text-yellow-600" : "text-red-600"
+                        }`}>
+                          {scoreOn20.toFixed(1)}/20
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{scorePercentage.toFixed(1)}%</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className={`text-sm ${
+                          result.cheatingAttempts > 0 ? "text-red-600 font-medium" : "text-gray-500"
+                        }`}>
+                          {result.cheatingAttempts}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {dateFormatted}
+                      </td>
+                    </tr>
+                  );
+                })}
+                
+                {quizResults.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                      Aucun résultat disponible
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        {/* Section des étudiants actifs */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="p-6 border-b">
             <h2 className="text-xl font-semibold text-gray-800">Étudiants connectés</h2>
           </div>
@@ -247,6 +400,10 @@ const AdminDashboard: React.FC = () => {
               <div className="p-6 text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p className="text-gray-600">Chargement des données...</p>
+              </div>
+            ) : error ? (
+              <div className="p-6 text-center">
+                <p className="text-gray-600">{error}</p>
               </div>
             ) : (
               <table className="min-w-full divide-y divide-gray-200">
@@ -318,80 +475,6 @@ const AdminDashboard: React.FC = () => {
                 </tbody>
               </table>
             )}
-          </div>
-        </div>
-        
-        {/* Section des résultats des étudiants */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold text-gray-800">Résultats des étudiants</h2>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nom
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Note
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Pourcentage
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Triche
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {sortedResults.map((result: QuizResult) => {
-                  const scorePercentage = (result.score / result.maxScore) * 100;
-                  const dateFormatted = new Date(result.completedAt).toLocaleString();
-                  
-                  return (
-                    <tr key={result.studentId} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{result.studentName}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm font-medium ${
-                          scorePercentage >= 80 ? "text-green-600" :
-                          scorePercentage >= 60 ? "text-yellow-600" : "text-red-600"
-                        }`}>
-                          {result.score.toFixed(1)}/20
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{scorePercentage.toFixed(1)}%</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${
-                          result.cheatingAttempts > 0 ? "text-red-600 font-medium" : "text-gray-500"
-                        }`}>
-                          {result.cheatingAttempts}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {dateFormatted}
-                      </td>
-                    </tr>
-                  );
-                })}
-                
-                {quizResults.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                      Aucun résultat disponible
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
         </div>
       </div>
