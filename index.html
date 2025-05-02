@@ -5,50 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ESGIS Exam Platform - Cloud Virtualization Course</title>
-    <script type="module" crossorigin src="/exam_esgis_platform/assets/index-BiEXmQ4V.js"></script>
-    <link rel="modulepreload" crossorigin href="/exam_esgis_platform/assets/vendor-C7i_txpd.js">
+    <script type="module" crossorigin src="/exam_esgis_platform/assets/index-_QZC-b7L.js"></script>
+    <link rel="modulepreload" crossorigin href="/exam_esgis_platform/assets/vendor-BF6PZ55j.js">
     <link rel="stylesheet" crossorigin href="/exam_esgis_platform/assets/index-Bz0OtZAp.css">
   </head>
   <body>
     <div id="root"></div>
-    <!-- Chargement du client Supabase via CDN (version non-module) -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
-    <script>
-      // Récupération des variables d'environnement ou utilisation des valeurs par défaut
-      const SUPABASE_URL = 'https://epnhnjkbxgciojevrwfq.supabase.co';
-      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyMDY5MDYsImV4cCI6MjA2MTc4MjkwNn0.VeqmGA56qySH_f4rwk6bnsvPS6173BtoRA0iCjXnogM';
-      
-      // Initialisation du client Supabase avec options CORS
-      window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: {
-          autoRefreshToken: true,
-          persistSession: true
-        },
-        global: {
-          headers: {
-            'X-Client-Info': 'supabase-js/2.39.7'
-          }
-        }
-      });
-      
-      // Vérification de la connexion
-      window.addEventListener('DOMContentLoaded', async () => {
-        try {
-          // Utiliser une requête simple pour vérifier la connexion
-          const { data, error } = await window.supabase
-            .from('active_students')
-            .select('*')
-            .limit(1);
-            
-          if (error) {
-            console.error('Erreur de connexion à Supabase:', error);
-          } else {
-            console.log('Connexion à Supabase établie avec succès');
-          }
-        } catch (err) {
-          console.error('Erreur lors de l\'initialisation de Supabase:', err);
-        }
-      });
-    </script>
   </body>
 </html>
