@@ -9,6 +9,7 @@ declare module 'react' {
   export function useContext<T>(context: any): T;
   export function useState<T>(initialState: T | (() => T)): [T, (newState: T | ((prevState: T) => T)) => void];
   export function useEffect(effect: () => void | (() => void), deps?: any[]): void;
+  export function useRef<T>(initialValue: T | null): { current: T | null };
   
   export type ReactNode = any;
 }

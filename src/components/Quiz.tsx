@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useQuiz } from "../context/QuizContext";
 import { useAuth } from "../context/AuthContext";
 import QuestionCard from "./QuestionCard";
@@ -8,7 +8,8 @@ import { QuizStatus } from "../types";
 import { toast, Toaster } from 'react-hot-toast';
 
 const Quiz: React.FC = () => {
-  const { appState } = useAuth();
+  // Utilisation de type assertion pour résoudre les erreurs TypeScript
+  const { appState } = useAuth() as any;
   const { 
     questions, 
     currentQuestionIndex, 
@@ -16,7 +17,10 @@ const Quiz: React.FC = () => {
     timer,
     startQuiz, 
     reportCheatingAttempt 
-  } = useQuiz();
+  } = useQuiz() as any;
+  
+  // Référence pour le div d'alerte personnalisé
+  const alertRef = useRef<HTMLDivElement>(null);
 
   // Create audio element for alert sound
   const alertSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
@@ -27,6 +31,54 @@ const Quiz: React.FC = () => {
       startQuiz();
     }
   }, [quizStatus, startQuiz]);
+  
+  // Fonction pour afficher une alerte personnalisée en rouge
+  const showCustomAlert = (message: string) => {
+    // Créer un div d'alerte rouge si ce n'est pas déjà fait
+    if (!alertRef.current) {
+      const alertDiv = document.createElement('div');
+      alertDiv.style.position = 'fixed';
+      alertDiv.style.top = '50%';
+      alertDiv.style.left = '50%';
+      alertDiv.style.transform = 'translate(-50%, -50%)';
+      alertDiv.style.backgroundColor = '#ff0000';
+      alertDiv.style.color = 'white';
+      alertDiv.style.padding = '20px';
+      alertDiv.style.borderRadius = '10px';
+      alertDiv.style.boxShadow = '0 0 20px rgba(255, 0, 0, 0.8)';
+      alertDiv.style.zIndex = '10000';
+      alertDiv.style.fontWeight = 'bold';
+      alertDiv.style.fontSize = '18px';
+      alertDiv.style.textAlign = 'center';
+      alertDiv.style.width = '80%';
+      alertDiv.style.maxWidth = '500px';
+      
+      // Ajouter un bouton pour fermer l'alerte
+      const closeButton = document.createElement('button');
+      closeButton.textContent = 'Fermer';
+      closeButton.style.marginTop = '15px';
+      closeButton.style.padding = '8px 16px';
+      closeButton.style.backgroundColor = 'white';
+      closeButton.style.color = 'red';
+      closeButton.style.border = 'none';
+      closeButton.style.borderRadius = '5px';
+      closeButton.style.fontWeight = 'bold';
+      closeButton.style.cursor = 'pointer';
+      
+      closeButton.onclick = () => {
+        document.body.removeChild(alertDiv);
+        alertRef.current = null;
+      };
+      
+      alertDiv.appendChild(document.createTextNode(message));
+      alertDiv.appendChild(document.createElement('br'));
+      alertDiv.appendChild(document.createElement('br'));
+      alertDiv.appendChild(closeButton);
+      
+      document.body.appendChild(alertDiv);
+      alertRef.current = alertDiv;
+    }
+  };
   
   // Set up visibility change detection for anti-cheating
   useEffect(() => {
@@ -70,8 +122,8 @@ const Quiz: React.FC = () => {
           }
         );
         
-        // Afficher également une alerte pour s'assurer que le message est visible
-        alert('⚠️ TENTATIVE DE TRICHE DÉTECTÉE ! Cet incident sera signalé.');
+        // Afficher l'alerte personnalisée rouge
+        showCustomAlert('⚠️ ALERTE DE SÉCURITÉ ⚠️\n\nTENTATIVE DE TRICHE DÉTECTÉE !\n\nCet incident a été enregistré et sera signalé à l\'administration.\n\nVotre session est surveillée.');
       } else if (document.visibilityState === "visible" && cheatingToast) {
         // When user returns to the tab, dismiss the toast after 120 seconds (2 minutes)
         // Clear any existing timeout first
@@ -96,6 +148,11 @@ const Quiz: React.FC = () => {
       }
       if (cheatingToastTimeout) {
         clearTimeout(cheatingToastTimeout);
+      }
+      // Nettoyer l'alerte personnalisée si elle existe
+      if (alertRef.current && document.body.contains(alertRef.current)) {
+        document.body.removeChild(alertRef.current);
+        alertRef.current = null;
       }
     };
   }, [quizStatus, reportCheatingAttempt, alertSound]);
