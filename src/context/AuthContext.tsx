@@ -5,8 +5,59 @@ import { toast } from 'react-hot-toast';
 // Déclaration pour TypeScript - permet d'accéder à window.supabase
 declare global {
   interface Window {
-    supabase: any;
+    supabase: SupabaseClient;
   }
+}
+
+// Types Supabase simplifiés
+interface SupabaseClient {
+  supabaseUrl: string;
+  supabaseKey: string;
+  from: (table: string) => SupabaseTable;
+  rpc: (fn: string, params: Record<string, unknown>) => Promise<SupabaseResponse>;
+  channel: (channel: string) => SupabaseChannel;
+}
+
+interface SupabaseTable {
+  select: (columns?: string) => SupabaseQuery;
+  insert: (data: Record<string, unknown>) => Promise<SupabaseResponse>;
+  update: (data: Record<string, unknown>) => SupabaseQuery;
+}
+
+interface SupabaseQuery {
+  select: (columns?: string) => SupabaseQuery;
+  eq: (column: string, value: string | number) => SupabaseQuery;
+  single: () => Promise<SupabaseResponse>;
+  maybeSingle: () => Promise<SupabaseResponse>;
+  limit: (count: number) => SupabaseQuery;
+  order: (column: string, options?: { ascending: boolean }) => SupabaseQuery;
+}
+
+interface SupabaseResponse {
+  data: unknown;
+  error: SupabaseError | null;
+}
+
+interface SupabaseError {
+  code: string;
+  message: string;
+  status?: number;
+}
+
+interface SupabaseChannel {
+  on: (event: string, callback: (payload: unknown) => void) => SupabaseChannel;
+  subscribe: () => SupabaseChannel;
+  unsubscribe: () => void;
+}
+
+// Interface pour les données d'étudiant actif
+interface ActiveStudentData {
+  student_id: string;
+  student_name: string;
+  status: string;
+  cheating_attempts: number;
+  connected_at: string;
+  last_activity: string;
 }
 
 interface AuthContextType {
@@ -25,7 +76,16 @@ const defaultState: AppState = {
 const completedQuizzes = new Set<string>();
 
 // Stockage local des étudiants actifs (fallback si Supabase échoue)
-const activeStudents: Record<string, any> = {};
+interface ActiveStudent {
+  student_id: string;
+  student_name: string;
+  status: 'connected' | 'in_progress' | 'completed';
+  cheating_attempts: number;
+  connected_at: string;
+  last_activity: string;
+}
+
+const activeStudents: Record<string, ActiveStudent> = {};
 
 const AuthContext = createContext<AuthContextType>({
   appState: defaultState,
@@ -51,13 +111,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const checkSupabaseConnection = async () => {
       try {
         // Tenter une requête simple pour vérifier la connexion
-        const { error } = await supabase
+        const response = await supabase
           .from('quiz_results')
-          .select('count(*)', { count: 'exact', head: true })
-          .limit(1);
+          .select('count(*)')
+          .limit(1)
+          .single();
           
-        if (error) {
-          console.warn('Problème de connexion à Supabase:', error);
+        if (response.error) {
+          console.warn('Problème de connexion à Supabase:', response.error);
           setSupabaseAvailable(false);
         } else {
           console.log('Connexion à Supabase établie');
@@ -70,7 +131,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
     
     checkSupabaseConnection();
-  }, []);
+  }, [supabase]);
 
   // Fonction pour enregistrer un étudiant dans Supabase ou localement
   const registerStudentInSupabase = async (student: Student, isAdmin: boolean) => {
@@ -105,25 +166,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
       
-      if (data) {
+      const studentData = data as ActiveStudentData | null;
+      
+      if (studentData) {
         // Mettre à jour l'entrée existante
-        const { error: updateError } = await supabase
+        const updateResponse = await supabase
           .from('active_students')
           .update({
             status: 'connected',
             last_activity: new Date().toISOString()
           })
-          .eq('student_id', data.student_id);
+          .eq('student_id', studentData.student_id)
+          .single();
           
-        if (updateError) {
-          console.error('Erreur lors de la mise à jour de l\'étudiant:', updateError);
+        if (updateResponse.error) {
+          console.error('Erreur lors de la mise à jour de l\'étudiant:', updateResponse.error);
           return;
         }
           
         console.log(`Étudiant ${student.name} mis à jour dans Supabase`);
       } else {
         // Créer une nouvelle entrée
-        const { error: insertError } = await supabase
+        const insertResponse = await supabase
           .from('active_students')
           .insert({
             student_id: student.id,
@@ -134,8 +198,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             last_activity: new Date().toISOString()
           });
           
-        if (insertError) {
-          console.error('Erreur lors de l\'insertion de l\'étudiant:', insertError);
+        if (insertResponse.error) {
+          console.error('Erreur lors de l\'insertion de l\'étudiant:', insertResponse.error);
           return;
         }
         
@@ -152,7 +216,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     // Mettre à jour localement en premier (fallback)
     if (activeStudents[student.id]) {
-      activeStudents[student.id].status = status;
+      activeStudents[student.id].status = status as 'connected' | 'in_progress' | 'completed';
       activeStudents[student.id].last_activity = new Date().toISOString();
     }
     
@@ -163,16 +227,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     
     try {
-      const { error } = await supabase
+      const updateResponse = await supabase
         .from('active_students')
         .update({
           status,
           last_activity: new Date().toISOString()
         })
-        .eq('student_id', student.id);
+        .eq('student_id', student.id)
+        .single();
         
-      if (error) {
-        console.error('Erreur lors de la mise à jour du statut:', error);
+      if (updateResponse.error) {
+        console.error('Erreur lors de la mise à jour du statut:', updateResponse.error);
         return;
       }
         
@@ -184,6 +249,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Mettre à jour le statut de l'étudiant lorsque l'état de l'application change
   useEffect(() => {
+    if (!appState.isAuthenticated) return;
+    
     const updateStatus = async () => {
       if (appState.currentUser && !appState.isAdmin) {
         // Mettre à jour le statut de l'étudiant
@@ -191,10 +258,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
     
-    if (appState.isAuthenticated) {
-      updateStatus();
-    }
-  }, [appState.isAuthenticated]);
+    updateStatus();
+    
+    // Nous désactivons l'avertissement ESLint car updateStudentStatus dépend de supabase et supabaseAvailable
+    // qui ne changent pas souvent, et nous ne voulons pas recréer la fonction à chaque rendu
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appState.isAuthenticated, appState.currentUser, appState.isAdmin]);
 
   const login = async (name: string, isAdmin = false): Promise<boolean> => {
     const trimmedName = name.trim();

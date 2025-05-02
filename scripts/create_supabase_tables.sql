@@ -86,19 +86,13 @@ CREATE POLICY "Tout le monde peut lire les étudiants actifs"
   USING (true);
 
 -- Politique permettant à tous les utilisateurs d'insérer/mettre à jour leurs propres données
-CREATE POLICY "Les utilisateurs peuvent ajouter/modifier leurs données" 
+CREATE POLICY "Les utilisateurs peuvent ajouter leurs données" 
   ON public.active_students FOR INSERT 
   WITH CHECK (true);
 
 CREATE POLICY "Les utilisateurs peuvent mettre à jour leurs données" 
   ON public.active_students FOR UPDATE
   USING (true);
-
--- Création d'un index sur student_id pour des recherches plus rapides
-CREATE INDEX IF NOT EXISTS idx_active_students_student_id ON public.active_students(student_id);
-
--- Création d'un index sur last_activity pour nettoyer les sessions inactives
-CREATE INDEX IF NOT EXISTS idx_active_students_last_activity ON public.active_students(last_activity);
 
 -- Activation des abonnements temps réel pour cette table
 ALTER PUBLICATION supabase_realtime ADD TABLE public.active_students;

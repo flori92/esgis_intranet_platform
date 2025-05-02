@@ -5,12 +5,20 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Définition explicite des permissions
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v3
+        with:
+          persist-credentials: false # Important pour éviter d'utiliser le token GITHUB_TOKEN par défaut
 
       - name: Setup Node.js ⚙️
         uses: actions/setup-node@v3
@@ -32,3 +40,4 @@ jobs:
         with:
           folder: dist
           branch: gh-pages
+          token: ${{ secrets.GITHUB_TOKEN }} # Utilise le token par défaut qui a maintenant les permissions nécessaires

@@ -15,18 +15,61 @@ CREATE TABLE IF NOT EXISTS public.active_students (
 -- Activation de la sécurité au niveau des lignes (RLS)
 ALTER TABLE public.active_students ENABLE ROW LEVEL SECURITY;
 
--- Politiques de sécurité pour permettre les opérations CRUD
-CREATE POLICY "Lecture pour tous" ON public.active_students
-  FOR SELECT USING (true);
+-- Vérifier si les politiques existent déjà
+DO $$
+BEGIN
+  -- Vérifier si la politique "Lecture pour tous" existe déjà
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'active_students' 
+    AND policyname = 'Lecture pour tous'
+  ) THEN
+    -- Créer la politique si elle n'existe pas
+    EXECUTE 'CREATE POLICY "Lecture pour tous" ON public.active_students
+      FOR SELECT USING (true)';
+  END IF;
 
-CREATE POLICY "Insertion pour tous" ON public.active_students
-  FOR INSERT WITH CHECK (true);
+  -- Vérifier si la politique "Insertion pour tous" existe déjà
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'active_students' 
+    AND policyname = 'Insertion pour tous'
+  ) THEN
+    -- Créer la politique si elle n'existe pas
+    EXECUTE 'CREATE POLICY "Insertion pour tous" ON public.active_students
+      FOR INSERT WITH CHECK (true)';
+  END IF;
 
-CREATE POLICY "Mise à jour pour tous" ON public.active_students
-  FOR UPDATE USING (true);
+  -- Vérifier si la politique "Mise à jour pour tous" existe déjà
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'active_students' 
+    AND policyname = 'Mise à jour pour tous'
+  ) THEN
+    -- Créer la politique si elle n'existe pas
+    EXECUTE 'CREATE POLICY "Mise à jour pour tous" ON public.active_students
+      FOR UPDATE USING (true)';
+  END IF;
+END
+$$;
 
--- Activation des notifications temps réel
-ALTER PUBLICATION supabase_realtime ADD TABLE public.active_students;
+-- Vérifier si la table est déjà dans la publication supabase_realtime
+DO $$
+DECLARE
+  table_in_publication BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+    AND tablename = 'active_students'
+  ) INTO table_in_publication;
+  
+  IF NOT table_in_publication THEN
+    -- Ajouter la table à la publication si elle n'y est pas déjà
+    EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.active_students';
+  END IF;
+END
+$$;
 
 -- Vérification que la table a été créée
 SELECT EXISTS (
