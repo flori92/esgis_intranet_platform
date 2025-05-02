@@ -1,60 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Student, AppState } from "../types";
 import { toast } from 'react-hot-toast';
+import supabase, { checkSupabaseConnection as checkConnection } from '../supabase';
 
-// Déclaration pour TypeScript - permet d'accéder à window.supabase
-declare global {
-  interface Window {
-    supabase: SupabaseClient;
-  }
-}
-
-// Types Supabase simplifiés
-interface SupabaseClient {
-  supabaseUrl: string;
-  supabaseKey: string;
-  from: (table: string) => SupabaseTable;
-  rpc: (fn: string, params: Record<string, unknown>) => Promise<SupabaseResponse>;
-  channel: (channel: string) => SupabaseChannel;
-}
-
-interface SupabaseTable {
-  select: (columns?: string) => SupabaseQuery;
-  insert: (data: Record<string, unknown>) => Promise<SupabaseResponse>;
-  update: (data: Record<string, unknown>) => SupabaseQuery;
-}
-
-interface SupabaseQuery {
-  select: (columns?: string) => SupabaseQuery;
-  eq: (column: string, value: string | number) => SupabaseQuery;
-  single: () => Promise<SupabaseResponse>;
-  maybeSingle: () => Promise<SupabaseResponse>;
-  limit: (count: number) => Promise<SupabaseResponse>;
-  order: (column: string, options?: { ascending: boolean }) => SupabaseQuery;
-}
-
-interface SupabaseResponse {
-  data: unknown;
-  error: SupabaseError | null;
-}
-
-interface SupabaseError {
-  code: string;
-  message: string;
-  status?: number;
-}
-
-interface SupabaseChannel {
-  on: (event: string, callback: (payload: unknown) => void) => SupabaseChannel;
-  subscribe: () => SupabaseChannel;
-  unsubscribe: () => void;
-}
-
-// Interface pour les données d'étudiant actif
-interface ActiveStudentData {
+// Stockage local des étudiants actifs (fallback si Supabase échoue)
+interface ActiveStudent {
   student_id: string;
   student_name: string;
-  status: string;
+  status: 'connected' | 'in_progress' | 'completed';
   cheating_attempts: number;
   connected_at: string;
   last_activity: string;
@@ -76,17 +29,7 @@ const defaultState: AppState = {
 // Store completed quiz names to prevent retakes (fallback local storage)
 const completedQuizzes = new Set<string>();
 
-// Stockage local des étudiants actifs (fallback si Supabase échoue)
-interface ActiveStudent {
-  student_id: string;
-  student_name: string;
-  status: 'connected' | 'in_progress' | 'completed';
-  cheating_attempts: number;
-  connected_at: string;
-  last_activity: string;
-  has_completed?: boolean;
-}
-
+// Stockage local des étudiants actifs
 const activeStudents: Record<string, ActiveStudent> = {};
 
 const AuthContext = createContext<AuthContextType>({
@@ -105,49 +48,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [appState, setAppState] = useState<AppState>(defaultState);
   const [supabaseAvailable, setSupabaseAvailable] = useState<boolean>(true);
   
-  // Référence au client Supabase initialisé dans index.html
-  const supabase = window.supabase;
-  
   // Vérifier si Supabase est disponible au chargement
   useEffect(() => {
-    const checkSupabaseConnection = async () => {
+    const verifySupabaseConnection = async () => {
       try {
-        // Tenter une requête simple pour vérifier la connexion
-        const response = await supabase
-          .from('active_students')
-          .select('*')
-          .limit(1);
-          
-        if (response.error) {
-          console.warn('Problème de connexion à Supabase:', response.error);
-          setSupabaseAvailable(false);
-        } else {
-          console.log('Connexion à Supabase établie');
-          setSupabaseAvailable(true);
-        }
+        const isConnected = await checkConnection();
+        setSupabaseAvailable(isConnected);
+        console.log(`Connexion à Supabase: ${isConnected ? 'Établie' : 'Échouée'}`);
       } catch (err) {
         console.error('Erreur lors de la vérification de la connexion Supabase:', err);
         setSupabaseAvailable(false);
       }
     };
     
-    checkSupabaseConnection();
-  }, [supabase]);
+    verifySupabaseConnection();
+  }, []);
 
   // Fonction pour vérifier si un étudiant a déjà terminé l'examen
   const checkIfStudentHasCompleted = async (studentName: string): Promise<boolean> => {
-    // Vérifier d'abord dans le stockage local (fallback)
+    // Vérifier d'abord dans le stockage local
     if (completedQuizzes.has(studentName.toLowerCase())) {
+      console.log(`L'étudiant ${studentName} a déjà terminé l'examen (vérifié localement)`);
       return true;
     }
     
-    // Si Supabase n'est pas disponible, utiliser uniquement le stockage local
+    // Si Supabase n'est pas disponible, vérifier uniquement localement
     if (!supabaseAvailable) {
+      console.log(`Supabase non disponible, vérification locale uniquement pour ${studentName}`);
       return false;
     }
     
     try {
-      // Vérifier dans Supabase si l'étudiant a déjà terminé l'examen
+      // Vérifier dans Supabase
       const { data, error } = await supabase
         .from('active_students')
         .select('has_completed')
@@ -159,17 +91,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
       
-      const studentData = data as ActiveStudentData | null;
-      
-      // Si l'étudiant existe et a déjà terminé, ajouter au stockage local
-      if (studentData && studentData.has_completed) {
+      if (data && data.has_completed) {
+        console.log(`L'étudiant ${studentName} a déjà terminé l'examen (vérifié dans Supabase)`);
+        // Ajouter au stockage local pour les futures vérifications
         completedQuizzes.add(studentName.toLowerCase());
         return true;
       }
       
       return false;
     } catch (error) {
-      console.error('Erreur lors de la vérification du statut de l\'étudiant:', error);
+      console.error('Exception lors de la vérification du statut de l\'étudiant:', error);
       return false;
     }
   };
@@ -196,39 +127,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     
     try {
-      // Vérifier si l'étudiant est déjà connecté
+      // Vérifier si l'étudiant existe déjà
       const { data, error } = await supabase
         .from('active_students')
-        .select('*')
+        .select('student_id')
         .eq('student_name', student.name)
         .maybeSingle();
-        
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      
+      if (error && error.code !== 'PGRST116') {
         console.error('Erreur lors de la vérification de l\'étudiant:', error);
         return;
       }
       
-      const studentData = data as ActiveStudentData | null;
-      
-      if (studentData) {
-        // Mettre à jour l'entrée existante
+      if (data) {
+        // L'étudiant existe déjà, mettre à jour son statut
         const updateResponse = await supabase
           .from('active_students')
           .update({
             status: 'connected',
-            last_activity: new Date().toISOString()
+            last_activity: new Date().toISOString(),
+            has_completed: false
           })
-          .eq('student_id', studentData.student_id)
+          .eq('student_id', data.student_id)
           .single();
           
         if (updateResponse.error) {
           console.error('Erreur lors de la mise à jour de l\'étudiant:', updateResponse.error);
           return;
         }
-          
+        
         console.log(`Étudiant ${student.name} mis à jour dans Supabase`);
       } else {
-        // Créer une nouvelle entrée
+        // L'étudiant n'existe pas, l'insérer
         const insertResponse = await supabase
           .from('active_students')
           .insert({
