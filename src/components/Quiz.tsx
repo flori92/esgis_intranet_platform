@@ -5,7 +5,8 @@ import QuestionCard from "./QuestionCard";
 import QuizNavigation from "./QuizNavigation";
 import QuizResults from "./QuizResults";
 import { QuizStatus } from "../types";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
+import { Toaster } from 'react-hot-toast';
 
 const Quiz: React.FC = () => {
   const { appState } = useAuth();
