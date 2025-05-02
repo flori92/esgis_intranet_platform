@@ -21,6 +21,8 @@ const Quiz: React.FC = () => {
   
   // Référence pour le div d'alerte personnalisé
   const alertRef = useRef<HTMLDivElement>(null);
+  // Référence pour suivre si une triche a été détectée
+  const cheatingDetectedRef = useRef<boolean>(false);
 
   // Create audio element for alert sound
   const alertSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
@@ -30,125 +32,151 @@ const Quiz: React.FC = () => {
     if (quizStatus === QuizStatus.NOT_STARTED) {
       startQuiz();
     }
+    
+    // Afficher une alerte de test après 5 secondes pour vérifier que l'alerte fonctionne
+    const testTimeout = setTimeout(() => {
+      if (quizStatus === QuizStatus.IN_PROGRESS) {
+        console.log("Test d'alerte après 5 secondes");
+        showCustomAlert('⚠️ TEST ALERTE ⚠️\n\nCeci est un test pour vérifier que l\'alerte fonctionne correctement.');
+      }
+    }, 5000);
+    
+    return () => clearTimeout(testTimeout);
   }, [quizStatus, startQuiz]);
   
   // Fonction pour afficher une alerte personnalisée en rouge
   const showCustomAlert = (message: string) => {
-    // Créer un div d'alerte rouge si ce n'est pas déjà fait
-    if (!alertRef.current) {
-      const alertDiv = document.createElement('div');
-      alertDiv.style.position = 'fixed';
-      alertDiv.style.top = '50%';
-      alertDiv.style.left = '50%';
-      alertDiv.style.transform = 'translate(-50%, -50%)';
-      alertDiv.style.backgroundColor = '#ff0000';
-      alertDiv.style.color = 'white';
-      alertDiv.style.padding = '20px';
-      alertDiv.style.borderRadius = '10px';
-      alertDiv.style.boxShadow = '0 0 20px rgba(255, 0, 0, 0.8)';
-      alertDiv.style.zIndex = '10000';
-      alertDiv.style.fontWeight = 'bold';
-      alertDiv.style.fontSize = '18px';
-      alertDiv.style.textAlign = 'center';
-      alertDiv.style.width = '80%';
-      alertDiv.style.maxWidth = '500px';
-      
-      // Ajouter un bouton pour fermer l'alerte
-      const closeButton = document.createElement('button');
-      closeButton.textContent = 'Fermer';
-      closeButton.style.marginTop = '15px';
-      closeButton.style.padding = '8px 16px';
-      closeButton.style.backgroundColor = 'white';
-      closeButton.style.color = 'red';
-      closeButton.style.border = 'none';
-      closeButton.style.borderRadius = '5px';
-      closeButton.style.fontWeight = 'bold';
-      closeButton.style.cursor = 'pointer';
-      
-      closeButton.onclick = () => {
-        document.body.removeChild(alertDiv);
-        alertRef.current = null;
-      };
-      
-      alertDiv.appendChild(document.createTextNode(message));
-      alertDiv.appendChild(document.createElement('br'));
-      alertDiv.appendChild(document.createElement('br'));
-      alertDiv.appendChild(closeButton);
-      
-      document.body.appendChild(alertDiv);
-      alertRef.current = alertDiv;
+    console.log("Affichage de l'alerte personnalisée:", message);
+    
+    // Supprimer toute alerte existante
+    if (alertRef.current && document.body.contains(alertRef.current)) {
+      document.body.removeChild(alertRef.current);
+      alertRef.current = null;
     }
+    
+    // Créer un div d'alerte rouge
+    const alertDiv = document.createElement('div');
+    alertDiv.style.position = 'fixed';
+    alertDiv.style.top = '0';
+    alertDiv.style.left = '0';
+    alertDiv.style.width = '100%';
+    alertDiv.style.height = '100%';
+    alertDiv.style.backgroundColor = 'rgba(255, 0, 0, 0.9)';
+    alertDiv.style.color = 'white';
+    alertDiv.style.display = 'flex';
+    alertDiv.style.flexDirection = 'column';
+    alertDiv.style.justifyContent = 'center';
+    alertDiv.style.alignItems = 'center';
+    alertDiv.style.zIndex = '99999';
+    alertDiv.style.fontWeight = 'bold';
+    alertDiv.style.fontSize = '24px';
+    alertDiv.style.textAlign = 'center';
+    alertDiv.style.padding = '20px';
+    
+    // Créer le contenu de l'alerte
+    const messageElement = document.createElement('div');
+    messageElement.innerHTML = message.replace(/\n/g, '<br>');
+    messageElement.style.marginBottom = '30px';
+    
+    // Ajouter un bouton pour fermer l'alerte
+    const closeButton = document.createElement('button');
+    closeButton.textContent = 'FERMER';
+    closeButton.style.padding = '12px 24px';
+    closeButton.style.backgroundColor = 'white';
+    closeButton.style.color = 'red';
+    closeButton.style.border = 'none';
+    closeButton.style.borderRadius = '5px';
+    closeButton.style.fontWeight = 'bold';
+    closeButton.style.fontSize = '18px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.3)';
+    
+    closeButton.onclick = () => {
+      if (alertRef.current && document.body.contains(alertRef.current)) {
+        document.body.removeChild(alertRef.current);
+        alertRef.current = null;
+      }
+    };
+    
+    alertDiv.appendChild(messageElement);
+    alertDiv.appendChild(closeButton);
+    
+    document.body.appendChild(alertDiv);
+    alertRef.current = alertDiv;
+    
+    // Jouer un son d'alerte
+    alertSound.play().catch(err => console.error('Erreur lors de la lecture du son:', err));
+  };
+  
+  // Fonction pour détecter la triche (changement d'onglet)
+  const detectCheating = () => {
+    console.log("Triche détectée! Visibilité:", document.visibilityState);
+    
+    // Marquer qu'une triche a été détectée
+    cheatingDetectedRef.current = true;
+    
+    // Signaler la tentative de triche
+    reportCheatingAttempt();
+    
+    // Afficher l'alerte rouge en plein écran
+    showCustomAlert('⚠️ ALERTE DE SÉCURITÉ ⚠️\n\nTENTATIVE DE TRICHE DÉTECTÉE !\n\nCet incident a été enregistré et sera signalé à l\'administration.\n\nVotre session est surveillée.');
+    
+    // Afficher également un toast
+    toast.error('⚠️ TENTATIVE DE TRICHE DÉTECTÉE !', {
+      duration: 120000, // 2 minutes
+      position: 'top-center',
+      style: {
+        background: '#fee2e2',
+        color: '#991b1b',
+        fontWeight: 'bold',
+        fontSize: '1.1em',
+        padding: '16px',
+        border: '2px solid #dc2626',
+        zIndex: 9999
+      },
+      icon: '⚠️',
+    });
   };
   
   // Set up visibility change detection for anti-cheating
   useEffect(() => {
-    let cheatingToast: string | undefined;
-    let cheatingToastTimeout: ReturnType<typeof setTimeout> | undefined;
-
+    console.log("Configuration de la détection de changement d'onglet");
+    
     const handleVisibilityChange = () => {
+      console.log("Changement de visibilité détecté:", document.visibilityState);
+      
       if (document.visibilityState === "hidden" && quizStatus === QuizStatus.IN_PROGRESS) {
-        // User switched tabs or minimized the window
-        reportCheatingAttempt();
-        
-        // Play alert sound
-        alertSound.play().catch(err => console.error('Error playing sound:', err));
-        
-        // If there's an existing toast, dismiss it
-        if (cheatingToast) {
-          toast.dismiss(cheatingToast);
-        }
-        
-        // Clear any existing timeout
-        if (cheatingToastTimeout) {
-          clearTimeout(cheatingToastTimeout);
-        }
-        
-        // Show new persistent toast with increased z-index
-        cheatingToast = toast.error(
-          '⚠️ TENTATIVE DE TRICHE DÉTECTÉE ! Cet incident sera signalé.',
-          {
-            duration: Infinity,
-            position: 'top-center',
-            style: {
-              background: '#fee2e2',
-              color: '#991b1b',
-              fontWeight: 'bold',
-              fontSize: '1.1em',
-              padding: '16px',
-              border: '2px solid #dc2626',
-              zIndex: 9999
-            },
-            icon: '⚠️',
-          }
-        );
-        
-        // Afficher l'alerte personnalisée rouge
-        showCustomAlert('⚠️ ALERTE DE SÉCURITÉ ⚠️\n\nTENTATIVE DE TRICHE DÉTECTÉE !\n\nCet incident a été enregistré et sera signalé à l\'administration.\n\nVotre session est surveillée.');
-      } else if (document.visibilityState === "visible" && cheatingToast) {
-        // When user returns to the tab, dismiss the toast after 120 seconds (2 minutes)
-        // Clear any existing timeout first
-        if (cheatingToastTimeout) {
-          clearTimeout(cheatingToastTimeout);
-        }
-        
-        // Set new timeout for 2 minutes
-        cheatingToastTimeout = setTimeout(() => {
-          toast.dismiss(cheatingToast);
-          cheatingToast = undefined;
-        }, 120000); // 120 secondes = 2 minutes
+        console.log("Tentative de triche détectée - changement d'onglet");
+        detectCheating();
       }
     };
     
+    // Ajouter un gestionnaire pour le changement de focus de fenêtre
+    const handleBlur = () => {
+      console.log("Événement blur détecté");
+      if (quizStatus === QuizStatus.IN_PROGRESS) {
+        console.log("Tentative de triche détectée - perte de focus");
+        detectCheating();
+      }
+    };
+    
+    // Utiliser plusieurs méthodes pour détecter les changements d'onglet
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+    
+    // Vérification périodique de la visibilité
+    const intervalCheck = setInterval(() => {
+      if (document.visibilityState === "hidden" && quizStatus === QuizStatus.IN_PROGRESS) {
+        console.log("Tentative de triche détectée - vérification périodique");
+        detectCheating();
+      }
+    }, 2000);
     
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (cheatingToast) {
-        toast.dismiss(cheatingToast);
-      }
-      if (cheatingToastTimeout) {
-        clearTimeout(cheatingToastTimeout);
-      }
+      window.removeEventListener("blur", handleBlur);
+      clearInterval(intervalCheck);
+      
       // Nettoyer l'alerte personnalisée si elle existe
       if (alertRef.current && document.body.contains(alertRef.current)) {
         document.body.removeChild(alertRef.current);
@@ -205,6 +233,14 @@ const Quiz: React.FC = () => {
             </div>
           </div>
         </header>
+        
+        {/* Bouton de test pour déclencher l'alerte manuellement */}
+        <button 
+          onClick={() => detectCheating()} 
+          className="mb-4 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded"
+        >
+          Tester l'alerte de triche
+        </button>
         
         <QuestionCard question={currentQuestion} />
         <QuizNavigation />
