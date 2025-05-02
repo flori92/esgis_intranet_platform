@@ -7,4 +7,10 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  // Configuration pour GitHub Pages
+  base: '/exam_esgis_platform/',
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+  },
 });
