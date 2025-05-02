@@ -11,18 +11,29 @@
     <!-- Chargement du client Supabase via CDN (version non-module) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
     <script>
-      // Initialisation du client Supabase
-      window.supabase = supabase.createClient(
-        'https://epnhnjkbxgciojevrwfq.supabase.co',
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyMDY5MDYsImV4cCI6MjA2MTc4MjkwNn0.VeqmGA56qySH_f4rwk6bnsvPS6173BtoRA0iCjXnogM'
-      );
+      // Récupération des variables d'environnement ou utilisation des valeurs par défaut
+      const SUPABASE_URL = 'https://epnhnjkbxgciojevrwfq.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyMDY5MDYsImV4cCI6MjA2MTc4MjkwNn0.VeqmGA56qySH_f4rwk6bnsvPS6173BtoRA0iCjXnogM';
+      
+      // Initialisation du client Supabase avec options CORS
+      window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true
+        },
+        global: {
+          headers: {
+            'X-Client-Info': 'supabase-js/2.39.7'
+          }
+        }
+      });
       
       // Vérification de la connexion
       window.addEventListener('DOMContentLoaded', async () => {
         try {
           // Utiliser une requête simple pour vérifier la connexion
           const { data, error } = await window.supabase
-            .from('quiz_results')
+            .from('active_students')
             .select('*')
             .limit(1);
             
