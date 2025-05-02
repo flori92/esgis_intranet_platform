@@ -11,10 +11,23 @@ declare global {
   }
 }
 
+// Interface pour les étudiants actifs
+interface ActiveStudent {
+  id: string;
+  student_id: string;
+  student_name: string;
+  status: 'connected' | 'in_progress' | 'completed';
+  cheating_attempts: number;
+  connected_at: string;
+  last_activity: string;
+}
+
 const AdminDashboard: React.FC = () => {
-  const { quizResults: contextQuizResults, timer } = useQuiz();
-  const { logout } = useAuth();
+  const { quizResults: contextQuizResults, timer } = useQuiz() as any;
+  const { logout } = useAuth() as any;
   const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
+  const [activeStudents, setActiveStudents] = useState<ActiveStudent[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   
   // Référence au client Supabase initialisé dans index.html
   const supabase = window.supabase;
@@ -44,21 +57,92 @@ const AdminDashboard: React.FC = () => {
       }
     };
     
+    // Récupération des étudiants actifs
+    const fetchActiveStudents = async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('active_students')
+          .select('*')
+          .order('connected_at', { ascending: false });
+          
+        if (error) {
+          console.error('Erreur lors de la récupération des étudiants actifs:', error);
+          return;
+        }
+        
+        if (data) {
+          setActiveStudents(data);
+        }
+      } catch (err) {
+        console.error('Erreur inattendue:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
     fetchQuizResults();
+    fetchActiveStudents();
     
     // Mise en place de l'abonnement temps réel pour les nouveaux résultats
-    const subscription = supabase
+    const resultsSubscription = supabase
       .channel('public:quiz_results')
       .on('INSERT', (payload: { new: QuizResult }) => {
-        setQuizResults((currentResults: QuizResult[]) => [...currentResults, payload.new]);
+        setQuizResults((currentResults) => [...currentResults, payload.new]);
       })
       .subscribe();
       
-    // Nettoyage de l'abonnement à la destruction du composant
+    // Mise en place de l'abonnement temps réel pour les étudiants actifs
+    const studentsSubscription = supabase
+      .channel('public:active_students')
+      .on('INSERT', (payload: { new: ActiveStudent }) => {
+        console.log('Nouvel étudiant connecté:', payload.new);
+        setActiveStudents((current) => [payload.new, ...current]);
+      })
+      .on('UPDATE', (payload: { new: ActiveStudent }) => {
+        console.log('Mise à jour étudiant:', payload.new);
+        setActiveStudents((current) => 
+          current.map(student => 
+            student.student_id === payload.new.student_id ? payload.new : student
+          )
+        );
+      })
+      .subscribe();
+      
+    // Nettoyage des abonnements à la destruction du composant
     return () => {
-      subscription.unsubscribe();
+      resultsSubscription.unsubscribe();
+      studentsSubscription.unsubscribe();
     };
   }, [contextQuizResults]);
+  
+  // Fonction pour signaler une tentative de triche pour un étudiant spécifique
+  const reportCheatingForStudent = async (studentId: string) => {
+    try {
+      // Mettre à jour le nombre de tentatives de triche dans Supabase
+      const { data, error } = await supabase
+        .from('active_students')
+        .select('cheating_attempts')
+        .eq('student_id', studentId)
+        .single();
+        
+      if (error) {
+        console.error('Erreur lors de la récupération des tentatives de triche:', error);
+        return;
+      }
+      
+      const updatedCheatingAttempts = (data?.cheating_attempts || 0) + 1;
+      
+      await supabase
+        .from('active_students')
+        .update({ cheating_attempts: updatedCheatingAttempts })
+        .eq('student_id', studentId);
+        
+      console.log(`Tentative de triche signalée pour l'étudiant ${studentId}`);
+    } catch (err) {
+      console.error('Erreur lors du signalement de triche:', err);
+    }
+  };
   
   const averageScore = quizResults.length > 0
     ? quizResults.reduce((sum: number, result: QuizResult) => sum + result.score, 0) / quizResults.length
@@ -68,6 +152,48 @@ const AdminDashboard: React.FC = () => {
 
   const formatTimer = (timer: Timer) => {
     return `${String(timer.minutes).padStart(2, '0')}:${String(timer.seconds).padStart(2, '0')}`;
+  };
+  
+  // Fonction pour obtenir la classe CSS en fonction du statut
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case 'connected':
+        return 'bg-blue-100 text-blue-800';
+      case 'in_progress':
+        return 'bg-green-100 text-green-800';
+      case 'completed':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+  
+  // Fonction pour formater la date
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+  
+  // Fonction pour calculer le temps écoulé depuis la dernière activité
+  const getTimeElapsed = (lastActivity: string) => {
+    const lastActivityTime = new Date(lastActivity).getTime();
+    const now = new Date().getTime();
+    const diffInSeconds = Math.floor((now - lastActivityTime) / 1000);
+    
+    if (diffInSeconds < 60) {
+      return `${diffInSeconds} sec`;
+    } else if (diffInSeconds < 3600) {
+      return `${Math.floor(diffInSeconds / 60)} min`;
+    } else {
+      return `${Math.floor(diffInSeconds / 3600)} h ${Math.floor((diffInSeconds % 3600) / 60)} min`;
+    }
   };
   
   return (
@@ -93,8 +219,8 @@ const AdminDashboard: React.FC = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">Étudiants en cours</h2>
-            <p className="text-3xl font-bold text-blue-600">{quizResults.length}</p>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Étudiants connectés</h2>
+            <p className="text-3xl font-bold text-blue-600">{activeStudents.length}</p>
           </div>
           
           <div className="bg-white p-6 rounded-lg shadow-md">
@@ -105,11 +231,97 @@ const AdminDashboard: React.FC = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold text-gray-800 mb-2">Tentatives de triche</h2>
             <p className="text-3xl font-bold text-red-600">
-              {quizResults.reduce((sum: number, result: QuizResult) => sum + result.cheatingAttempts, 0)}
+              {activeStudents.reduce((sum, student) => sum + student.cheating_attempts, 0)}
             </p>
           </div>
         </div>
         
+        {/* Section des étudiants actifs */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+          <div className="p-6 border-b">
+            <h2 className="text-xl font-semibold text-gray-800">Étudiants connectés</h2>
+          </div>
+          
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="p-6 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Chargement des données...</p>
+              </div>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Nom
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Statut
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tentatives de triche
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Connecté à
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Dernière activité
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {activeStudents.map((student) => (
+                    <tr key={student.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{student.student_name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(student.status)}`}>
+                          {student.status === 'connected' ? 'Connecté' : 
+                           student.status === 'in_progress' ? 'En cours d\'examen' : 'Terminé'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className={`text-sm ${
+                          student.cheating_attempts > 0 ? "text-red-600 font-medium" : "text-gray-500"
+                        }`}>
+                          {student.cheating_attempts}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(student.connected_at)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {getTimeElapsed(student.last_activity)} ({formatDate(student.last_activity)})
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <button
+                          onClick={() => reportCheatingForStudent(student.student_id)}
+                          className="text-red-600 hover:text-red-900 mr-2"
+                        >
+                          Signaler triche
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  
+                  {activeStudents.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                        Aucun étudiant connecté
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+        
+        {/* Section des résultats des étudiants */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="p-6 border-b">
             <h2 className="text-xl font-semibold text-gray-800">Résultats des étudiants</h2>
