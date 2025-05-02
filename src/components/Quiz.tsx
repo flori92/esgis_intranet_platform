@@ -5,8 +5,7 @@ import QuestionCard from "./QuestionCard";
 import QuizNavigation from "./QuizNavigation";
 import QuizResults from "./QuizResults";
 import { QuizStatus } from "../types";
-import toast from 'react-hot-toast';
-import { Toaster } from 'react-hot-toast';
+import { toast, Toaster } from 'react-hot-toast';
 
 const Quiz: React.FC = () => {
   const { appState } = useAuth();
@@ -52,7 +51,7 @@ const Quiz: React.FC = () => {
           clearTimeout(cheatingToastTimeout);
         }
         
-        // Show new persistent toast
+        // Show new persistent toast with increased z-index
         cheatingToast = toast.error(
           '⚠️ TENTATIVE DE TRICHE DÉTECTÉE ! Cet incident sera signalé.',
           {
@@ -64,10 +63,15 @@ const Quiz: React.FC = () => {
               fontWeight: 'bold',
               fontSize: '1.1em',
               padding: '16px',
-              border: '2px solid #dc2626'
+              border: '2px solid #dc2626',
+              zIndex: 9999
             },
+            icon: '⚠️',
           }
         );
+        
+        // Afficher également une alerte pour s'assurer que le message est visible
+        alert('⚠️ TENTATIVE DE TRICHE DÉTECTÉE ! Cet incident sera signalé.');
       } else if (document.visibilityState === "visible" && cheatingToast) {
         // When user returns to the tab, dismiss the toast after 120 seconds (2 minutes)
         // Clear any existing timeout first
@@ -117,7 +121,15 @@ const Quiz: React.FC = () => {
   
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <Toaster />
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 5000,
+          style: {
+            zIndex: 9999,
+          },
+        }}
+      />
       <div className="max-w-3xl mx-auto">
         <header className="mb-8">
           <div className="flex justify-between items-center">

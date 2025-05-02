@@ -31,15 +31,13 @@ declare module 'react-hot-toast' {
   export function success(message: string, options?: any): string;
   export function error(message: string, options?: any): string;
   export function dismiss(toastId?: string): void;
-  export const Toaster: React.FC;
+  export const Toaster: React.FC<any>;
   
-  const toast: {
+  export const toast: {
     success: typeof success;
     error: typeof error;
     dismiss: typeof dismiss;
   };
-  
-  export default toast;
 }
 
 declare module 'lucide-react' {
