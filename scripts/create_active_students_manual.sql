@@ -77,3 +77,4 @@ SELECT EXISTS (
   WHERE table_schema = 'public' 
   AND table_name = 'active_students'
 ) AS table_exists;
+LI et l'API peux tu 
