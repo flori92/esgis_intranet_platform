@@ -13,7 +13,7 @@ declare global {
 
 // Interface pour les étudiants actifs
 interface ActiveStudent {
-  id: string;
+  id?: string;
   student_id: string;
   student_name: string;
   status: 'connected' | 'in_progress' | 'completed';
@@ -29,7 +29,7 @@ const AdminDashboard: React.FC = () => {
   const [activeStudents, setActiveStudents] = useState<ActiveStudent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [tableCreated, setTableCreated] = useState<boolean>(false);
+  const [supabaseAvailable, setSupabaseAvailable] = useState<boolean>(true);
   
   // Référence au client Supabase initialisé dans index.html
   const supabase = window.supabase;
@@ -39,8 +39,36 @@ const AdminDashboard: React.FC = () => {
     // Initialisation avec les résultats du contexte pour un affichage immédiat
     setQuizResults(contextQuizResults || []);
     
+    // Vérifier si Supabase est disponible
+    const checkSupabaseConnection = async () => {
+      try {
+        // Tenter une requête simple pour vérifier la connexion
+        const { error } = await supabase
+          .from('quiz_results')
+          .select('count(*)', { count: 'exact', head: true })
+          .limit(1);
+          
+        if (error) {
+          console.warn('Problème de connexion à Supabase:', error);
+          setSupabaseAvailable(false);
+          setError("Impossible de se connecter à la base de données. Affichage des données locales uniquement.");
+        } else {
+          console.log('Connexion à Supabase établie');
+          setSupabaseAvailable(true);
+        }
+      } catch (err) {
+        console.error('Erreur lors de la vérification de la connexion Supabase:', err);
+        setSupabaseAvailable(false);
+        setError("Erreur de connexion à la base de données. Affichage des données locales uniquement.");
+      }
+    };
+    
+    checkSupabaseConnection();
+    
     // Récupération des résultats depuis Supabase
     const fetchQuizResults = async () => {
+      if (!supabaseAvailable) return;
+      
       try {
         const { data, error } = await supabase
           .from('quiz_results')
@@ -52,68 +80,15 @@ const AdminDashboard: React.FC = () => {
         }
         
         if (data) {
-          setQuizResults(prevResults => [...prevResults, ...data]);
+          setQuizResults(prevResults => {
+            // Fusionner les résultats locaux et ceux de Supabase en évitant les doublons
+            const existingIds = new Set(prevResults.map(r => r.studentId));
+            const newResults = data.filter(r => !existingIds.has(r.studentId));
+            return [...prevResults, ...newResults];
+          });
         }
       } catch (err) {
         console.error('Erreur inattendue:', err);
-      }
-    };
-    
-    // Fonction pour créer la table active_students
-    const createActiveStudentsTable = async () => {
-      try {
-        setError("Création de la table des étudiants actifs en cours...");
-        
-        const createTableSQL = `
-          CREATE TABLE IF NOT EXISTS public.active_students (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-            student_id TEXT NOT NULL,
-            student_name TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'connected',
-            cheating_attempts INTEGER NOT NULL DEFAULT 0,
-            connected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-            last_activity TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-          );
-          
-          ALTER TABLE public.active_students ENABLE ROW LEVEL SECURITY;
-          
-          CREATE POLICY "Lecture pour tous" ON public.active_students
-            FOR SELECT USING (true);
-          
-          CREATE POLICY "Insertion pour tous" ON public.active_students
-            FOR INSERT WITH CHECK (true);
-          
-          CREATE POLICY "Mise à jour pour tous" ON public.active_students
-            FOR UPDATE USING (true);
-          
-          ALTER PUBLICATION supabase_realtime ADD TABLE public.active_students;
-        `;
-        
-        // Exécuter le SQL via l'API REST directement
-        const response = await fetch(`${supabase.supabaseUrl}/rest/v1/rpc/exec_sql`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabase.supabaseKey,
-            'Authorization': `Bearer ${supabase.supabaseKey}`
-          },
-          body: JSON.stringify({ query: createTableSQL })
-        });
-        
-        if (response.ok) {
-          console.log('Table active_students créée avec succès!');
-          setTableCreated(true);
-          setError("Table des étudiants actifs créée avec succès! Les étudiants connectés apparaîtront ici automatiquement.");
-          return true;
-        } else {
-          console.error('Erreur lors de la création de la table:', await response.text());
-          setError("Impossible de créer la table des étudiants actifs. Les étudiants connectés ne seront pas visibles.");
-          return false;
-        }
-      } catch (err) {
-        console.error('Erreur lors de la création de la table:', err);
-        setError("Une erreur s'est produite lors de la création de la table. Les étudiants connectés ne seront pas visibles.");
-        return false;
       }
     };
     
@@ -122,6 +97,11 @@ const AdminDashboard: React.FC = () => {
       try {
         setLoading(true);
         
+        if (!supabaseAvailable) {
+          setLoading(false);
+          return;
+        }
+        
         // Tenter de récupérer les étudiants actifs
         const { data, error } = await supabase
           .from('active_students')
@@ -129,19 +109,13 @@ const AdminDashboard: React.FC = () => {
           
         if (error) {
           console.error('Erreur lors de la récupération des étudiants actifs:', error);
-          
-          // Si la table n'existe pas (erreur 404), la créer
-          if (error.code === '42P01' || error.message.includes('does not exist') || error.status === 404) {
-            await createActiveStudentsTable();
-          } else {
-            setError("Impossible de récupérer les étudiants actifs. Veuillez rafraîchir la page.");
-          }
+          setError("Impossible de récupérer les étudiants actifs. Veuillez créer la table manuellement dans Supabase.");
+          setLoading(false);
           return;
         }
         
         if (data) {
           setActiveStudents(data);
-          setTableCreated(true);
           setError(null);
         }
       } catch (err) {
@@ -156,19 +130,22 @@ const AdminDashboard: React.FC = () => {
     fetchActiveStudents();
     
     // Mise en place de l'abonnement temps réel pour les nouveaux résultats
-    const resultsSubscription = supabase
-      .channel('public:quiz_results')
-      .on('INSERT', (payload: { new: QuizResult }) => {
-        console.log('Nouveau résultat reçu:', payload.new);
-        setQuizResults((currentResults) => [...currentResults, payload.new]);
-      })
-      .subscribe();
+    let resultsSubscription: any;
+    
+    if (supabaseAvailable) {
+      resultsSubscription = supabase
+        .channel('public:quiz_results')
+        .on('INSERT', (payload: { new: QuizResult }) => {
+          console.log('Nouveau résultat reçu:', payload.new);
+          setQuizResults((currentResults) => [...currentResults, payload.new]);
+        })
+        .subscribe();
+    }
     
     // Mise en place de l'abonnement temps réel pour les étudiants actifs
-    // Seulement si la table a été créée avec succès
     let studentsSubscription: any;
     
-    if (tableCreated) {
+    if (supabaseAvailable) {
       studentsSubscription = supabase
         .channel('public:active_students')
         .on('INSERT', (payload: { new: ActiveStudent }) => {
@@ -188,18 +165,31 @@ const AdminDashboard: React.FC = () => {
       
     // Nettoyage des abonnements à la destruction du composant
     return () => {
-      resultsSubscription.unsubscribe();
+      if (resultsSubscription) {
+        resultsSubscription.unsubscribe();
+      }
       if (studentsSubscription) {
         studentsSubscription.unsubscribe();
       }
     };
-  }, [contextQuizResults, tableCreated]);
+  }, [contextQuizResults]);
   
   // Fonction pour signaler une tentative de triche pour un étudiant spécifique
   const reportCheatingForStudent = async (studentId: string) => {
     try {
-      if (!tableCreated) {
-        console.error('La table active_students n\'existe pas encore');
+      if (!supabaseAvailable) {
+        // Mise à jour locale
+        setActiveStudents(current => 
+          current.map(student => {
+            if (student.student_id === studentId) {
+              return {
+                ...student,
+                cheating_attempts: (student.cheating_attempts || 0) + 1
+              };
+            }
+            return student;
+          })
+        );
         return;
       }
       
@@ -306,6 +296,17 @@ const AdminDashboard: React.FC = () => {
           </button>
         </header>
         
+        {error && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+            <p className="text-yellow-700">{error}</p>
+            <p className="text-sm text-yellow-600 mt-2">
+              Pour résoudre ce problème, veuillez exécuter le script SQL dans l'éditeur SQL de Supabase :
+              <br />
+              <code className="bg-yellow-100 px-2 py-1 rounded">scripts/create_active_students_manual.sql</code>
+            </p>
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold text-gray-800 mb-2">Étudiants connectés</h2>
@@ -320,7 +321,7 @@ const AdminDashboard: React.FC = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold text-gray-800 mb-2">Tentatives de triche</h2>
             <p className="text-3xl font-bold text-red-600">
-              {activeStudents.reduce((sum, student) => sum + student.cheating_attempts, 0)}
+              {activeStudents.reduce((sum, student) => sum + (student.cheating_attempts || 0), 0)}
             </p>
           </div>
         </div>
@@ -412,10 +413,6 @@ const AdminDashboard: React.FC = () => {
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p className="text-gray-600">Chargement des données...</p>
               </div>
-            ) : error ? (
-              <div className="p-6 text-center">
-                <p className="text-gray-600">{error}</p>
-              </div>
             ) : (
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -442,7 +439,7 @@ const AdminDashboard: React.FC = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {activeStudents.map((student) => (
-                    <tr key={student.id} className="hover:bg-gray-50">
+                    <tr key={student.id || student.student_id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{student.student_name}</div>
                       </td>
@@ -479,7 +476,9 @@ const AdminDashboard: React.FC = () => {
                   {activeStudents.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
-                        Aucun étudiant connecté
+                        {error ? 
+                          "Impossible d'afficher les étudiants connectés. Veuillez créer la table manuellement." : 
+                          "Aucun étudiant connecté"}
                       </td>
                     </tr>
                   )}

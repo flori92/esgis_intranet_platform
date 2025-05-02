@@ -24,6 +24,9 @@ const defaultState: AppState = {
 // Store completed quiz names to prevent retakes
 const completedQuizzes = new Set<string>();
 
+// Stockage local des étudiants actifs (fallback si Supabase échoue)
+const activeStudents: Record<string, any> = {};
+
 const AuthContext = createContext<AuthContextType>({
   appState: defaultState,
   login: async () => false,
@@ -38,126 +41,105 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [appState, setAppState] = useState<AppState>(defaultState);
-  const [tableCreated, setTableCreated] = useState<boolean>(false);
+  const [supabaseAvailable, setSupabaseAvailable] = useState<boolean>(true);
   
   // Référence au client Supabase initialisé dans index.html
   const supabase = window.supabase;
-
-  // Fonction pour créer la table active_students si elle n'existe pas
-  const createActiveStudentsTable = async () => {
-    try {
-      console.log('Tentative de création de la table active_students...');
-      
-      const createTableSQL = `
-        CREATE TABLE IF NOT EXISTS public.active_students (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          student_id TEXT NOT NULL,
-          student_name TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'connected',
-          cheating_attempts INTEGER NOT NULL DEFAULT 0,
-          connected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-          last_activity TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-        );
-        
-        ALTER TABLE public.active_students ENABLE ROW LEVEL SECURITY;
-        
-        CREATE POLICY "Lecture pour tous" ON public.active_students
-          FOR SELECT USING (true);
-        
-        CREATE POLICY "Insertion pour tous" ON public.active_students
-          FOR INSERT WITH CHECK (true);
-        
-        CREATE POLICY "Mise à jour pour tous" ON public.active_students
-          FOR UPDATE USING (true);
-        
-        ALTER PUBLICATION supabase_realtime ADD TABLE public.active_students;
-      `;
-      
-      // Exécuter le SQL via l'API SQL
-      const { error } = await supabase.rpc('exec_sql', { query: createTableSQL });
-      
-      if (error) {
-        console.error('Erreur lors de la création de la table:', error);
-        return false;
+  
+  // Vérifier si Supabase est disponible au chargement
+  useEffect(() => {
+    const checkSupabaseConnection = async () => {
+      try {
+        // Tenter une requête simple pour vérifier la connexion
+        const { error } = await supabase
+          .from('quiz_results')
+          .select('count(*)', { count: 'exact', head: true })
+          .limit(1);
+          
+        if (error) {
+          console.warn('Problème de connexion à Supabase:', error);
+          setSupabaseAvailable(false);
+        } else {
+          console.log('Connexion à Supabase établie');
+          setSupabaseAvailable(true);
+        }
+      } catch (err) {
+        console.error('Erreur lors de la vérification de la connexion Supabase:', err);
+        setSupabaseAvailable(false);
       }
-      
-      console.log('Table active_students créée avec succès!');
-      setTableCreated(true);
-      return true;
-    } catch (err) {
-      console.error('Erreur lors de la création de la table:', err);
-      return false;
-    }
-  };
+    };
+    
+    checkSupabaseConnection();
+  }, []);
 
-  // Fonction pour enregistrer un étudiant dans Supabase
+  // Fonction pour enregistrer un étudiant dans Supabase ou localement
   const registerStudentInSupabase = async (student: Student, isAdmin: boolean) => {
     if (isAdmin) return; // Ne pas enregistrer les administrateurs
     
+    // Enregistrer localement en premier (fallback)
+    activeStudents[student.id] = {
+      student_id: student.id,
+      student_name: student.name,
+      status: 'connected',
+      cheating_attempts: 0,
+      connected_at: new Date().toISOString(),
+      last_activity: new Date().toISOString()
+    };
+    
+    // Si Supabase n'est pas disponible, ne pas essayer d'y accéder
+    if (!supabaseAvailable) {
+      console.log(`Étudiant ${student.name} enregistré localement (Supabase non disponible)`);
+      return;
+    }
+    
     try {
-      // Vérifier si la table existe en tentant d'y accéder
-      const { error: checkError } = await supabase
+      // Vérifier si l'étudiant est déjà connecté
+      const { data, error } = await supabase
         .from('active_students')
-        .select('count(*)', { count: 'exact', head: true })
-        .limit(1);
-      
-      // Si la table n'existe pas, essayer de la créer
-      if (checkError && (checkError.code === '42P01' || checkError.message.includes('does not exist') || checkError.status === 404)) {
-        console.log('Table active_students non trouvée, tentative de création...');
-        const created = await createActiveStudentsTable();
+        .select('*')
+        .eq('student_name', student.name)
+        .maybeSingle();
         
-        if (!created) {
-          console.error('Impossible de créer la table active_students');
-          return;
-        }
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Erreur lors de la vérification de l\'étudiant:', error);
+        return;
       }
       
-      // Vérifier si l'étudiant est déjà connecté
-      try {
-        const { data: existingStudent, error: fetchError } = await supabase
+      if (data) {
+        // Mettre à jour l'entrée existante
+        const { error: updateError } = await supabase
           .from('active_students')
-          .select('*')
-          .eq('student_name', student.name)
-          .single();
+          .update({
+            status: 'connected',
+            last_activity: new Date().toISOString()
+          })
+          .eq('student_id', data.student_id);
           
-        if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
-          console.error('Erreur lors de la vérification de l\'étudiant:', fetchError);
+        if (updateError) {
+          console.error('Erreur lors de la mise à jour de l\'étudiant:', updateError);
+          return;
+        }
+          
+        console.log(`Étudiant ${student.name} mis à jour dans Supabase`);
+      } else {
+        // Créer une nouvelle entrée
+        const { error: insertError } = await supabase
+          .from('active_students')
+          .insert({
+            student_id: student.id,
+            student_name: student.name,
+            status: 'connected',
+            cheating_attempts: 0,
+            connected_at: new Date().toISOString(),
+            last_activity: new Date().toISOString()
+          });
+          
+        if (insertError) {
+          console.error('Erreur lors de l\'insertion de l\'étudiant:', insertError);
           return;
         }
         
-        if (existingStudent) {
-          // Mettre à jour l'entrée existante
-          await supabase
-            .from('active_students')
-            .update({
-              status: 'connected',
-              last_activity: new Date().toISOString()
-            })
-            .eq('student_id', existingStudent.student_id);
-            
-          console.log(`Étudiant ${student.name} mis à jour dans Supabase`);
-        } else {
-          // Créer une nouvelle entrée
-          const { error: insertError } = await supabase
-            .from('active_students')
-            .insert({
-              student_id: student.id,
-              student_name: student.name,
-              status: 'connected',
-              cheating_attempts: 0,
-              connected_at: new Date().toISOString(),
-              last_activity: new Date().toISOString()
-            });
-            
-          if (insertError) {
-            console.error('Erreur lors de l\'insertion de l\'étudiant:', insertError);
-            return;
-          }
-          
-          console.log(`Étudiant ${student.name} enregistré dans Supabase`);
-        }
-      } catch (err) {
-        console.error('Erreur lors de la gestion de l\'étudiant:', err);
+        console.log(`Étudiant ${student.name} enregistré dans Supabase`);
       }
     } catch (error) {
       console.error('Erreur lors de l\'enregistrement de l\'étudiant dans Supabase:', error);
@@ -166,23 +148,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Fonction pour mettre à jour le statut d'un étudiant dans Supabase
   const updateStudentStatus = async (student: Student, status: string) => {
+    if (!student) return;
+    
+    // Mettre à jour localement en premier (fallback)
+    if (activeStudents[student.id]) {
+      activeStudents[student.id].status = status;
+      activeStudents[student.id].last_activity = new Date().toISOString();
+    }
+    
+    // Si Supabase n'est pas disponible, ne pas essayer d'y accéder
+    if (!supabaseAvailable) {
+      console.log(`Statut de l'étudiant ${student.name} mis à jour localement: ${status}`);
+      return;
+    }
+    
     try {
-      if (student) {
-        const { error } = await supabase
-          .from('active_students')
-          .update({
-            status,
-            last_activity: new Date().toISOString()
-          })
-          .eq('student_id', student.id);
-          
-        if (error) {
-          console.error('Erreur lors de la mise à jour du statut:', error);
-          return;
-        }
-          
-        console.log(`Statut de l'étudiant ${student.name} mis à jour: ${status}`);
+      const { error } = await supabase
+        .from('active_students')
+        .update({
+          status,
+          last_activity: new Date().toISOString()
+        })
+        .eq('student_id', student.id);
+        
+      if (error) {
+        console.error('Erreur lors de la mise à jour du statut:', error);
+        return;
       }
+        
+      console.log(`Statut de l'étudiant ${student.name} mis à jour: ${status}`);
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut de l\'étudiant:', error);
     }
@@ -216,7 +210,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       name: trimmedName
     };
 
-    // Enregistrer l'étudiant dans Supabase
+    // Enregistrer l'étudiant dans Supabase ou localement
     await registerStudentInSupabase(student, isAdmin);
 
     setAppState({
