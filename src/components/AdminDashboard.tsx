@@ -29,6 +29,7 @@ const AdminDashboard: React.FC = () => {
   const [activeStudents, setActiveStudents] = useState<ActiveStudent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [tableCreated, setTableCreated] = useState<boolean>(false);
   
   // Référence au client Supabase initialisé dans index.html
   const supabase = window.supabase;
@@ -58,55 +59,11 @@ const AdminDashboard: React.FC = () => {
       }
     };
     
-    // Récupération des étudiants actifs
-    const fetchActiveStudents = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Vérifier si la table active_students existe
-        const { error: checkError } = await supabase
-          .from('active_students')
-          .select('count(*)', { count: 'exact', head: true })
-          .limit(1);
-          
-        if (checkError && checkError.code === '42P01') {
-          // La table n'existe pas, on utilise les données du contexte
-          console.log('Table active_students non trouvée, création automatique...');
-          setError("La table des étudiants actifs n'existe pas encore. Les étudiants connectés apparaîtront ici automatiquement.");
-          
-          // Créer la table active_students
-          await createActiveStudentsTable();
-          setLoading(false);
-          return;
-        }
-        
-        // Si la table existe, récupérer les données
-        const { data, error } = await supabase
-          .from('active_students')
-          .select('*')
-          .order('connected_at', { ascending: false });
-          
-        if (error) {
-          console.error('Erreur lors de la récupération des étudiants actifs:', error);
-          setError("Impossible de récupérer les étudiants actifs. Veuillez rafraîchir la page.");
-          return;
-        }
-        
-        if (data) {
-          setActiveStudents(data);
-        }
-      } catch (err) {
-        console.error('Erreur inattendue:', err);
-        setError("Une erreur inattendue s'est produite. Veuillez rafraîchir la page.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    // Fonction pour créer la table active_students si elle n'existe pas
+    // Fonction pour créer la table active_students
     const createActiveStudentsTable = async () => {
       try {
+        setError("Création de la table des étudiants actifs en cours...");
+        
         const createTableSQL = `
           CREATE TABLE IF NOT EXISTS public.active_students (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -118,38 +75,80 @@ const AdminDashboard: React.FC = () => {
             last_activity TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
           );
           
-          -- Activation des politiques RLS
           ALTER TABLE public.active_students ENABLE ROW LEVEL SECURITY;
           
-          -- Politique pour permettre la lecture
           CREATE POLICY "Lecture pour tous" ON public.active_students
             FOR SELECT USING (true);
           
-          -- Politique pour permettre l'insertion
           CREATE POLICY "Insertion pour tous" ON public.active_students
             FOR INSERT WITH CHECK (true);
           
-          -- Politique pour permettre la mise à jour
           CREATE POLICY "Mise à jour pour tous" ON public.active_students
             FOR UPDATE USING (true);
           
-          -- Activation des abonnements temps réel
           ALTER PUBLICATION supabase_realtime ADD TABLE public.active_students;
         `;
         
-        // Exécuter le SQL via l'API RPC
-        const { error } = await supabase.rpc('exec_sql', { query: createTableSQL });
+        // Exécuter le SQL via l'API REST directement
+        const response = await fetch(`${supabase.supabaseUrl}/rest/v1/rpc/exec_sql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabase.supabaseKey,
+            'Authorization': `Bearer ${supabase.supabaseKey}`
+          },
+          body: JSON.stringify({ query: createTableSQL })
+        });
         
-        if (error) {
-          console.error('Erreur lors de la création de la table:', error);
+        if (response.ok) {
+          console.log('Table active_students créée avec succès!');
+          setTableCreated(true);
+          setError("Table des étudiants actifs créée avec succès! Les étudiants connectés apparaîtront ici automatiquement.");
+          return true;
+        } else {
+          console.error('Erreur lors de la création de la table:', await response.text());
+          setError("Impossible de créer la table des étudiants actifs. Les étudiants connectés ne seront pas visibles.");
           return false;
         }
-        
-        console.log('Table active_students créée avec succès!');
-        return true;
       } catch (err) {
         console.error('Erreur lors de la création de la table:', err);
+        setError("Une erreur s'est produite lors de la création de la table. Les étudiants connectés ne seront pas visibles.");
         return false;
+      }
+    };
+    
+    // Récupération des étudiants actifs
+    const fetchActiveStudents = async () => {
+      try {
+        setLoading(true);
+        
+        // Tenter de récupérer les étudiants actifs
+        const { data, error } = await supabase
+          .from('active_students')
+          .select('*');
+          
+        if (error) {
+          console.error('Erreur lors de la récupération des étudiants actifs:', error);
+          
+          // Si la table n'existe pas (erreur 404), la créer
+          if (error.code === '42P01' || error.message.includes('does not exist') || error.status === 404) {
+            await createActiveStudentsTable();
+          } else {
+            setError("Impossible de récupérer les étudiants actifs. Veuillez rafraîchir la page.");
+          }
+          return;
+        }
+        
+        if (data) {
+          setActiveStudents(data);
+          setTableCreated(true);
+          setError(null);
+        }
+      } catch (err) {
+        console.error('Erreur inattendue:', err);
+        setError("Une erreur inattendue s'est produite. Veuillez rafraîchir la page.");
+      } finally {
+        setLoading(false);
       }
     };
     
@@ -164,34 +163,46 @@ const AdminDashboard: React.FC = () => {
         setQuizResults((currentResults) => [...currentResults, payload.new]);
       })
       .subscribe();
-      
+    
     // Mise en place de l'abonnement temps réel pour les étudiants actifs
-    const studentsSubscription = supabase
-      .channel('public:active_students')
-      .on('INSERT', (payload: { new: ActiveStudent }) => {
-        console.log('Nouvel étudiant connecté:', payload.new);
-        setActiveStudents((current) => [payload.new, ...current]);
-      })
-      .on('UPDATE', (payload: { new: ActiveStudent }) => {
-        console.log('Mise à jour étudiant:', payload.new);
-        setActiveStudents((current) => 
-          current.map(student => 
-            student.student_id === payload.new.student_id ? payload.new : student
-          )
-        );
-      })
-      .subscribe();
+    // Seulement si la table a été créée avec succès
+    let studentsSubscription: any;
+    
+    if (tableCreated) {
+      studentsSubscription = supabase
+        .channel('public:active_students')
+        .on('INSERT', (payload: { new: ActiveStudent }) => {
+          console.log('Nouvel étudiant connecté:', payload.new);
+          setActiveStudents((current) => [payload.new, ...current]);
+        })
+        .on('UPDATE', (payload: { new: ActiveStudent }) => {
+          console.log('Mise à jour étudiant:', payload.new);
+          setActiveStudents((current) => 
+            current.map(student => 
+              student.student_id === payload.new.student_id ? payload.new : student
+            )
+          );
+        })
+        .subscribe();
+    }
       
     // Nettoyage des abonnements à la destruction du composant
     return () => {
       resultsSubscription.unsubscribe();
-      studentsSubscription.unsubscribe();
+      if (studentsSubscription) {
+        studentsSubscription.unsubscribe();
+      }
     };
-  }, [contextQuizResults]);
+  }, [contextQuizResults, tableCreated]);
   
   // Fonction pour signaler une tentative de triche pour un étudiant spécifique
   const reportCheatingForStudent = async (studentId: string) => {
     try {
+      if (!tableCreated) {
+        console.error('La table active_students n\'existe pas encore');
+        return;
+      }
+      
       // Mettre à jour le nombre de tentatives de triche dans Supabase
       const { data, error } = await supabase
         .from('active_students')
