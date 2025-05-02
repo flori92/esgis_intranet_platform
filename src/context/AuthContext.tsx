@@ -29,7 +29,7 @@ interface SupabaseQuery {
   eq: (column: string, value: string | number) => SupabaseQuery;
   single: () => Promise<SupabaseResponse>;
   maybeSingle: () => Promise<SupabaseResponse>;
-  limit: (count: number) => SupabaseQuery;
+  limit: (count: number) => Promise<SupabaseResponse>;
   order: (column: string, options?: { ascending: boolean }) => SupabaseQuery;
 }
 
@@ -114,10 +114,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         // Tenter une requête simple pour vérifier la connexion
         const response = await supabase
-          .from('quiz_results')
+          .from('active_students')
           .select('*')
-          .limit(1)
-          .single();
+          .limit(1);
           
         if (response.error) {
           console.warn('Problème de connexion à Supabase:', response.error);
