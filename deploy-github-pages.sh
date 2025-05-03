@@ -10,15 +10,25 @@ echo "🚀 Préparation du déploiement optimisé pour GitHub Pages..."
 # Nettoyage du dossier de build précédent
 rm -rf dist
 
-# Construction du projet avec les variables d'environnement
-echo "🏗️ Construction du projet avec l'optimisation des chemins..."
-VITE_PUBLIC_URL="/intranet-esgis/" npm run build
+# Ajout de variables d'environnement explicites pour garantir les bons chemins
+export VITE_PUBLIC_URL="/intranet-esgis"
 
-# Vérification de la présence du fichier .nojekyll
-if [ ! -f "dist/.nojekyll" ]; then
-    echo "👉 Création du fichier .nojekyll pour désactiver Jekyll sur GitHub Pages..."
-    touch dist/.nojekyll
+# Construction avec les variables d'environnement définies
+echo "🏗️ Construction du projet avec l'optimisation des chemins..."
+npm run build
+
+# Vérification du contenu du fichier index.html généré
+echo "🔍 Vérification du fichier index.html..."
+if grep -q '<base href="/intranet-esgis/">' dist/index.html; then
+    echo "✅ Tag base correctement configuré"
+else
+    echo "⚠️ Ajout manuel du tag base..."
+    sed -i '' 's|<head>|<head>\n  <base href="/intranet-esgis/">|' dist/index.html
 fi
+
+# Création explicite du fichier .nojekyll pour éviter le traitement Jekyll
+echo "📝 Création du fichier .nojekyll..."
+touch dist/.nojekyll
 
 # Copie du fichier 404.html pour la gestion des routes SPA
 cp public/404.html dist/
