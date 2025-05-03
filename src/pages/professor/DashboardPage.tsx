@@ -18,6 +18,11 @@ import {
   Tab,
   Alert,
   Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  SelectChangeEvent
 } from '@mui/material';
 import {
   School as SchoolIcon,
@@ -25,253 +30,130 @@ import {
   Assignment as AssignmentIcon,
   People as PeopleIcon,
   Notifications as NotificationsIcon,
-  Description as DescriptionIcon,
+  CalendarToday as CalendarTodayIcon,
 } from '@mui/icons-material';
+import { Link } from 'react-router-dom';
 import { useAuth, AuthContextType } from '../../context/AuthContext';
 import supabase from '../../services/supabase';
-import { Database } from '../../types/database';
-
-// Types pour les statistiques
-interface DashboardStats {
-  totalCourses: number;
-  totalStudents: number;
-  upcomingExams: number;
-  pendingGrades: number;
-}
-
-// Types pour les cours
-interface Course {
-  id: number;
-  name: string;
-  code: string;
-  department_id: number;
-  department_name: string;
-  students_count: number;
-  next_session: string | null;
-  room: string | null;
-}
-
-// Types pour les notifications
-interface Notification {
-  id: number;
-  title: string;
-  content: string;
-  created_at: string;
-  priority: 'high' | 'medium' | 'low';
-  read: boolean;
-}
-
-// Types pour les examens
-interface Exam {
-  id: number;
-  course_id: number;
-  course_name: string;
-  date: string;
-  duration: number;
-  room: string;
-  type: 'midterm' | 'final' | 'quiz';
-  status: 'upcoming' | 'completed' | 'graded';
-}
+import { format, parseISO } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { 
+  mockProfessorStats, 
+  mockProfessorCourses, 
+  mockProfessorExams, 
+  mockPendingGrades, 
+  mockProfessorNews, 
+  mockProfessorEvents,
+  formatDate,
+  formatTime,
+  ProfessorStats,
+  ProfessorCourse,
+  ProfessorExam,
+  PendingGrade,
+  ProfessorNewsItem,
+  ProfessorEventItem
+} from '../../utils/professorMockData';
 
 const ProfessorDashboardPage: React.FC = () => {
+  // État pour les données
   const { authState } = useAuth() as AuthContextType;
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [exams, setExams] = useState<Exam[]>([]);
+  const [stats, setStats] = useState<ProfessorStats | null>(null);
+  const [courses, setCourses] = useState<ProfessorCourse[]>([]);
+  const [exams, setExams] = useState<ProfessorExam[]>([]);
+  const [pendingGrades, setPendingGrades] = useState<PendingGrade[]>([]);
+  const [news, setNews] = useState<ProfessorNewsItem[]>([]);
+  const [events, setEvents] = useState<ProfessorEventItem[]>([]);
+  
+  // État pour le chargement et les erreurs
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // État pour les filtres
+  const [selectedDay, setSelectedDay] = useState<string>('tous');
+  const [selectedEventType, setSelectedEventType] = useState<string>('tous');
+  
+  // État pour les onglets
   const [tabValue, setTabValue] = useState(0);
 
-  // Vérifier si l'utilisateur est un professeur
+  // Fonction pour charger les données du tableau de bord
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      if (!authState.user || !authState.professor) {
+        throw new Error('Informations du professeur non disponibles');
+      }
+
+      // Essayer de récupérer les données de Supabase, utiliser les données mock en cas d'erreur
+      try {
+        // Ici, nous utiliserions les vraies requêtes Supabase
+        // En cas d'erreur, les blocs catch ci-dessous utiliseront les données mock
+      } catch (error) {
+        console.error('Erreur lors de la récupération des données:', error);
+      }
+      
+      // Utiliser les données mock pour le moment
+      setStats(mockProfessorStats);
+      setCourses(mockProfessorCourses);
+      setExams(mockProfessorExams);
+      setPendingGrades(mockPendingGrades);
+      setNews(mockProfessorNews);
+      setEvents(mockProfessorEvents);
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Erreur lors du chargement des données:', error);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('Une erreur inconnue est survenue');
+      }
+      
+      // Utiliser les données mock en cas d'erreur
+      setStats(mockProfessorStats);
+      setCourses(mockProfessorCourses);
+      setExams(mockProfessorExams);
+      setPendingGrades(mockPendingGrades);
+      setNews(mockProfessorNews);
+      setEvents(mockProfessorEvents);
+      
+      setLoading(false);
+    }
+  };
+
+  // Charger les données au chargement du composant
   useEffect(() => {
-    if (!authState.isProfessor) {
-      // Rediriger vers la page d'accueil si l'utilisateur n'est pas un professeur
-      window.location.href = '/';
+    if (authState.isProfessor) {
+      fetchDashboardData();
     }
   }, [authState.isProfessor]);
 
-  // Charger les données du tableau de bord
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      setLoading(true);
-      try {
-        if (!authState.user || !authState.professor) {
-          throw new Error('Informations du professeur non disponibles');
-        }
+  // Gérer les changements de filtres
+  const handleDayFilterChange = (event: SelectChangeEvent<string>) => {
+    setSelectedDay(event.target.value);
+  };
 
-        const professorId = authState.professor.id;
+  const handleEventTypeFilterChange = (event: SelectChangeEvent<string>) => {
+    setSelectedEventType(event.target.value);
+  };
 
-        // Récupérer les cours du professeur
-        const { data: coursesData, error: coursesError } = await supabase
-          .from('professor_courses')
-          .select(`
-            course_id,
-            courses (
-              id,
-              name,
-              code,
-              department_id,
-              departments (name)
-            )
-          `)
-          .eq('professor_id', professorId);
+  // Filtrer les cours par jour
+  const filteredCourses = courses.filter(course => {
+    if (selectedDay === 'tous') return true;
+    if (!course.nextSession) return false;
+    
+    const courseDay = format(new Date(course.nextSession), 'EEEE', { locale: fr });
+    return courseDay.toLowerCase() === selectedDay.toLowerCase();
+  });
 
-        if (coursesError) throw coursesError;
-
-        // Transformer les données des cours
-        const transformedCourses: Course[] = [];
-        
-        if (coursesData) {
-          for (const item of coursesData) {
-            const course = item.courses;
-            
-            // Récupérer le nombre d'étudiants pour ce cours
-            const { count: studentsCount } = await supabase
-              .from('student_courses')
-              .select('*', { count: 'exact', head: true })
-              .eq('course_id', course.id);
-
-            // Récupérer la prochaine session pour ce cours
-            const { data: nextSessionData } = await supabase
-              .from('course_sessions')
-              .select('date, room')
-              .eq('course_id', course.id)
-              .gte('date', new Date().toISOString())
-              .order('date', { ascending: true })
-              .limit(1)
-              .single();
-
-            transformedCourses.push({
-              id: course.id,
-              name: course.name,
-              code: course.code,
-              department_id: course.department_id,
-              department_name: course.departments.name,
-              students_count: studentsCount || 0,
-              next_session: nextSessionData?.date || null,
-              room: nextSessionData?.room || null,
-            });
-          }
-        }
-
-        setCourses(transformedCourses);
-
-        // Récupérer les statistiques
-        const totalCourses = transformedCourses.length;
-
-        // Calculer le nombre total d'étudiants (sans doublons)
-        let totalStudents = 0;
-        if (transformedCourses.length > 0) {
-          const courseIds = transformedCourses.map(course => course.id);
-          const { data: uniqueStudents } = await supabase
-            .from('student_courses')
-            .select('student_id')
-            .in('course_id', courseIds);
-
-          // Utiliser un Set pour éliminer les doublons
-          const uniqueStudentIds = new Set(uniqueStudents?.map(item => item.student_id));
-          totalStudents = uniqueStudentIds.size;
-        }
-
-        // Récupérer le nombre d'examens à venir
-        const { count: upcomingExams } = await supabase
-          .from('exams')
-          .select('*', { count: 'exact', head: true })
-          .in('course_id', transformedCourses.map(course => course.id))
-          .gte('date', new Date().toISOString())
-          .eq('status', 'upcoming');
-
-        // Récupérer le nombre de notes en attente
-        const { count: pendingGrades } = await supabase
-          .from('exam_results')
-          .select('*', { count: 'exact', head: true })
-          .in('course_id', transformedCourses.map(course => course.id))
-          .is('grade', null);
-
-        setStats({
-          totalCourses,
-          totalStudents,
-          upcomingExams: upcomingExams || 0,
-          pendingGrades: pendingGrades || 0,
-        });
-
-        // Récupérer les notifications
-        const { data: notificationsData, error: notificationsError } = await supabase
-          .from('notifications')
-          .select('*')
-          .or(`recipient_id.eq.${authState.user.id},recipient_role.eq.professor`)
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        if (notificationsError) throw notificationsError;
-        setNotifications(notificationsData || []);
-
-        // Récupérer les examens à venir
-        const { data: examsData, error: examsError } = await supabase
-          .from('exams')
-          .select(`
-            id,
-            course_id,
-            courses (name),
-            date,
-            duration,
-            room,
-            type,
-            status
-          `)
-          .in('course_id', transformedCourses.map(course => course.id))
-          .order('date', { ascending: true })
-          .limit(5);
-
-        if (examsError) throw examsError;
-
-        // Transformer les données des examens
-        const transformedExams = examsData?.map(exam => ({
-          id: exam.id,
-          course_id: exam.course_id,
-          course_name: exam.courses.name,
-          date: exam.date,
-          duration: exam.duration,
-          room: exam.room,
-          type: exam.type,
-          status: exam.status,
-        })) || [];
-
-        setExams(transformedExams);
-      } catch (error) {
-        console.error('Erreur lors du chargement des données du tableau de bord:', error);
-        setError('Erreur lors du chargement des données. Veuillez réessayer.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-  }, [authState.user, authState.professor, authState.isProfessor]);
+  // Filtrer les événements par type
+  const filteredEvents = events.filter(event => {
+    if (selectedEventType === 'tous') return true;
+    return event.type === selectedEventType;
+  });
 
   // Gérer le changement d'onglet
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
-  };
-
-  // Formater la date
-  const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-    };
-    return new Date(dateString).toLocaleDateString('fr-FR', options);
-  };
-
-  // Formater l'heure
-  const formatTime = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = {
-      hour: '2-digit',
-      minute: '2-digit',
-    };
-    return new Date(dateString).toLocaleTimeString('fr-FR', options);
   };
 
   // Afficher un message de chargement
@@ -288,9 +170,6 @@ const ProfessorDashboardPage: React.FC = () => {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error">{error}</Alert>
-        <Button variant="contained" onClick={() => window.location.reload()} sx={{ mt: 2 }}>
-          Réessayer
-        </Button>
       </Box>
     );
   }
@@ -301,204 +180,287 @@ const ProfessorDashboardPage: React.FC = () => {
         Tableau de bord professeur
       </Typography>
 
-      <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }}>
+      {/* Salutation personnalisée */}
+      <Typography variant="h6" sx={{ mb: 3, color: '#003366' }}>
+        Bienvenue, {authState.professor?.full_name || 'Professeur'} !
+      </Typography>
+
+      {/* Widgets de statistiques */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            sx={{
+              p: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              height: 140,
+              bgcolor: '#e3f2fd',
+              borderLeft: '4px solid #1976d2',
+            }}
+          >
+            <Typography variant="subtitle2" color="textSecondary">
+              Cours
+            </Typography>
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+              <SchoolIcon sx={{ fontSize: 40, color: '#1976d2', mr: 2 }} />
+              <Typography variant="h4">{stats?.totalCourses || 0}</Typography>
+            </Box>
+            <Typography variant="body2">Total de cours enseignés</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            sx={{
+              p: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              height: 140,
+              bgcolor: '#e8f5e9',
+              borderLeft: '4px solid #2e7d32',
+            }}
+          >
+            <Typography variant="subtitle2" color="textSecondary">
+              Étudiants
+            </Typography>
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+              <PeopleIcon sx={{ fontSize: 40, color: '#2e7d32', mr: 2 }} />
+              <Typography variant="h4">{stats?.totalStudents || 0}</Typography>
+            </Box>
+            <Typography variant="body2">Total d'étudiants</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            sx={{
+              p: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              height: 140,
+              bgcolor: '#fff8e1',
+              borderLeft: '4px solid #ff9800',
+            }}
+          >
+            <Typography variant="subtitle2" color="textSecondary">
+              Examens
+            </Typography>
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+              <AssignmentIcon sx={{ fontSize: 40, color: '#ff9800', mr: 2 }} />
+              <Typography variant="h4">{stats?.upcomingExams || 0}</Typography>
+            </Box>
+            <Typography variant="body2">Examens à venir</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            sx={{
+              p: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              height: 140,
+              bgcolor: '#ffebee',
+              borderLeft: '4px solid #d32f2f',
+            }}
+          >
+            <Typography variant="subtitle2" color="textSecondary">
+              Notes
+            </Typography>
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+              <AssignmentIcon sx={{ fontSize: 40, color: '#d32f2f', mr: 2 }} />
+              <Typography variant="h4">{stats?.pendingGrades || 0}</Typography>
+            </Box>
+            <Typography variant="body2">Notes à publier</Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Onglets */}
+      <Tabs
+        value={tabValue}
+        onChange={handleTabChange}
+        indicatorColor="primary"
+        textColor="primary"
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+      >
         <Tab label="Vue d'ensemble" />
         <Tab label="Mes cours" />
         <Tab label="Examens" />
+        <Tab label="Actualités" />
+        <Tab label="Événements" />
       </Tabs>
 
+      {/* Vue d'ensemble */}
       {tabValue === 0 && (
-        <>
-          {/* Statistiques */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper
-                elevation={3}
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  bgcolor: '#f5f5f5',
-                  height: '100%',
-                }}
-              >
-                <SchoolIcon sx={{ fontSize: 40, color: '#003366', mb: 1 }} />
-                <Typography variant="h5" component="div">
-                  {stats?.totalCourses}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Cours
-                </Typography>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper
-                elevation={3}
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  bgcolor: '#f5f5f5',
-                  height: '100%',
-                }}
-              >
-                <PeopleIcon sx={{ fontSize: 40, color: '#003366', mb: 1 }} />
-                <Typography variant="h5" component="div">
-                  {stats?.totalStudents}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Étudiants
-                </Typography>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper
-                elevation={3}
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  bgcolor: '#f5f5f5',
-                  height: '100%',
-                }}
-              >
-                <EventIcon sx={{ fontSize: 40, color: '#CC0000', mb: 1 }} />
-                <Typography variant="h5" component="div">
-                  {stats?.upcomingExams}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Examens à venir
-                </Typography>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper
-                elevation={3}
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  bgcolor: '#f5f5f5',
-                  height: '100%',
-                }}
-              >
-                <AssignmentIcon sx={{ fontSize: 40, color: '#FF9800', mb: 1 }} />
-                <Typography variant="h5" component="div">
-                  {stats?.pendingGrades}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Notes en attente
-                </Typography>
-              </Paper>
-            </Grid>
-          </Grid>
-
-          {/* Cours et notifications */}
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Card elevation={3}>
-                <CardHeader
-                  title="Mes prochains cours"
-                  titleTypographyProps={{ variant: 'h6' }}
-                  action={
-                    <Button size="small" color="primary" href="/professor/courses">
-                      Voir tout
-                    </Button>
-                  }
-                />
-                <Divider />
-                <CardContent sx={{ p: 0 }}>
-                  <List>
-                    {courses.filter(course => course.next_session).length > 0 ? (
-                      courses
-                        .filter(course => course.next_session)
-                        .sort((a, b) => {
-                          if (!a.next_session || !b.next_session) return 0;
-                          return new Date(a.next_session).getTime() - new Date(b.next_session).getTime();
-                        })
-                        .slice(0, 5)
-                        .map((course) => (
-                          <ListItem key={course.id} divider>
-                            <ListItemIcon>
-                              <SchoolIcon color="primary" />
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={course.name}
-                              secondary={
-                                course.next_session
-                                  ? `${formatDate(course.next_session)} à ${formatTime(
-                                      course.next_session
-                                    )} - Salle ${course.room}`
-                                  : 'Aucune session programmée'
-                              }
-                            />
-                          </ListItem>
-                        ))
-                    ) : (
-                      <ListItem>
-                        <ListItemText primary="Aucun cours programmé" />
-                      </ListItem>
-                    )}
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Card elevation={3}>
-                <CardHeader
-                  title="Notifications récentes"
-                  titleTypographyProps={{ variant: 'h6' }}
-                  action={
-                    <Button size="small" color="primary" href="/professor/notifications">
-                      Voir tout
-                    </Button>
-                  }
-                />
-                <Divider />
-                <CardContent sx={{ p: 0 }}>
-                  <List>
-                    {notifications.length > 0 ? (
-                      notifications.map((notification) => (
-                        <ListItem key={notification.id} divider>
-                          <ListItemIcon>
-                            <NotificationsIcon
-                              color={
-                                notification.priority === 'high'
-                                  ? 'error'
-                                  : notification.priority === 'medium'
-                                  ? 'warning'
-                                  : 'info'
-                              }
-                            />
-                          </ListItemIcon>
+        <Grid container spacing={3}>
+          {/* Cours du jour */}
+          <Grid item xs={12} md={6} lg={4}>
+            <Card elevation={3} sx={{ height: '100%' }}>
+              <CardHeader
+                title="Cours du jour"
+                titleTypographyProps={{ variant: 'h6' }}
+                action={
+                  <FormControl variant="standard" size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel id="day-filter-label">Jour</InputLabel>
+                    <Select
+                      labelId="day-filter-label"
+                      id="day-filter"
+                      value={selectedDay}
+                      onChange={handleDayFilterChange}
+                      label="Jour"
+                    >
+                      <MenuItem value="tous">Tous</MenuItem>
+                      <MenuItem value="lundi">Lundi</MenuItem>
+                      <MenuItem value="mardi">Mardi</MenuItem>
+                      <MenuItem value="mercredi">Mercredi</MenuItem>
+                      <MenuItem value="jeudi">Jeudi</MenuItem>
+                      <MenuItem value="vendredi">Vendredi</MenuItem>
+                      <MenuItem value="samedi">Samedi</MenuItem>
+                    </Select>
+                  </FormControl>
+                }
+              />
+              <Divider />
+              <CardContent sx={{ p: 0 }}>
+                <List>
+                  {filteredCourses.filter(course => course.nextSession).length > 0 ? (
+                    filteredCourses
+                      .filter(course => course.nextSession)
+                      .sort((a, b) => {
+                        if (!a.nextSession || !b.nextSession) return 0;
+                        return new Date(a.nextSession).getTime() - new Date(b.nextSession).getTime();
+                      })
+                      .slice(0, 5)
+                      .map((course) => (
+                        <ListItem key={course.id} divider>
+                          <SchoolIcon sx={{ mr: 2, color: '#003366' }} />
                           <ListItemText
-                            primary={notification.title}
-                            secondary={`${notification.content.substring(0, 60)}... - ${formatDate(
-                              notification.created_at
-                            )}`}
+                            primary={course.name}
+                            secondary={
+                              course.nextSession
+                                ? `${formatDate(course.nextSession)} à ${formatTime(
+                                    course.nextSession
+                                  )} - Salle ${course.room}`
+                                : 'Aucune session programmée'
+                            }
                           />
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            component={Link}
+                            to={`/professor/courses/${course.id}`}
+                            sx={{ ml: 2 }}
+                          >
+                            Détails
+                          </Button>
                         </ListItem>
                       ))
-                    ) : (
-                      <ListItem>
-                        <ListItemText primary="Aucune notification récente" />
-                      </ListItem>
-                    )}
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
+                  ) : (
+                    <ListItem>
+                      <ListItemText primary="Aucun cours programmé pour ce jour" />
+                    </ListItem>
+                  )}
+                </List>
+              </CardContent>
+            </Card>
           </Grid>
-        </>
+
+          {/* Notes à publier */}
+          <Grid item xs={12} md={6} lg={4}>
+            <Card elevation={3} sx={{ height: '100%' }}>
+              <CardHeader title="Notes à publier" titleTypographyProps={{ variant: 'h6' }} />
+              <Divider />
+              <CardContent sx={{ p: 0 }}>
+                <List>
+                  {pendingGrades.length > 0 ? (
+                    pendingGrades.map((grade) => (
+                      <ListItem key={grade.id} divider>
+                        <AssignmentIcon sx={{ mr: 2, color: '#d32f2f' }} />
+                        <ListItemText
+                          primary={grade.courseName}
+                          secondary={
+                            <>
+                              <Typography variant="body2" component="span">
+                                Type: {grade.examType === 'final' ? 'Examen final' : grade.examType === 'midterm' ? 'Examen partiel' : 'Quiz'}
+                              </Typography>
+                              <br />
+                              <Typography variant="body2" component="span">
+                                Échéance: {formatDate(grade.dueDate)}
+                              </Typography>
+                              <br />
+                              <Typography variant="body2" component="span">
+                                Progression: {grade.gradedCount}/{grade.studentsCount} ({Math.round((grade.gradedCount / grade.studentsCount) * 100)}%)
+                              </Typography>
+                            </>
+                          }
+                        />
+                        <Button
+                          variant="contained"
+                          size="small"
+                          color="primary"
+                          component={Link}
+                          to={`/professor/grades/${grade.courseId}`}
+                          sx={{ ml: 2 }}
+                        >
+                          Saisir
+                        </Button>
+                      </ListItem>
+                    ))
+                  ) : (
+                    <ListItem>
+                      <ListItemText primary="Aucune note en attente de publication" />
+                    </ListItem>
+                  )}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Actualités */}
+          <Grid item xs={12} md={6} lg={4}>
+            <Card elevation={3} sx={{ height: '100%' }}>
+              <CardHeader title="Actualités récentes" titleTypographyProps={{ variant: 'h6' }} />
+              <Divider />
+              <CardContent sx={{ p: 0 }}>
+                <List>
+                  {news.length > 0 ? (
+                    news.map((newsItem) => (
+                      <ListItem key={newsItem.id} divider>
+                        <ListItemIcon>
+                          <NotificationsIcon
+                            color={
+                              newsItem.category === 'important'
+                                ? 'error'
+                                : newsItem.category === 'information'
+                                ? 'info'
+                                : 'warning'
+                            }
+                          />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={newsItem.title}
+                          secondary={`${newsItem.content.substring(0, 60)}... - ${formatDate(
+                            newsItem.date
+                          )}`}
+                        />
+                      </ListItem>
+                    ))
+                  ) : (
+                    <ListItem>
+                      <ListItemText primary="Aucune actualité récente" />
+                    </ListItem>
+                  )}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       )}
 
+      {/* Mes cours */}
       {tabValue === 1 && (
         <Card elevation={3}>
-          <CardHeader title="Tous mes cours" titleTypographyProps={{ variant: 'h6' }} />
+          <CardHeader title="Mes cours" titleTypographyProps={{ variant: 'h6' }} />
           <Divider />
           <CardContent sx={{ p: 0 }}>
             <List>
@@ -522,17 +484,17 @@ const ProfessorDashboardPage: React.FC = () => {
                       secondary={
                         <>
                           <Typography variant="body2" component="span">
-                            Département: {course.department_name}
+                            Département: {course.department}
                           </Typography>
                           <br />
                           <Typography variant="body2" component="span">
-                            {course.students_count} étudiants inscrits
+                            {course.students} étudiants inscrits
                           </Typography>
                           <br />
                           <Typography variant="body2" component="span">
-                            {course.next_session
-                              ? `Prochaine session: ${formatDate(course.next_session)} à ${formatTime(
-                                  course.next_session
+                            {course.nextSession
+                              ? `Prochaine session: ${formatDate(course.nextSession)} à ${formatTime(
+                                  course.nextSession
                                 )} - Salle ${course.room}`
                               : 'Aucune session programmée'}
                           </Typography>
@@ -542,7 +504,8 @@ const ProfessorDashboardPage: React.FC = () => {
                     <Button
                       variant="outlined"
                       size="small"
-                      href={`/professor/courses/${course.id}`}
+                      component={Link}
+                      to={`/professor/courses/${course.id}`}
                       sx={{ ml: 2 }}
                     >
                       Détails
@@ -559,6 +522,7 @@ const ProfessorDashboardPage: React.FC = () => {
         </Card>
       )}
 
+      {/* Examens */}
       {tabValue === 2 && (
         <Card elevation={3}>
           <CardHeader title="Examens à venir" titleTypographyProps={{ variant: 'h6' }} />
@@ -582,7 +546,7 @@ const ProfessorDashboardPage: React.FC = () => {
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          {exam.course_name}
+                          {exam.courseName}
                           <Chip
                             label={
                               exam.type === 'final'
@@ -640,7 +604,8 @@ const ProfessorDashboardPage: React.FC = () => {
                     <Button
                       variant="outlined"
                       size="small"
-                      href={`/professor/exams/${exam.id}`}
+                      component={Link}
+                      to={`/professor/exams/${exam.id}`}
                       sx={{ ml: 2 }}
                     >
                       Détails
@@ -650,6 +615,119 @@ const ProfessorDashboardPage: React.FC = () => {
               ) : (
                 <ListItem>
                   <ListItemText primary="Aucun examen programmé" />
+                </ListItem>
+              )}
+            </List>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Actualités */}
+      {tabValue === 3 && (
+        <Card elevation={3}>
+          <CardHeader title="Actualités" titleTypographyProps={{ variant: 'h6' }} />
+          <Divider />
+          <CardContent sx={{ p: 0 }}>
+            <List>
+              {news.length > 0 ? (
+                news.map((newsItem) => (
+                  <ListItem key={newsItem.id} divider>
+                    <ListItemIcon>
+                      <NotificationsIcon
+                        color={
+                          newsItem.category === 'important'
+                            ? 'error'
+                            : newsItem.category === 'information'
+                            ? 'info'
+                            : 'warning'
+                        }
+                      />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={newsItem.title}
+                      secondary={`${newsItem.content.substring(0, 60)}... - ${formatDate(
+                        newsItem.date
+                      )}`}
+                    />
+                  </ListItem>
+                ))
+              ) : (
+                <ListItem>
+                  <ListItemText primary="Aucune actualité récente" />
+                </ListItem>
+              )}
+            </List>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Événements */}
+      {tabValue === 4 && (
+        <Card elevation={3}>
+          <CardHeader 
+            title="Événements" 
+            titleTypographyProps={{ variant: 'h6' }} 
+            action={
+              <FormControl variant="standard" size="small" sx={{ minWidth: 120 }}>
+                <InputLabel id="event-type-filter-label">Type</InputLabel>
+                <Select
+                  labelId="event-type-filter-label"
+                  id="event-type-filter"
+                  value={selectedEventType}
+                  onChange={handleEventTypeFilterChange}
+                  label="Type"
+                >
+                  <MenuItem value="tous">Tous</MenuItem>
+                  <MenuItem value="reunion">Réunions</MenuItem>
+                  <MenuItem value="formation">Formations</MenuItem>
+                  <MenuItem value="administratif">Administratif</MenuItem>
+                  <MenuItem value="autre">Autres</MenuItem>
+                </Select>
+              </FormControl>
+            }
+          />
+          <Divider />
+          <CardContent sx={{ p: 0 }}>
+            <List>
+              {filteredEvents.length > 0 ? (
+                filteredEvents.map((event) => (
+                  <ListItem key={event.id} divider>
+                    <ListItemIcon>
+                      <CalendarTodayIcon
+                        color={
+                          event.type === 'reunion'
+                            ? 'error'
+                            : event.type === 'formation'
+                            ? 'info'
+                            : event.type === 'administratif'
+                            ? 'warning'
+                            : 'primary'
+                        }
+                      />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={event.title}
+                      secondary={
+                        <>
+                          <Typography variant="body2" component="span">
+                            Date: {formatDate(event.date)}
+                          </Typography>
+                          <br />
+                          <Typography variant="body2" component="span">
+                            Lieu: {event.location}
+                          </Typography>
+                          <br />
+                          <Typography variant="body2" component="span">
+                            Type: {event.type}
+                          </Typography>
+                        </>
+                      }
+                    />
+                  </ListItem>
+                ))
+              ) : (
+                <ListItem>
+                  <ListItemText primary="Aucun événement programmé" />
                 </ListItem>
               )}
             </List>
