@@ -1,27 +1,15 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Redirection - Plateforme Intranet ESGIS</title>
-  <script type="text/javascript">
-    // Gestion des routes pour une SPA hébergée sur GitHub Pages
-    (function() {
-      // Récupération de l'URL actuelle
-      var pathSegments = window.location.pathname.split('/');
-      var repoName = 'intranet-esgis';
-      var hasRepoName = pathSegments.indexOf(repoName) !== -1;
-      
-      // Redirection vers l'index avec les paramètres de route
-      var redirectUrl = window.location.protocol + '//' + window.location.hostname + 
-        (hasRepoName ? '/' + repoName : '') + '/index.html' + 
-        window.location.search + window.location.hash;
-      
-      window.location.replace(redirectUrl);
-    })();
+  <title>Redirection vers l'application</title>
+  <script>
+    // Redirection vers la page index avec le chemin comme paramètre
+    const path = window.location.pathname.substr('/intranet-esgis'.length);
+    window.location.href = '/intranet-esgis/#' + path;
   </script>
 </head>
 <body>
-  <p>Redirection vers la plateforme Intranet ESGIS...</p>
+  <p>Redirection en cours...</p>
 </body>
 </html>

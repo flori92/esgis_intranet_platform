@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
   <head>
-  <base href="/intranet-esgis/">
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Plateforme Intranet ESGIS</title>
@@ -18,10 +17,20 @@
         document.write('<base href="' + baseUrl + '" />');
       }
     </script>
-    <script type="module" crossorigin src="/intranet-esgis/assets/index.Df5Xg3vb.js"></script>
-    <link rel="stylesheet" crossorigin href="/intranet-esgis/assets/index.Bc4_1O5T.css">
-<script src="./spa-redirect.js"></script>
-  </head>
+    <script type="module" crossorigin src="/intranet-esgis/index.C4bLpb26.js"></script>
+    <link rel="stylesheet" crossorigin href="/intranet-esgis/index.Dx-m7knh.css">
+  <script>
+    // Configuration des chemins de base
+    window.ESGIS_INTRANET_BASE_PATH = "/intranet-esgis";
+    // Support pour les routes SPA sur GitHub Pages
+    (function() {
+      const redirect = sessionStorage.redirect;
+      delete sessionStorage.redirect;
+      if (redirect && redirect !== location.href) {
+        history.replaceState(null, null, redirect);
+      }
+    })();
+  </script>  </head>
   <body>
     <div id="root"></div>
   </body>
