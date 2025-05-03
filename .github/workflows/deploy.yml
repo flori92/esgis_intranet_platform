@@ -1,15 +1,9 @@
 name: Déploiement sur GitHub Pages
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
-
-# Définition explicite des permissions
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -17,33 +11,46 @@ jobs:
     
     steps:
       - name: Checkout 🛎️
-        uses: actions/checkout@v3
-        with:
-          persist-credentials: false # Important pour éviter d'utiliser le token GITHUB_TOKEN par défaut
+        uses: actions/checkout@v4
 
-      - name: Configurer Node.js 18 📦
-        uses: actions/setup-node@v3
+      - name: Configuration de Node.js ⚙️
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '20'
           cache: 'npm'
-
-      - name: Installer les dépendances 🔧
+          
+      - name: Installation des dépendances 📦
         run: npm ci
-
-      - name: Vérification TypeScript (non bloquante) 🧪
-        run: npx tsc --noEmit || echo "Des erreurs TypeScript ont été détectées, mais le build continuera."
-        continue-on-error: true
-
-      - name: Build du projet 🏗️
+        
+      - name: Vérification TypeScript (non-bloquante) 🔍
         run: |
+          echo "::group::Vérification TypeScript"
+          npx tsc --noEmit || echo "Des erreurs TypeScript ont été détectées, mais le déploiement continuera."
+          echo "::endgroup::"
+        continue-on-error: true
+        
+      - name: Build du projet 🛠️
+        run: |
+          echo "::group::Build du projet"
           CI=false npm run build
+          echo "::endgroup::"
         env:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-
+          
+      - name: Vérification du build 🧪
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "::error::Le dossier dist n'a pas été créé. Le build a échoué."
+            exit 1
+          fi
+          echo "✅ Le build a réussi, le dossier dist existe."
+          
       - name: Déploiement sur GitHub Pages 🚀
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: dist
           branch: gh-pages
-          token: ${{ secrets.GITHUB_TOKEN }} # Utilise le token par défaut qui a maintenant les permissions nécessaires
+          
+      - name: Notification de fin de déploiement 📢
+        run: echo "🎉 Déploiement terminé avec succès ! Le site est accessible à l'adresse https://[organisation].github.io/intranet-esgis/"
