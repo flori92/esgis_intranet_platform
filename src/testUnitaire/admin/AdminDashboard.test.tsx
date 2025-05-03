@@ -10,32 +10,20 @@ jest.mock('../../context/AuthContext', () => ({
   }),
 }));
 
-import { render, screen } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from '../../context/AuthContext';
+import React from 'react';
+import { screen } from '@testing-library/react';
 import AdminDashboardPage from '../../pages/admin/AdminDashboardPage';
+import { renderWithProviders } from '../../__tests__/test-utils';
 
 describe('AdminDashboardPage', () => {
   test('Affiche le titre du tableau de bord', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <AdminDashboardPage />
-        </AuthProvider>
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminDashboardPage />);
     
     expect(screen.getByText('Tableau de Bord Administratif')).toBeInTheDocument();
   });
 
   test('Affiche les modules d\'administration', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <AdminDashboardPage />
-        </AuthProvider>
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminDashboardPage />);
     
     expect(screen.getByText('Départements & Filières')).toBeInTheDocument();
     expect(screen.getByText('Professeurs & Rôles')).toBeInTheDocument();
@@ -45,13 +33,7 @@ describe('AdminDashboardPage', () => {
   });
 
   test('Affiche les statistiques rapides', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <AdminDashboardPage />
-        </AuthProvider>
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminDashboardPage />);
     
     expect(screen.getByText('Départements')).toBeInTheDocument();
     expect(screen.getByText('Professeurs')).toBeInTheDocument();
@@ -60,13 +42,7 @@ describe('AdminDashboardPage', () => {
   });
 
   test('Affiche les actions rapides', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <AdminDashboardPage />
-        </AuthProvider>
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminDashboardPage />);
     
     expect(screen.getByText('Actions rapides')).toBeInTheDocument();
     expect(screen.getByText('Créer un nouveau département')).toBeInTheDocument();

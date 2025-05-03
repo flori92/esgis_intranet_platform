@@ -4,7 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 
 const QuizResults: React.FC = () => {
   const { questions, userAnswers, calculateScore, cheatingAttempts } = useQuiz();
-  const { appState, logout } = useAuth();
+  const { authState, logout } = useAuth();
   
   const score = calculateScore();
   const totalPossibleScore = questions.length * 0.5;
@@ -15,8 +15,12 @@ const QuizResults: React.FC = () => {
   ).length;
   
   const getScoreColor = () => {
-    if (percentage >= 80) return "text-green-600";
-    if (percentage >= 60) return "text-yellow-600";
+    if (percentage >= 80) {
+      return "text-green-600";
+    }
+    if (percentage >= 60) {
+      return "text-yellow-600";
+    }
     return "text-red-600";
   };
   
@@ -29,7 +33,7 @@ const QuizResults: React.FC = () => {
           <div className="mb-8">
             <div className="flex justify-between items-center mb-4">
               <p className="text-gray-700">Étudiant:</p>
-              <p className="font-medium">{appState.currentUser?.name}</p>
+              <p className="font-medium">{authState.profile?.full_name}</p>
             </div>
             
             <div className="flex justify-between items-center mb-4">

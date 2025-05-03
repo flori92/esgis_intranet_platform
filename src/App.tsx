@@ -41,7 +41,7 @@ import StagesPage from './pages/stages/StagesPage';
 
 // Composant de protection des routes
 const ProtectedRoute: React.FC<{ 
-  element: React.ReactNode; 
+  element: JSX.Element;
   requiredRole?: 'admin' | 'professor' | 'student';
 }> = ({ element, requiredRole }) => {
   const { authState } = useAuth() as AuthContextType;
@@ -59,15 +59,6 @@ const ProtectedRoute: React.FC<{
       (requiredRole === 'student' && !authState.isStudent)
     ) {
       // Rediriger vers la page appropriée selon le rôle
-      if (authState.isAdmin) {
-        return <Navigate to="/admin/dashboard" replace />;
-      }
-      if (authState.isProfessor) {
-        return <Navigate to="/professor/dashboard" replace />;
-      }
-      if (authState.isStudent) {
-        return <Navigate to="/student/dashboard" replace />;
-      }
       return <Navigate to="/login" replace />;
     }
   }

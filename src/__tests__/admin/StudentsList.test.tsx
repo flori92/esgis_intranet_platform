@@ -1,8 +1,9 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../../context/AuthContext';
 import StudentsListPage from '../../pages/admin/students/StudentsListPage';
+import { renderWithProviders } from '../test-utils';
 
 // Mock du hook useAuth
 jest.mock('../../hooks/useAuth', () => ({
@@ -11,6 +12,7 @@ jest.mock('../../hooks/useAuth', () => ({
       isAdmin: true,
       user: { id: 'test-user-id' },
     },
+    logout: jest.fn(),
   }),
 }));
 
@@ -63,25 +65,13 @@ jest.mock('../../utils/supabase', () => ({
 
 describe('StudentsListPage', () => {
   test('Affiche le titre de la page de gestion des étudiants', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <StudentsListPage />
-        </AuthProvider>
-      </BrowserRouter>
-    );
+    renderWithProviders(<BrowserRouter><AuthProvider><StudentsListPage /></AuthProvider></BrowserRouter>);
     
     expect(screen.getByText('Gestion des Étudiants')).toBeInTheDocument();
   });
 
   test('Affiche la barre de recherche et les filtres', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <StudentsListPage />
-        </AuthProvider>
-      </BrowserRouter>
-    );
+    renderWithProviders(<BrowserRouter><AuthProvider><StudentsListPage /></AuthProvider></BrowserRouter>);
     
     expect(screen.getByPlaceholderText('Rechercher un étudiant...')).toBeInTheDocument();
     expect(screen.getByText('Département')).toBeInTheDocument();
@@ -91,13 +81,7 @@ describe('StudentsListPage', () => {
   });
 
   test('Affiche les boutons d\'action', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <StudentsListPage />
-        </AuthProvider>
-      </BrowserRouter>
-    );
+    renderWithProviders(<BrowserRouter><AuthProvider><StudentsListPage /></AuthProvider></BrowserRouter>);
     
     expect(screen.getByText('Exporter')).toBeInTheDocument();
     expect(screen.getByText('Ajouter')).toBeInTheDocument();
@@ -105,13 +89,7 @@ describe('StudentsListPage', () => {
   });
 
   test('Affiche les en-têtes du tableau des étudiants', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <StudentsListPage />
-        </AuthProvider>
-      </BrowserRouter>
-    );
+    renderWithProviders(<BrowserRouter><AuthProvider><StudentsListPage /></AuthProvider></BrowserRouter>);
     
     expect(screen.getByText('Matricule')).toBeInTheDocument();
     expect(screen.getByText('Nom complet')).toBeInTheDocument();
