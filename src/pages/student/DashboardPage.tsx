@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -14,18 +15,25 @@ import {
   ListItemText,
   CardHeader,
   CardMedia,
-  Button
+  Button,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  SelectChangeEvent,
+  Badge
 } from '@mui/material';
+import {
+  Event as EventIcon,
+  Grade as GradeIcon,
+  School as SchoolIcon,
+  Notifications as NotificationsIcon,
+  CalendarToday as CalendarTodayIcon
+} from '@mui/icons-material';
 import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import EventIcon from '@mui/icons-material/Event';
-import GradeIcon from '@mui/icons-material/Grade';
-import SchoolIcon from '@mui/icons-material/School';
-import NotificationsIcon from '@mui/icons-material/Notifications';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-// Import des données mockées et de l'initialiseur
 import { initializeMockData, NewsItem, EventItem, mockNews, mockEvents } from '../../utils/mockDataInitializer';
 
 // Définition des interfaces
@@ -58,9 +66,13 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<StudentDashboardData | null>(null);
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+  const [filteredSchedule, setFilteredSchedule] = useState<ScheduleItem[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<EventItem[]>([]);
   const [dataInitialized, setDataInitialized] = useState(false);
+  const [dayOfWeekFilter, setDayOfWeekFilter] = useState<string>('');
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>('');
 
   // Utiliser useRef pour stabiliser la fonction fetchDashboardData
   const fetchDashboardDataRef = useRef(async () => {
@@ -354,6 +366,12 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Effet pour initialiser les filtres lorsque les données sont chargées
+  useEffect(() => {
+    setFilteredSchedule(schedule);
+    setFilteredEvents(events);
+  }, [schedule, events]);
+
   // Formater le jour de la semaine
   const formatDayOfWeek = (day: number) => {
     const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -368,6 +386,30 @@ export default function DashboardPage() {
   // Formater l'heure
   const formatTime = (timeString: string) => {
     return format(new Date(timeString), 'HH:mm');
+  };
+
+  // Gérer le filtre par jour de la semaine
+  const handleDayOfWeekFilterChange = (event: SelectChangeEvent) => {
+    setDayOfWeekFilter(event.target.value);
+    if (event.target.value === '') {
+      setFilteredSchedule(schedule);
+    } else {
+      const filtered = schedule.filter(item => 
+        item.day_of_week === parseInt(event.target.value));
+      setFilteredSchedule(filtered);
+    }
+  };
+
+  // Gérer le filtre par type d'événement
+  const handleEventTypeFilterChange = (event: SelectChangeEvent) => {
+    setEventTypeFilter(event.target.value);
+    if (event.target.value === '') {
+      setFilteredEvents(events);
+    } else {
+      const filtered = events.filter(item => 
+        item.type === event.target.value);
+      setFilteredEvents(filtered);
+    }
   };
 
   if (loading) {
@@ -410,15 +452,46 @@ export default function DashboardPage() {
               backgroundColor: '#003366', 
               color: 'white',
               display: 'flex',
-              alignItems: 'center'
+              alignItems: 'center',
+              flexWrap: 'wrap'
             }}>
               <EventIcon sx={{ mr: 1 }} />
-              <Typography variant="h6">Emploi du temps</Typography>
+              <Typography variant="h6" sx={{ flexGrow: 1 }}>Emploi du temps</Typography>
+              <Box sx={{ minWidth: 120, marginLeft: 'auto' }}>
+                <FormControl size="small" fullWidth sx={{ m: 0 }}>
+                  <Select
+                    value={dayOfWeekFilter}
+                    onChange={handleDayOfWeekFilterChange}
+                    displayEmpty
+                    inputProps={{ 'aria-label': 'Filtrer par jour' }}
+                    sx={{ 
+                      color: 'white',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'rgba(255, 255, 255, 0.5)',
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'white',
+                      },
+                      '& .MuiSvgIcon-root': {
+                        color: 'white',
+                      }
+                    }}
+                  >
+                    <MenuItem value="">Tous les jours</MenuItem>
+                    <MenuItem value="1">Lundi</MenuItem>
+                    <MenuItem value="2">Mardi</MenuItem>
+                    <MenuItem value="3">Mercredi</MenuItem>
+                    <MenuItem value="4">Jeudi</MenuItem>
+                    <MenuItem value="5">Vendredi</MenuItem>
+                    <MenuItem value="6">Samedi</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
             </Box>
             <Box sx={{ p: 2, flexGrow: 1 }}>
-              {schedule.length > 0 ? (
+              {filteredSchedule.length > 0 ? (
                 <List dense sx={{ maxHeight: 250, overflow: 'auto' }}>
-                  {schedule.slice(0, 5).map(item => (
+                  {filteredSchedule.slice(0, 5).map(item => (
                     <ListItem key={item.id} sx={{ mb: 1, bgcolor: 'white', borderRadius: 1 }}>
                       <ListItemText
                         primary={item.course_name}
@@ -444,11 +517,18 @@ export default function DashboardPage() {
                   ))}
                 </List>
               ) : (
-                <Typography>Aucun cours programmé</Typography>
+                <Typography>Aucun cours programmé pour ce jour</Typography>
               )}
             </Box>
+
             <Box sx={{ p: 1, textAlign: 'center' }}>
-              <Button variant="outlined" color="primary" sx={{ color: '#003366', borderColor: '#003366' }}>
+              <Button 
+                variant="outlined" 
+                color="primary" 
+                component={Link}
+                to="/student/schedule"
+                sx={{ color: '#003366', borderColor: '#003366' }}
+              >
                 Voir tout l'emploi du temps
               </Button>
             </Box>
@@ -504,7 +584,13 @@ export default function DashboardPage() {
               )}
             </Box>
             <Box sx={{ p: 1, textAlign: 'center' }}>
-              <Button variant="outlined" color="primary" sx={{ color: '#003366', borderColor: '#003366' }}>
+              <Button 
+                variant="outlined" 
+                color="primary"
+                component={Link}
+                to="/student/grades"
+                sx={{ color: '#003366', borderColor: '#003366' }}
+              >
                 Voir toutes les notes
               </Button>
             </Box>
@@ -557,7 +643,13 @@ export default function DashboardPage() {
               )}
             </Box>
             <Box sx={{ p: 1, textAlign: 'center' }}>
-              <Button variant="outlined" color="primary" sx={{ color: '#003366', borderColor: '#003366' }}>
+              <Button 
+                variant="outlined" 
+                color="primary"
+                component={Link}
+                to="/student/courses" 
+                sx={{ color: '#003366', borderColor: '#003366' }}
+              >
                 Voir tous les cours
               </Button>
             </Box>
@@ -615,11 +707,42 @@ export default function DashboardPage() {
         PROCHAINS ÉVÉNEMENTS
       </Typography>
       <Paper elevation={3} sx={{ mb: 4, p: 2 }}>
-        {events.length > 0 ? (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ minWidth: 200 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="event-type-filter-label">Type d'événement</InputLabel>
+              <Select
+                labelId="event-type-filter-label"
+                id="event-type-filter"
+                value={eventTypeFilter}
+                label="Type d'événement"
+                onChange={handleEventTypeFilterChange}
+              >
+                <MenuItem value="">Tous les événements</MenuItem>
+                <MenuItem value="conférence">Conférences</MenuItem>
+                <MenuItem value="atelier">Ateliers</MenuItem>
+                <MenuItem value="social">Événements sociaux</MenuItem>
+                <MenuItem value="professionnel">Événements professionnels</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+          
+          <Box>
+            <Badge badgeContent={filteredEvents.length} color="primary" showZero>
+              <Typography variant="body2">
+                {filteredEvents.length > 0 
+                  ? `${filteredEvents.length} événement${filteredEvents.length > 1 ? 's' : ''} à venir` 
+                  : 'Aucun événement'}
+              </Typography>
+            </Badge>
+          </Box>
+        </Box>
+        
+        {filteredEvents.length > 0 ? (
           <List>
-            {events.map((event) => (
-              <>
-                <ListItem key={event.id} alignItems="flex-start">
+            {filteredEvents.map((event) => (
+              <Box key={event.id}>
+                <ListItem alignItems="flex-start">
                   <ListItemText
                     primary={
                       <Typography variant="h6" color="primary">
@@ -657,11 +780,11 @@ export default function DashboardPage() {
                   />
                 </ListItem>
                 <Divider component="li" />
-              </>
+              </Box>
             ))}
           </List>
         ) : (
-          <Typography>Aucun événement à venir</Typography>
+          <Typography>Aucun événement correspondant à vos critères</Typography>
         )}
       </Paper>
     </Box>

@@ -17,6 +17,7 @@ export interface EventItem {
   start_date: string;
   end_date?: string;
   location?: string;
+  type?: string;
 }
 
 // Actualités mockées
@@ -51,28 +52,32 @@ export const mockEvents: EventItem[] = [
     description: 'Atelier pratique sur la rédaction de CV et les techniques de recherche de stage efficaces. Animé par le service carrière de l\'ESGIS.',
     start_date: '2025-05-10T14:00:00Z',
     end_date: '2025-05-10T17:00:00Z',
-    location: 'Salle A305 - Campus Principal'
+    location: 'Salle A305 - Campus Principal',
+    type: 'atelier'
   },
   {
     title: 'Séminaire Intelligence Artificielle',
     description: 'Présentation des dernières avancées en intelligence artificielle et démonstration de projets étudiants.',
     start_date: '2025-05-15T09:30:00Z',
     end_date: '2025-05-15T16:00:00Z',
-    location: 'Amphithéâtre Mendès France'
+    location: 'Amphithéâtre Mendès France',
+    type: 'conférence'
   },
   {
     title: 'Soirée d\'intégration promotion 2025',
     description: 'Soirée festive d\'accueil des nouveaux étudiants de la promotion 2025. Venez faire connaissance avec vos camarades de promotion!',
     start_date: '2025-05-18T19:00:00Z',
     end_date: '2025-05-18T23:00:00Z',
-    location: 'Campus ESGIS - Espace Événementiel'
+    location: 'Campus ESGIS - Espace Événementiel',
+    type: 'social'
   },
   {
     title: 'Forum entreprises ESGIS Connect',
     description: 'Rencontrez les recruteurs de plus de 50 entreprises partenaires pour des opportunités de stage et d\'emploi.',
     start_date: '2025-05-25T10:00:00Z',
     end_date: '2025-05-25T17:00:00Z',
-    location: 'Palais des Congrès'
+    location: 'Palais des Congrès',
+    type: 'professionnel'
   }
 ];
 
