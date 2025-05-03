@@ -1,6 +1,6 @@
 // Mock de l'AuthProvider pour les tests
 jest.mock('./context/AuthContext', () => ({
-  AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="auth-provider">{children}</div>
 }), { virtual: true });
 
 import React from 'react';

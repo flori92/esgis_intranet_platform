@@ -15,7 +15,7 @@ jest.mock('../../hooks/useAuth', () => ({
 
 // Mock de l'AuthProvider pour résoudre le problème de props children
 jest.mock('../../context/AuthContext', () => ({
-  AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>,
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="auth-provider">{children}</div>,
   useAuth: () => ({
     authState: {
       isAdmin: true,

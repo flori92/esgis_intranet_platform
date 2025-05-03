@@ -1,6 +1,6 @@
 // Mock de l'AuthProvider pour résoudre le problème de props children
 jest.mock('../../context/AuthContext', () => ({
-  AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>,
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="auth-provider">{children}</div>,
   useAuth: () => ({
     authState: {
       isAdmin: true,
@@ -10,7 +10,6 @@ jest.mock('../../context/AuthContext', () => ({
   }),
 }));
 
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../../context/AuthContext';

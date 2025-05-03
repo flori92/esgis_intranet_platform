@@ -233,7 +233,7 @@ export const getConversationMessages = async (conversationId: string | number): 
     const { data, error } = await supabase
       .from('messages')
       .select('*')
-      .eq('conversation_id', conversationId)
+      .eq('conversation_id', typeof conversationId === 'string' ? parseInt(conversationId, 10) : conversationId)
       .order('created_at', { ascending: true });
     
     if (error) {
@@ -320,7 +320,7 @@ export const updateMessageReadStatus = async (conversationId: string | number, u
   const { data: unreadMessages, error: fetchError } = await supabase
     .from('messages')
     .select('id')
-    .eq('conversation_id', conversationId)
+    .eq('conversation_id', typeof conversationId === 'string' ? parseInt(conversationId, 10) : conversationId)
     .eq('read', false)
     .neq('sender_id', userId);
 

@@ -1,6 +1,6 @@
 // Mock de l'AuthProvider pour résoudre le problème de props children
 jest.mock('../../context/AuthContext', () => ({
-  AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>,
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="auth-provider">{children}</div>,
   useAuth: () => ({
     authState: {
       isAdmin: true,
@@ -10,18 +10,8 @@ jest.mock('../../context/AuthContext', () => ({
   }),
 }));
 
-// Mock du hook useAuth
-jest.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({
-    authState: {
-      isAdmin: true,
-      user: { id: 'test-user-id' },
-    },
-  }),
-}));
-
 // Mock de supabase
-jest.mock('../../utils/supabase', () => ({
+jest.mock('../../services/supabase', () => ({
   supabase: {
     from: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
@@ -55,8 +45,7 @@ jest.mock('../../utils/supabase', () => ({
   },
 }));
 
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../../context/AuthContext';
 import StudentsListPage from '../../pages/admin/students/StudentsListPage';

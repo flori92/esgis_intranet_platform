@@ -156,24 +156,48 @@ const AdminDashboard: React.FC = () => {
       try {
         const resultsSubscription = supabase
           .channel('public:quiz_results')
-          .on('INSERT', 'quiz_results', (payload: { new: QuizResult }) => {
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quiz_results' }, (payload: { new: QuizResult }) => {
             console.log('Nouveau résultat reçu:', payload.new);
-            setQuizResults((currentResults) => [...currentResults, payload.new]);
+            
+            // Ajouter le nouveau résultat aux résultats existants
+            setQuizResults(prevResults => {
+              // Éviter les doublons en vérifiant si le résultat existe déjà
+              const exists = prevResults.some(r => r.studentId === payload.new.studentId);
+              if (exists) {
+                return prevResults.map(r => 
+                  r.studentId === payload.new.studentId ? payload.new : r
+                );
+              } else {
+                return [...prevResults, payload.new];
+              }
+            });
           })
           .subscribe();
           
-        // Mise en place de l'abonnement temps réel pour les étudiants actifs
+        // Abonnement aux mises à jour des étudiants actifs
         const studentsSubscription = supabase
           .channel('public:active_students')
-          .on('INSERT', 'active_students', (payload: { new: ActiveStudent }) => {
-            console.log('Nouvel étudiant connecté:', payload.new);
-            setActiveStudents((current) => [payload.new, ...current]);
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'active_students' }, (payload: { new: ActiveStudent }) => {
+            console.log('Nouvel étudiant actif:', payload.new);
+            
+            setActiveStudents(prev => {
+              // Éviter les doublons
+              const exists = prev.some(s => s.student_id === payload.new.student_id);
+              if (exists) {
+                return prev.map(s => 
+                  s.student_id === payload.new.student_id ? payload.new : s
+                );
+              } else {
+                return [...prev, payload.new];
+              }
+            });
           })
-          .on('UPDATE', 'active_students', (payload: { new: ActiveStudent }) => {
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'active_students' }, (payload: { new: ActiveStudent }) => {
             console.log('Mise à jour étudiant:', payload.new);
-            setActiveStudents((current) => 
-              current.map(student => 
-                student.student_id === payload.new.student_id ? payload.new : student
+            
+            setActiveStudents(prev => 
+              prev.map(s => 
+                s.student_id === payload.new.student_id ? payload.new : s
               )
             );
           })
