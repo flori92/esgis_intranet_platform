@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { supabase } from '../services/supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { Profile, Student, Professor, Role } from '../types/supabase.types';
@@ -77,7 +77,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .eq('id', user.id)
         .single();
 
-      if (profileError) throw profileError;
+      if (profileError) {
+    throw profileError;
+  }
 
       // Vérifier et convertir le rôle en type Role valide
       let userRole: Role = 'student'; // Valeur par défaut
@@ -111,8 +113,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (student) {
           studentData = {
             ...student,
-            graduation_year: student.graduation_year || null,
-            specialization: student.specialization || null,
+            // Utilisation d'une assertion de type pour éviter les erreurs TypeScript
+            // ou définition de valeurs par défaut pour les propriétés manquantes
+            graduation_year: (student as any).graduation_year || null,
+            specialization: (student as any).specialization || null,
             status: student.status as "active" | "suspended" | "graduated" | "expelled"
           };
         }
@@ -153,7 +157,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Fonction pour rafraîchir la session (avec useCallback pour éviter les recréations à chaque rendu)
-  const refreshSession = useCallback(async () => {
+  const refreshSession = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -181,7 +185,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Erreur lors du rafraîchissement de la session:', error);
       setAuthState(prev => ({ ...prev, error: error as Error, loading: false }));
     }
-  }, []);
+  };
 
   // Effet pour s'abonner aux changements d'authentification
   useEffect(() => {
@@ -211,14 +215,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
       subscription.unsubscribe();
     };
-  }, [refreshSession]); // Ajout de refreshSession comme dépendance
+  }, []); // Ajout de refreshSession comme dépendance
 
   // Fonction de connexion
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       
       return { error: null };
     } catch (error) {
@@ -251,7 +257,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         redirectTo: `${window.location.origin}/reset-password`
       });
       
-      if (error) throw error;
+      if (error) {
+    throw error;
+  }
       
       return { error: null };
     } catch (error) {
@@ -279,7 +287,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+    throw error;
+  }
       
       // Mise à jour de l'état
       if (data) {
@@ -324,8 +334,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         password
       });
       
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Erreur: Utilisateur non créé');
+      if (authError) {
+    throw authError;
+  }
+      if (!authData.user) {
+    throw new Error('Erreur: Utilisateur non créé');
+  }
       
       const userId = authData.user.id;
       
@@ -341,7 +355,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           is_active: true
         });
       
-      if (profileError) throw profileError;
+      if (profileError) {
+    throw profileError;
+  }
       
       // Créer l'entrée spécifique au rôle (étudiant ou professeur)
       if (profileData.role === 'student') {
@@ -357,18 +373,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             status: 'active'
           }]);
         
-        if (studentError) throw studentError;
+        if (studentError) {
+    throw studentError;
+  }
       } else if (profileData.role === 'professor') {
         const { error: professorError } = await supabase
           .from('professors')
           .insert([{
             profile_id: userId,
-            title: 'Dr.',
-            specialization: '',
+            employee_number: `PROF-${Date.now().toString().slice(-6)}`,
+            hire_date: new Date().toISOString(),
+            specialties: [],
             status: 'active'
           }]);
         
-        if (professorError) throw professorError;
+        if (professorError) {
+    throw professorError;
+  }
       }
       
       return { error: null, userId };

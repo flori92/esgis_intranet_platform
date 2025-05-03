@@ -33,26 +33,34 @@ export interface Student {
   id: string;
   profile_id: string;
   student_id: string;
+  student_number?: string;    // Ajout pour compatibilité avec le code existant
   enrollment_year: number;
+  entry_year?: number;        // Ajout pour compatibilité avec le code existant
   current_year: number;
+  level?: string;             // Ajout pour compatibilité avec le code existant
   department_id: number;
   created_at: string;
   updated_at: string;
   profile?: Profile;
+  // Propriétés étendues utilisées dans l'application
+  graduation_year?: string | number | null;
+  specialization?: string | null;
+  status?: 'active' | 'suspended' | 'graduated' | 'expelled';
 }
 
 /**
  * Professeur
  */
 export interface Professor {
-  id: string;
+  id?: number | string;
   profile_id: string;
-  professor_id: string;
+  employee_number: string;  // Renommé de professor_id pour correspondre au schéma de la BD
   hire_date: string;
-  specialty: string;
-  department_id: number;
-  created_at: string;
-  updated_at: string;
+  specialties?: string[];   // Renommé de specialty et adapté en tableau
+  status?: string;
+  department_id?: number;   // Rendu optionnel car pas dans le schéma de base
+  created_at?: string;
+  updated_at?: string;
   profile?: Profile;
 }
 
