@@ -4,7 +4,8 @@ import { toast } from 'react-hot-toast';
 import supabase, { checkSupabaseConnection as checkConnection } from '../supabase';
 import { completedQuizzes, activeStudents } from './authUtils';
 
-interface AuthContextType {
+// Interface du contexte d'authentification
+export interface AuthContextType {
   appState: AppState;
   login: (name: string, isAdmin?: boolean) => Promise<boolean>;
   logout: () => Promise<void>;

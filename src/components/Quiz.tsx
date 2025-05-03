@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { useQuiz } from "../context/QuizContext";
+import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
 import QuestionCard from "./QuestionCard";
 import QuizNavigation from "./QuizNavigation";

@@ -1,5 +1,5 @@
 import React from "react";
-import { useQuiz } from "../context/QuizContext";
+import { useQuiz } from "../hooks/useQuiz";
 
 const QuizNavigation: React.FC = () => {
   const { 

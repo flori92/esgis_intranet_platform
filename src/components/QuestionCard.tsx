@@ -1,6 +1,6 @@
 import React from "react";
 import { Question } from "../types";
-import { useQuiz } from "../context/QuizContext";
+import { useQuiz } from "../hooks/useQuiz";
 
 interface QuestionCardProps {
   question: Question;

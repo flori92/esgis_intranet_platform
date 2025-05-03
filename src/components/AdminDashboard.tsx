@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { useQuiz } from "../context/QuizContext";
+import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
 import { Timer, QuizResult } from "../types";
 import { Clock } from "lucide-react";
-import { SupabaseClient } from '@supabase/supabase-js';
+import supabase from '../supabase';
 
 // Déclaration pour TypeScript - permet d'accéder à window.supabase
 declare global {
   interface Window {
-    supabase: SupabaseClient;
+    supabase: typeof supabase;
   }
 }
 
@@ -156,7 +156,7 @@ const AdminDashboard: React.FC = () => {
       try {
         const resultsSubscription = supabase
           .channel('public:quiz_results')
-          .on('INSERT', (payload: { new: QuizResult }) => {
+          .on('INSERT', 'quiz_results', (payload: { new: QuizResult }) => {
             console.log('Nouveau résultat reçu:', payload.new);
             setQuizResults((currentResults) => [...currentResults, payload.new]);
           })
@@ -165,11 +165,11 @@ const AdminDashboard: React.FC = () => {
         // Mise en place de l'abonnement temps réel pour les étudiants actifs
         const studentsSubscription = supabase
           .channel('public:active_students')
-          .on('INSERT', (payload: { new: ActiveStudent }) => {
+          .on('INSERT', 'active_students', (payload: { new: ActiveStudent }) => {
             console.log('Nouvel étudiant connecté:', payload.new);
             setActiveStudents((current) => [payload.new, ...current]);
           })
-          .on('UPDATE', (payload: { new: ActiveStudent }) => {
+          .on('UPDATE', 'active_students', (payload: { new: ActiveStudent }) => {
             console.log('Mise à jour étudiant:', payload.new);
             setActiveStudents((current) => 
               current.map(student => 

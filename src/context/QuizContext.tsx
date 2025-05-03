@@ -1,18 +1,20 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useState, useEffect, ReactNode, useRef } from "react";
 import { Question, QuizResult, QuizStatus, Timer } from "../types";
 import { getRandomizedQuestions } from "../data/questions";
 import { useAuth } from "../hooks/useAuth";
 import emailjs from '@emailjs/browser';
 import toast from 'react-hot-toast';
+import supabase from '../supabase';
 
 // Déclaration pour TypeScript - permet d'accéder à window.supabase
 declare global {
   interface Window {
-    supabase: any;
+    supabase: typeof supabase;
   }
 }
 
-interface QuizContextType {
+// Interface du contexte Quiz avec export pour rendre accessible depuis d'autres fichiers
+export interface QuizContextType {
   questions: Question[];
   currentQuestionIndex: number;
   userAnswers: Record<string, number>;
@@ -46,7 +48,8 @@ const QuizContext = createContext<QuizContextType>({
   quizResults: []
 });
 
-export const useQuiz = () => useContext(QuizContext);
+// Export du contexte pour qu'il soit accessible depuis le hook useQuiz
+export { QuizContext };
 
 interface QuizProviderProps {
   children: ReactNode;
@@ -67,6 +70,164 @@ export const QuizProvider: React.FC<QuizProviderProps> = ({ children }: QuizProv
   
   // Référence au client Supabase initialisé dans index.html
   const supabase = window.supabase;
+
+  // Utilisation de useRef pour stocker des références stables aux fonctions
+  // qui seront utilisées dans les useEffect pour éviter les recréations
+  const functionsRef = useRef<{
+    calculateScore: () => number;
+    sendEmailNotification: (result: QuizResult) => Promise<void>;
+    endQuiz: () => void;
+  }>({
+    calculateScore: () => {
+      let score = 0;
+      
+      questions.forEach((question) => {
+        const userAnswer = userAnswers[question.id];
+        if (userAnswer !== undefined && userAnswer === question.correctAnswer) {
+          score += 0.5; // Chaque question vaut 0.5 point
+        }
+      });
+      
+      return score;
+    },
+    
+    sendEmailNotification: async (result: QuizResult) => {
+      try {
+        const templateParams = {
+          to_email: 'florifavi@gmail.com',
+          student_name: result.studentName,
+          score: result.score.toFixed(1),
+          max_score: result.maxScore,
+          percentage: ((result.score / result.maxScore) * 100).toFixed(1),
+          cheating_attempts: result.cheatingAttempts,
+          completion_date: new Date(result.completedAt).toLocaleString(),
+        };
+  
+        await emailjs.send(
+          'service_default',
+          'template_default',
+          templateParams
+        );
+  
+        toast.success('Résultats envoyés à l\'administrateur');
+      } catch (error) {
+        console.error('Erreur lors de l\'envoi de l\'email:', error);
+        toast.error('Erreur lors de l\'envoi des résultats');
+      }
+    },
+    
+    endQuiz: () => {
+      if (appState.currentUser && quizStatus === QuizStatus.IN_PROGRESS) {
+        const score = functionsRef.current!.calculateScore();
+        const result: QuizResult = {
+          studentId: appState.currentUser.id,
+          studentName: appState.currentUser.name,
+          score,
+          maxScore: questions.length * 0.5,
+          answers: { ...userAnswers },
+          cheatingAttempts,
+          completedAt: new Date().toISOString()
+        };
+        
+        // Insertion du résultat dans Supabase
+        const insertQuizResult = async () => {
+          try {
+            const { error } = await supabase
+              .from('quiz_results')
+              .insert([result]);
+              
+            if (error) {
+              console.error('Erreur lors de l\'enregistrement du résultat:', error);
+              toast.error('Erreur lors de l\'enregistrement du résultat');
+              // Fallback : enregistrement local en cas d'échec
+              setQuizResults((prev: QuizResult[]) => [...prev, result]);
+              return;
+            }
+            
+            toast.success('Résultat enregistré avec succès');
+            // Mise à jour locale pour cohérence de l'UI
+            setQuizResults((prev: QuizResult[]) => [...prev, result]);
+          } catch (err) {
+            console.error('Erreur inattendue:', err);
+            toast.error('Erreur lors de l\'enregistrement du résultat');
+            // Fallback : enregistrement local en cas d'échec
+            setQuizResults((prev: QuizResult[]) => [...prev, result]);
+          }
+        };
+        
+        insertQuizResult();
+        setQuizStatus(QuizStatus.COMPLETED);
+        
+        // Send email notification with the results
+        functionsRef.current!.sendEmailNotification(result);
+      }
+    }
+  });
+
+  // Mise à jour des fonctions dans la ref quand les dépendances changent
+  useEffect(() => {
+    functionsRef.current!.calculateScore = () => {
+      let score = 0;
+      
+      questions.forEach((question) => {
+        const userAnswer = userAnswers[question.id];
+        if (userAnswer !== undefined && userAnswer === question.correctAnswer) {
+          score += 0.5; // Chaque question vaut 0.5 point
+        }
+      });
+      
+      return score;
+    };
+  }, [questions, userAnswers]);
+
+  useEffect(() => {
+    functionsRef.current!.endQuiz = () => {
+      if (appState.currentUser && quizStatus === QuizStatus.IN_PROGRESS) {
+        const score = functionsRef.current!.calculateScore();
+        const result: QuizResult = {
+          studentId: appState.currentUser.id,
+          studentName: appState.currentUser.name,
+          score,
+          maxScore: questions.length * 0.5,
+          answers: { ...userAnswers },
+          cheatingAttempts,
+          completedAt: new Date().toISOString()
+        };
+        
+        // Insertion du résultat dans Supabase
+        const insertQuizResult = async () => {
+          try {
+            const { error } = await supabase
+              .from('quiz_results')
+              .insert([result]);
+              
+            if (error) {
+              console.error('Erreur lors de l\'enregistrement du résultat:', error);
+              toast.error('Erreur lors de l\'enregistrement du résultat');
+              // Fallback : enregistrement local en cas d'échec
+              setQuizResults((prev: QuizResult[]) => [...prev, result]);
+              return;
+            }
+            
+            toast.success('Résultat enregistré avec succès');
+            // Mise à jour locale pour cohérence de l'UI
+            setQuizResults((prev: QuizResult[]) => [...prev, result]);
+          } catch (err) {
+            console.error('Erreur inattendue:', err);
+            toast.error('Erreur lors de l\'enregistrement du résultat');
+            // Fallback : enregistrement local en cas d'échec
+            setQuizResults((prev: QuizResult[]) => [...prev, result]);
+          }
+        };
+        
+        insertQuizResult();
+        setQuizStatus(QuizStatus.COMPLETED);
+        
+        // Send email notification with the results
+        functionsRef.current!.sendEmailNotification(result);
+      }
+    };
+  }, [appState.currentUser, questions.length, userAnswers, cheatingAttempts, quizStatus, supabase]);
 
   // Récupération des résultats depuis Supabase au chargement
   useEffect(() => {
@@ -92,32 +253,7 @@ export const QuizProvider: React.FC<QuizProviderProps> = ({ children }: QuizProv
     };
     
     fetchQuizResults();
-  }, []);
-
-  const sendEmailNotification = async (result: QuizResult) => {
-    try {
-      const templateParams = {
-        to_email: 'florifavi@gmail.com',
-        student_name: result.studentName,
-        score: result.score.toFixed(1),
-        max_score: result.maxScore,
-        percentage: ((result.score / result.maxScore) * 100).toFixed(1),
-        cheating_attempts: result.cheatingAttempts,
-        completion_date: new Date(result.completedAt).toLocaleString(),
-      };
-
-      await emailjs.send(
-        'service_default',
-        'template_default',
-        templateParams
-      );
-
-      toast.success('Résultats envoyés à l\'administrateur');
-    } catch (error) {
-      console.error('Erreur lors de l\'envoi de l\'email:', error);
-      toast.error('Erreur lors de l\'envoi des résultats');
-    }
-  };
+  }, [supabase]);
 
   // Timer effect
   useEffect(() => {
@@ -128,7 +264,7 @@ export const QuizProvider: React.FC<QuizProviderProps> = ({ children }: QuizProv
         setTimer((prevTimer: Timer) => {
           if (prevTimer.minutes === 0 && prevTimer.seconds === 0) {
             clearInterval(interval);
-            endQuiz();
+            functionsRef.current!.endQuiz();
             return prevTimer;
           }
 
@@ -164,53 +300,6 @@ export const QuizProvider: React.FC<QuizProviderProps> = ({ children }: QuizProv
     setQuizStatus(QuizStatus.IN_PROGRESS);
   };
 
-  const endQuiz = () => {
-    if (appState.currentUser && quizStatus === QuizStatus.IN_PROGRESS) {
-      const score = calculateScore();
-      const result: QuizResult = {
-        studentId: appState.currentUser.id,
-        studentName: appState.currentUser.name,
-        score,
-        maxScore: questions.length * 0.5,
-        answers: { ...userAnswers },
-        cheatingAttempts,
-        completedAt: new Date().toISOString()
-      };
-      
-      // Insertion du résultat dans Supabase
-      const insertQuizResult = async () => {
-        try {
-          const { error } = await supabase
-            .from('quiz_results')
-            .insert([result]);
-            
-          if (error) {
-            console.error('Erreur lors de l\'enregistrement du résultat:', error);
-            toast.error('Erreur lors de l\'enregistrement du résultat');
-            // Fallback : enregistrement local en cas d'échec
-            setQuizResults((prev: QuizResult[]) => [...prev, result]);
-            return;
-          }
-          
-          toast.success('Résultat enregistré avec succès');
-          // Mise à jour locale pour cohérence de l'UI
-          setQuizResults((prev: QuizResult[]) => [...prev, result]);
-        } catch (err) {
-          console.error('Erreur inattendue:', err);
-          toast.error('Erreur lors de l\'enregistrement du résultat');
-          // Fallback : enregistrement local en cas d'échec
-          setQuizResults((prev: QuizResult[]) => [...prev, result]);
-        }
-      };
-      
-      insertQuizResult();
-      setQuizStatus(QuizStatus.COMPLETED);
-      
-      // Send email notification with the results
-      sendEmailNotification(result);
-    }
-  };
-
   const answerQuestion = (questionId: string, answerIndex: number) => {
     if (quizStatus === QuizStatus.IN_PROGRESS) {
       setUserAnswers((prev: Record<string, number>) => ({
@@ -232,20 +321,6 @@ export const QuizProvider: React.FC<QuizProviderProps> = ({ children }: QuizProv
     }
   };
 
-  const calculateScore = () => {
-    if (questions.length === 0) return 0;
-    
-    let correctAnswers = 0;
-    questions.forEach((question: Question) => {
-      const userAnswer = userAnswers[question.id];
-      if (userAnswer === question.correctAnswer) {
-        correctAnswers++;
-      }
-    });
-    
-    return correctAnswers * 0.5;
-  };
-
   const reportCheatingAttempt = () => {
     setCheatingAttempts((prev: number) => prev + 1);
   };
@@ -259,11 +334,11 @@ export const QuizProvider: React.FC<QuizProviderProps> = ({ children }: QuizProv
       cheatingAttempts,
       timer,
       startQuiz,
-      endQuiz,
+      endQuiz: functionsRef.current!.endQuiz,
       answerQuestion,
       goToNextQuestion,
       goToPreviousQuestion,
-      calculateScore,
+      calculateScore: functionsRef.current!.calculateScore,
       reportCheatingAttempt,
       quizResults
     }}>

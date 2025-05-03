@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext, AuthContextType } from '../context/AuthContext';
 
-// Hook pour accéder au contexte d'authentification
-export const useAuth = () => useContext(AuthContext);
+// Hook pour accéder au contexte d'authentification avec typage explicite
+export const useAuth = (): AuthContextType => useContext(AuthContext);
