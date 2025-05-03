@@ -67,6 +67,7 @@ interface Document {
   is_public: boolean;
   department_id: number | null;
   department_name: string | null;
+  tags?: string[];
 }
 
 // Types pour les catégories
@@ -95,9 +96,21 @@ const DocumentsPage: React.FC = () => {
     course_id: '',
     is_public: false,
     file: null as File | null,
+    tags: [] as string[],
   });
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+  const [dateFilter, setDateFilter] = useState<{
+    startDate: string | null;
+    endDate: string | null;
+  }>({
+    startDate: null,
+    endDate: null,
+  });
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // Définir les catégories
   const categories: Category[] = [
@@ -139,37 +152,19 @@ const DocumentsPage: React.FC = () => {
             }));
             setCourses(uniqueCourses);
           }
-        } else if (authState.isProfessor && authState.professor) {
-          const { data: coursesData, error: coursesError } = await supabase
-            .from('professor_courses')
-            .select(`
-              course_id,
-              courses (
-                id,
-                name
-              )
-            `)
-            .eq('professor_id', authState.professor.id);
+        }
 
-          if (coursesError) throw coursesError;
-
-          if (coursesData) {
-            const uniqueCourses = coursesData.map(item => ({
-              id: item.courses.id,
-              name: item.courses.name,
-            }));
-            setCourses(uniqueCourses);
-          }
-        } else if (authState.isAdmin) {
-          const { data: coursesData, error: coursesError } = await supabase
-            .from('courses')
-            .select('id, name');
-
-          if (coursesError) throw coursesError;
-
-          if (coursesData) {
-            setCourses(coursesData);
-          }
+        // Récupérer tous les tags disponibles
+        const { data: tagsData, error: tagsError } = await supabase
+          .from('document_tags')
+          .select('tag')
+          .order('tag');
+        
+        if (tagsError) throw tagsError;
+        
+        if (tagsData) {
+          const uniqueTags = [...new Set(tagsData.map(item => item.tag))];
+          setAvailableTags(uniqueTags);
         }
 
         // Construire la requête pour récupérer les documents
@@ -189,7 +184,8 @@ const DocumentsPage: React.FC = () => {
             courses (name),
             is_public,
             department_id,
-            departments (name)
+            departments (name),
+            tags
           `);
 
         // Filtrer selon le rôle de l'utilisateur
@@ -220,6 +216,7 @@ const DocumentsPage: React.FC = () => {
             is_public: doc.is_public,
             department_id: doc.department_id,
             department_name: doc.departments?.name || null,
+            tags: doc.tags || [],
           }));
 
           setDocuments(transformedDocuments);
@@ -257,12 +254,32 @@ const DocumentsPage: React.FC = () => {
         (doc) =>
           doc.title.toLowerCase().includes(query) ||
           (doc.description && doc.description.toLowerCase().includes(query)) ||
+          (doc.tags && doc.tags.some((tag) => tag.toLowerCase().includes(query))) ||
           (doc.course_name && doc.course_name.toLowerCase().includes(query))
       );
     }
 
+    // Filtrer par date
+    if (dateFilter.startDate) {
+      filtered = filtered.filter(
+        (doc) => new Date(doc.uploaded_at) >= new Date(dateFilter.startDate!)
+      );
+    }
+    if (dateFilter.endDate) {
+      filtered = filtered.filter(
+        (doc) => new Date(doc.uploaded_at) <= new Date(dateFilter.endDate!)
+      );
+    }
+
+    // Filtrer par tags
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter((doc) =>
+        doc.tags && selectedTags.every((tag) => doc.tags!.includes(tag))
+      );
+    }
+
     setFilteredDocuments(filtered);
-  }, [documents, selectedCategory, selectedCourse, searchQuery]);
+  }, [documents, selectedCategory, selectedCourse, searchQuery, dateFilter, selectedTags]);
 
   // Gérer le changement d'onglet
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -299,6 +316,7 @@ const DocumentsPage: React.FC = () => {
       course_id: '',
       is_public: false,
       file: null,
+      tags: [],
     });
     setUploadProgress(0);
     setIsUploading(false);
@@ -436,6 +454,21 @@ const DocumentsPage: React.FC = () => {
 
       if (insertError) throw insertError;
 
+      // Ajouter les tags s'il y en a
+      if (uploadFormData.tags.length > 0 && data && data.length > 0) {
+        const documentId = data[0].id;
+        const tagInserts = uploadFormData.tags.map((tag) => ({
+          document_id: documentId,
+          tag: tag,
+        }));
+
+        const { error: tagError } = await supabase
+          .from('document_tags')
+          .insert(tagInserts);
+
+        if (tagError) throw tagError;
+      }
+
       // Mettre à jour la liste des documents
       if (data && data.length > 0) {
         const newDoc: Document = {
@@ -453,6 +486,7 @@ const DocumentsPage: React.FC = () => {
           is_public: data[0].is_public,
           department_id: data[0].department_id,
           department_name: null, // À récupérer si nécessaire
+          tags: uploadFormData.tags,
         };
 
         setDocuments([newDoc, ...documents]);
@@ -518,70 +552,140 @@ const DocumentsPage: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Documents
-      </Typography>
+      <Typography variant="h4" gutterBottom>Bibliothèque de ressources</Typography>
 
-      {/* Barre d'outils */}
-      <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-        <TextField
-          placeholder="Rechercher..."
-          variant="outlined"
-          size="small"
-          value={searchQuery}
-          onChange={handleSearchChange}
-          sx={{ flexGrow: 1 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-        />
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Catégorie</InputLabel>
-          <Select
-            value={selectedCategory}
-            label="Catégorie"
-            onChange={handleCategoryChange}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <TextField
+            placeholder="Rechercher..."
+            variant="outlined"
             size="small"
-          >
-            {categories.map((category) => (
-              <MenuItem key={category.id} value={category.id}>
-                {category.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Cours</InputLabel>
-          <Select
-            value={selectedCourse}
-            label="Cours"
-            onChange={handleCourseChange}
-            size="small"
-          >
-            <MenuItem value="all">Tous les cours</MenuItem>
-            {courses.map((course) => (
-              <MenuItem key={course.id} value={course.id.toString()}>
-                {course.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
+            value={searchQuery}
+            onChange={handleSearchChange}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mr: 1, width: 300 }}
+          />
+          <Tooltip title="Recherche avancée">
+            <IconButton onClick={() => setAdvancedSearchOpen(!advancedSearchOpen)}>
+              <FilterListIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
         <Button
           variant="contained"
-          startIcon={<CloudUploadIcon />}
+          startIcon={<AddIcon />}
           onClick={handleOpenUploadDialog}
-          sx={{ ml: 'auto' }}
         >
-          Uploader
+          Nouveau document
         </Button>
       </Box>
+
+      {advancedSearchOpen && (
+        <Paper sx={{ p: 2, mb: 2 }}>
+          <Typography variant="h6" gutterBottom>Recherche avancée</Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth margin="dense" size="small">
+                <InputLabel>Catégorie</InputLabel>
+                <Select
+                  value={selectedCategory}
+                  label="Catégorie"
+                  onChange={handleCategoryChange}
+                >
+                  <MenuItem value="all">Toutes les catégories</MenuItem>
+                  {categories.map((category) => (
+                    <MenuItem key={category.id} value={category.id}>
+                      {category.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth margin="dense" size="small">
+                <InputLabel>Cours</InputLabel>
+                <Select
+                  value={selectedCourse}
+                  label="Cours"
+                  onChange={handleCourseChange}
+                  disabled={courses.length === 0}
+                >
+                  <MenuItem value="all">Tous les cours</MenuItem>
+                  {courses.map((course) => (
+                    <MenuItem key={course.id} value={course.id.toString()}>
+                      {course.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Date de début"
+                type="date"
+                value={dateFilter.startDate || ''}
+                onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                fullWidth
+                margin="dense"
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Date de fin"
+                type="date"
+                value={dateFilter.endDate || ''}
+                onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                fullWidth
+                margin="dense"
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" gutterBottom>Tags</Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {availableTags.map((tag) => (
+                  <Chip
+                    key={tag}
+                    label={tag}
+                    onClick={() => handleAddFilterTag(tag)}
+                    color={selectedTags.includes(tag) ? 'primary' : 'default'}
+                    onDelete={selectedTags.includes(tag) ? () => handleRemoveFilterTag(tag) : undefined}
+                  />
+                ))}
+              </Box>
+            </Grid>
+            <Grid item xs={12}>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                onClick={handleResetFilters}
+                startIcon={<FilterListIcon />}
+              >
+                Réinitialiser les filtres
+              </Button>
+            </Grid>
+          </Grid>
+        </Paper>
+      )}
 
       {/* Onglets */}
       <Tabs
@@ -650,6 +754,13 @@ const DocumentsPage: React.FC = () => {
                             size="small"
                             color="default"
                           />
+                          {document.tags && document.tags.length > 0 && (
+                            <Chip
+                              label={document.tags.join(', ')}
+                              size="small"
+                              color="default"
+                            />
+                          )}
                         </Box>
                       </Box>
                     }
@@ -755,6 +866,45 @@ const DocumentsPage: React.FC = () => {
                 <MenuItem value="true">Public</MenuItem>
               </Select>
             </FormControl>
+            <Box sx={{ display: 'flex', alignItems: 'flex-end', mt: 2 }}>
+              <TextField
+                label="Ajouter un tag"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                sx={{ flexGrow: 1, mr: 1 }}
+              />
+              <Button 
+                variant="outlined" 
+                onClick={() => {
+                  if (tagInput && !uploadFormData.tags.includes(tagInput)) {
+                    setUploadFormData({
+                      ...uploadFormData,
+                      tags: [...uploadFormData.tags, tagInput],
+                    });
+                    setTagInput('');
+                  }
+                }}
+                disabled={!tagInput}
+              >
+                Ajouter
+              </Button>
+            </Box>
+            {uploadFormData.tags.length > 0 && (
+              <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {uploadFormData.tags.map((tag) => (
+                  <Chip
+                    key={tag}
+                    label={tag}
+                    onDelete={() => {
+                      setUploadFormData({
+                        ...uploadFormData,
+                        tags: uploadFormData.tags.filter((t) => t !== tag),
+                      });
+                    }}
+                  />
+                ))}
+              </Box>
+            )}
             <Button
               variant="outlined"
               component="label"

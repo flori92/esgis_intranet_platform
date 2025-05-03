@@ -6,13 +6,14 @@ import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import MainLayout from './components/layout/MainLayout';
 import StudentDashboardPage from './pages/student/DashboardPage';
 import ProfessorDashboardPage from './pages/professor/DashboardPage';
-import AdminDashboardPage from './pages/admin/DashboardPage';
-import UserManagementPage from './pages/admin/UserManagementPage';
+import AdminRoutes from './routes/AdminRoutes';
+import ProfessorRoutes from './routes/ProfessorRoutes';
 import SchedulePage from './pages/schedule/SchedulePage';
 import GradesPage from './pages/grades/GradesPage';
 import DocumentsPage from './pages/documents/DocumentsPage';
 import MessagesPage from './pages/messages/MessagesPage';
 import NotificationsPage from './pages/notifications/NotificationsPage';
+import StagesPage from './pages/stages/StagesPage';
 
 // Composant de protection des routes
 const ProtectedRoute: React.FC<{ 
@@ -69,18 +70,20 @@ function App() {
             
             {/* Routes pour les professeurs */}
             <Route 
-              path="/professor/dashboard" 
-              element={<ProtectedRoute element={<ProfessorDashboardPage />} requiredRole="professor" />} 
+              path="/professor/*" 
+              element={<ProtectedRoute element={<ProfessorRoutes />} requiredRole="professor" />} 
             />
             
             {/* Routes pour les administrateurs */}
             <Route 
-              path="/admin/dashboard" 
-              element={<ProtectedRoute element={<AdminDashboardPage />} requiredRole="admin" />} 
+              path="/admin/*" 
+              element={<ProtectedRoute element={<AdminRoutes />} requiredRole="admin" />} 
             />
+            
+            {/* Routes pour les stages */}
             <Route 
-              path="/admin/users" 
-              element={<ProtectedRoute element={<UserManagementPage />} requiredRole="admin" />} 
+              path="/stages/*" 
+              element={<ProtectedRoute element={<StagesPage />} />} 
             />
             
             {/* Routes pour les emplois du temps */}

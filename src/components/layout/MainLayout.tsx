@@ -38,6 +38,8 @@ import {
   Grading as GradingIcon,
   Folder as FolderIcon,
   Chat as ChatIcon,
+  Book as BookIcon,
+  BarChart as BarChartIcon,
 } from '@mui/icons-material';
 import { useAuth, AuthContextType } from '../../context/AuthContext';
 
@@ -92,15 +94,17 @@ const MainLayout: React.FC = () => {
   const getMenuItems = () => {
     if (isAdmin) {
       return [
-        { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/admin/dashboard' },
-        { text: 'Utilisateurs', icon: <PeopleIcon />, path: '/admin/users' },
-        { text: 'Filières', icon: <SchoolIcon />, path: '/admin/departments' },
-        { text: 'Cours', icon: <SchoolIcon />, path: '/admin/courses' },
-        { text: 'Emplois du temps', icon: <EventIcon />, path: '/admin/schedule' },
-        { text: 'Documents', icon: <DescriptionIcon />, path: '/admin/documents' },
-        { text: 'Stages', icon: <WorkIcon />, path: '/admin/internships' },
-        { text: 'Paiements', icon: <AssignmentIcon />, path: '/admin/payments' },
-        { text: 'Rapports', icon: <DescriptionIcon />, path: '/admin/reports' },
+        { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/admin' },
+        { text: 'Départements & Filières', icon: <SchoolIcon />, path: '/admin/departments' },
+        { text: 'Rôles Professeurs', icon: <PersonIcon />, path: '/admin/professor-roles' },
+        { text: 'Matières & Cours', icon: <BookIcon />, path: '/admin/courses' },
+        { text: 'Assignation de Cours', icon: <AssignmentIcon />, path: '/admin/professor-courses' },
+        { text: 'Gestion Étudiants', icon: <PeopleIcon />, path: '/admin/students' },
+        { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/stages' },
+        { text: 'Documents', icon: <DescriptionIcon />, path: '/admin/document-generator' },
+        { text: 'Statistiques', icon: <BarChartIcon />, path: '/admin/reports' },
+        { text: 'Emplois du temps', icon: <EventIcon />, path: '/schedule' },
+        { text: 'Paramètres', icon: <SettingsIcon />, path: '/settings' },
       ];
     } else if (isProfessor) {
       return [
