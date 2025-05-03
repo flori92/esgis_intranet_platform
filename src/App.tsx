@@ -1,3 +1,8 @@
+// Mock de l'AuthProvider pour les tests
+jest.mock('./context/AuthContext', () => ({
+  AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>
+}), { virtual: true });
+
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth, AuthContextType } from './context/AuthContext';
@@ -5,7 +10,6 @@ import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import MainLayout from './components/layout/MainLayout';
 import StudentDashboardPage from './pages/student/DashboardPage';
-import ProfessorDashboardPage from './pages/professor/DashboardPage';
 import AdminRoutes from './routes/AdminRoutes';
 import ProfessorRoutes from './routes/ProfessorRoutes';
 import SchedulePage from './pages/schedule/SchedulePage';

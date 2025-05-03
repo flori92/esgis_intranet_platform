@@ -1,5 +1,4 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '../../context/AuthContext';
 import StudentsListPage from '../../pages/admin/students/StudentsListPage';
@@ -12,6 +11,11 @@ jest.mock('../../hooks/useAuth', () => ({
       user: { id: 'test-user-id' },
     },
   }),
+}));
+
+// Mock de l'AuthProvider pour résoudre le problème de props children
+jest.mock('../../context/AuthContext', () => ({
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 // Mock de supabase

@@ -1,18 +1,20 @@
-import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from '../../context/AuthContext';
-import AdminDashboardPage from '../../pages/admin/AdminDashboardPage';
-
-// Mock du hook useAuth
-jest.mock('../../hooks/useAuth', () => ({
+// Mock de l'AuthProvider pour résoudre le problème de props children
+jest.mock('../../context/AuthContext', () => ({
+  AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>,
   useAuth: () => ({
     authState: {
       isAdmin: true,
       user: { id: 'test-user-id' },
     },
+    logout: jest.fn(),
   }),
 }));
+
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from '../../context/AuthContext';
+import AdminDashboardPage from '../../pages/admin/AdminDashboardPage';
 
 describe('AdminDashboardPage', () => {
   test('Affiche le titre du tableau de bord', () => {

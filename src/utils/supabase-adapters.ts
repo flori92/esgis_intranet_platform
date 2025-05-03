@@ -8,10 +8,9 @@
 import {
   MessageWithSender,
   ConversationWithParticipants,
-  ExamResultWithUI,
   ExamResult,
   ExamType,
-  ExamStatus
+  Profile
 } from '../types/supabase.types';
 
 /**
@@ -36,7 +35,7 @@ export interface ExamResultWithUI {
   course_code: string;
   max_grade: number;
   semester: number;
-  credits?: number;
+  credits: number;
   average?: number | null;
 }
 
@@ -66,6 +65,11 @@ export function adaptMessage(raw: Record<string, unknown>): MessageWithSender {
  * @returns Conversation adaptée avec les informations des participants
  */
 export function adaptConversation(raw: Record<string, unknown>): ConversationWithParticipants {
+  // Récupérer les participants ou définir un tableau vide par défaut
+  const participants = Array.isArray(raw.participants) 
+    ? raw.participants as Profile[] 
+    : [] as Profile[];
+
   return {
     id: raw.id as number, // number selon Conversation
     title: (raw.title as string) ?? null,
@@ -74,6 +78,7 @@ export function adaptConversation(raw: Record<string, unknown>): ConversationWit
     last_message_id: raw.last_message_id === undefined ? null : (raw.last_message_id as number | null),
     created_at: raw.created_at as string,
     updated_at: raw.updated_at as string,
+    participants: participants, // Ajout de la propriété participants manquante
   };
 }
 
@@ -83,11 +88,15 @@ export function adaptConversation(raw: Record<string, unknown>): ConversationWit
  * @returns Résultat d'examen avec informations sur l'examen et le cours
  */
 export function adaptExamResult(raw: ExamResult): ExamResultWithUI {
-  const exam = raw.exams || {};
+  // Récupérer les données de l'examen de manière sécurisée
+  const examType = raw.exam_type || 'midterm';
+  
+  // Déterminer le type d'examen de manière sécurisée
   let exam_type: ExamType = 'midterm';
-  if (typeof exam.type === 'string' && ['midterm', 'final', 'quiz'].includes(exam.type)) {
-    exam_type = exam.type as ExamType;
+  if (typeof examType === 'string' && ['midterm', 'final', 'quiz'].includes(examType)) {
+    exam_type = examType as ExamType;
   }
+
   return {
     id: raw.id || 0,
     exam_id: raw.exam_id || 0,
@@ -95,18 +104,20 @@ export function adaptExamResult(raw: ExamResult): ExamResultWithUI {
     grade: raw.grade || null,
     comment: raw.comment || null,
     status: raw.status || 'pending',
-    exam_title: typeof raw.exam_title === 'string' ? raw.exam_title : '',
+    created_at: raw.created_at || new Date().toISOString(),
+    updated_at: raw.updated_at || new Date().toISOString(),
+    exam_title: raw.exam_title || '',
     exam_type,
-    exam_date: exam.date || null,
-    exam_weight: exam.weight || 1,
-    max_grade: exam.max_grade || 100,
-    ui: {
-      isEditing: false,
-      tempGrade: null,
-      tempComment: null
-    }
+    exam_date: raw.exam_date || '',
+    exam_weight: raw.exam_weight || 1,
+    course_id: raw.course_id || 0,
+    course_name: raw.course_name || '',
+    course_code: raw.course_code || '',
+    max_grade: raw.max_grade || 100,
+    semester: raw.semester || 1,
+    credits: 0, // Valeur par défaut pour le nombre de crédits
   };
-};
+}
 
 /**
  * Formate la date d'un message pour l'affichage

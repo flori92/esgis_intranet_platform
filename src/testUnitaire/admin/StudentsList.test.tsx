@@ -1,8 +1,14 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from '../../context/AuthContext';
-import StudentsListPage from '../../pages/admin/students/StudentsListPage';
+// Mock de l'AuthProvider pour résoudre le problème de props children
+jest.mock('../../context/AuthContext', () => ({
+  AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>,
+  useAuth: () => ({
+    authState: {
+      isAdmin: true,
+      user: { id: 'test-user-id' },
+    },
+    logout: jest.fn(),
+  }),
+}));
 
 // Mock du hook useAuth
 jest.mock('../../hooks/useAuth', () => ({
@@ -48,6 +54,12 @@ jest.mock('../../utils/supabase', () => ({
     )
   },
 }));
+
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from '../../context/AuthContext';
+import StudentsListPage from '../../pages/admin/students/StudentsListPage';
 
 describe('StudentsListPage', () => {
   test('Affiche le titre de la page de gestion des étudiants', () => {

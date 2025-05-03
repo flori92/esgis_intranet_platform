@@ -1,230 +1,229 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
-import supabase from '../services/supabase';
-import { Database } from '../types/database';
+import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
+import { supabase } from '../services/supabase';
+import { Session, User } from '@supabase/supabase-js';
+import { Profile, Student, Professor, Role } from '../types/supabase.types';
 
 // Types pour le contexte d'authentification
-export type Profile = Database['public']['Tables']['profiles']['Row'];
-export type Student = Database['public']['Tables']['students']['Row'];
-export type Professor = Database['public']['Tables']['professors']['Row'];
-
-// État d'authentification
 export interface AuthState {
-  session: Session | null;
   user: User | null;
   profile: Profile | null;
   student: Student | null;
   professor: Professor | null;
+  session: Session | null;
   isAdmin: boolean;
   isProfessor: boolean;
   isStudent: boolean;
-  isLoggedIn: boolean;
+  error: Error | null;
   loading: boolean;
 }
 
-// Interface pour le contexte d'authentification
 export interface AuthContextType {
   authState: AuthState;
-  signIn: (email: string, password: string) => Promise<{
-    error: Error | null;
-    data: Session | null;
-  }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<{
-    error: Error | null;
-    data: Record<string, never> | null;
-  }>;
+  logout: () => Promise<void>; // Alias pour signOut pour compatibilité
+  resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updateProfile: (profileData: Partial<Profile>) => Promise<{
     error: Error | null;
     data: Profile | null;
   }>;
-  refreshSession: () => Promise<void>;
-  createUserAccount: (userData: {
-    email: string;
-    password: string;
-    full_name: string;
-    role: 'admin' | 'professor' | 'student';
-    department_id?: number | null;
-    additional_data?: Record<string, any>;
-  }) => Promise<{
-    error: Error | null;
-    data: User | null;
-  }>;
+  createUserAccount: (
+    email: string,
+    password: string,
+    profileData: {
+      full_name: string;
+      role: Role;
+      department_id?: number;
+    }
+  ) => Promise<{ error: Error | null; userId: string | null }>;
 }
 
 // Valeur par défaut du contexte
-const initialAuthState: AuthState = {
-  session: null,
+const defaultAuthState: AuthState = {
   user: null,
   profile: null,
   student: null,
   professor: null,
+  session: null,
   isAdmin: false,
   isProfessor: false,
   isStudent: false,
-  isLoggedIn: false,
-  loading: true,
+  error: null,
+  loading: true
 };
 
 // Création du contexte
-const AuthContext = createContext<AuthContextType>({
-  authState: initialAuthState,
-  signIn: async () => ({ error: null, data: null }),
-  signOut: async () => {},
-  resetPassword: async () => ({ error: null, data: null }),
-  updateProfile: async () => ({ error: null, data: null }),
-  refreshSession: async () => {},
-  createUserAccount: async () => ({ error: null, data: null }),
-});
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Hook pour utiliser le contexte d'authentification
-export const useAuth = () => useContext(AuthContext);
+// Hook personnalisé pour utiliser le contexte
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth doit être utilisé à l\'intérieur d\'un AuthProvider');
+  }
+  return context;
+};
 
-// Fournisseur du contexte d'authentification
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [authState, setAuthState] = useState<AuthState>(initialAuthState);
+// Provider pour le contexte d'authentification
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [authState, setAuthState] = useState<AuthState>(defaultAuthState);
 
-  // Fonction pour récupérer le profil utilisateur
-  const fetchUserProfile = async (userId: string) => {
+  // Récupérer le profil de l'utilisateur
+  const fetchUserProfile = async (user: User) => {
     try {
-      // Récupérer le profil de base
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
+        .eq('id', user.id)
         .single();
 
       if (profileError) throw profileError;
 
-      // Déterminer le rôle et récupérer les données supplémentaires
-      let student = null;
-      let professor = null;
-      let isAdmin = false;
-      let isProfessor = false;
-      let isStudent = false;
-
-      if (profile) {
-        // Définir les rôles
-        isAdmin = profile.role === 'admin';
-        isProfessor = profile.role === 'professor';
-        isStudent = profile.role === 'student';
-
-        // Récupérer les données spécifiques au rôle
-        if (isStudent) {
-          const { data: studentData } = await supabase
-            .from('students')
-            .select('*')
-            .eq('profile_id', userId)
-            .single();
-          student = studentData;
-        } else if (isProfessor) {
-          const { data: professorData } = await supabase
-            .from('professors')
-            .select('*')
-            .eq('profile_id', userId)
-            .single();
-          professor = professorData;
-        }
+      // Vérifier et convertir le rôle en type Role valide
+      let userRole: Role = 'student'; // Valeur par défaut
+      if (profile.role === 'admin' || profile.role === 'professor' || profile.role === 'student') {
+        userRole = profile.role as Role; // Conversion explicite
+      } else {
+        console.warn(`Rôle non reconnu: ${profile.role}, utilisation de 'student' par défaut`);
       }
 
-      // Mettre à jour l'état d'authentification
+      // Mettre à jour le profil avec le rôle validé
+      const validatedProfile = {
+        ...profile,
+        role: userRole
+      };
+
+      let studentData = null;
+      let professorData = null;
+
+      if (userRole === 'student') {
+        const { data: student, error: studentError } = await supabase
+          .from('students')
+          .select('*')
+          .eq('profile_id', user.id)
+          .single();
+
+        if (studentError && studentError.code !== 'PGRST116') {
+          throw studentError;
+        }
+
+        // Si l'étudiant existe, ajouter les propriétés manquantes si nécessaires
+        if (student) {
+          studentData = {
+            ...student,
+            graduation_year: student.graduation_year || null,
+            specialization: student.specialization || null,
+            status: student.status as "active" | "suspended" | "graduated" | "expelled"
+          };
+        }
+      } else if (userRole === 'professor') {
+        const { data: professor, error: professorError } = await supabase
+          .from('professors')
+          .select('*')
+          .eq('profile_id', user.id)
+          .single();
+
+        if (professorError && professorError.code !== 'PGRST116') {
+          throw professorError;
+        }
+
+        professorData = professor;
+      }
+
       setAuthState(prev => ({
         ...prev,
-        profile,
-        student,
-        professor,
-        isAdmin,
-        isProfessor,
-        isStudent,
-        isLoggedIn: true,
-        loading: false,
+        user,
+        profile: validatedProfile,
+        student: studentData,
+        professor: professorData,
+        session: { ...prev.session, user },
+        isAdmin: userRole === 'admin',
+        isProfessor: userRole === 'professor',
+        isStudent: userRole === 'student',
+        loading: false
       }));
     } catch (error) {
       console.error('Erreur lors de la récupération du profil:', error);
-      setAuthState(prev => ({ ...prev, loading: false }));
+      setAuthState(prev => ({
+        ...prev,
+        error: error as Error,
+        loading: false
+      }));
     }
   };
 
-  // Fonction pour rafraîchir la session (utilisation de useCallback pour éviter les dépendances circulaires)
+  // Fonction pour rafraîchir la session (avec useCallback pour éviter les recréations à chaque rendu)
   const refreshSession = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
+      if (session) {
+        const { user } = session;
+        if (user) {
+          await fetchUserProfile(user);
+        } else {
+          setAuthState(prev => ({ ...prev, loading: false }));
+        }
+      } else {
         setAuthState(prev => ({
           ...prev,
-          session,
-          user: session.user,
-          isLoggedIn: true,
+          user: null,
+          profile: null,
+          student: null,
+          professor: null,
+          session: null,
+          isAdmin: false,
+          isProfessor: false,
+          isStudent: false,
+          loading: false
         }));
-        await fetchUserProfile(session.user.id);
-      } else {
-        setAuthState({
-          ...initialAuthState,
-          loading: false,
-        });
       }
     } catch (error) {
       console.error('Erreur lors du rafraîchissement de la session:', error);
-      setAuthState({
-        ...initialAuthState,
-        loading: false,
-      });
+      setAuthState(prev => ({ ...prev, error: error as Error, loading: false }));
     }
   }, []);
 
-  // Écouter les changements d'authentification
+  // Effet pour s'abonner aux changements d'authentification
   useEffect(() => {
-    // Récupérer la session initiale
-    refreshSession();
-
-    // S'abonner aux changements d'authentification
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event: AuthChangeEvent, session: Session | null) => {
-        setAuthState(prev => ({
-          ...prev,
-          session,
-          user: session?.user || null,
-          isLoggedIn: session !== null,
-          loading: true,
-        }));
-
-        if (session?.user) {
-          await fetchUserProfile(session.user.id);
-        } else {
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          const { user } = session;
+          await fetchUserProfile(user);
+        } else if (event === 'SIGNED_OUT') {
+          setAuthState({
+            ...defaultAuthState,
+            loading: false
+          });
+        } else if (event === 'TOKEN_REFRESHED' && session) {
           setAuthState(prev => ({
             ...prev,
-            profile: null,
-            student: null,
-            professor: null,
-            isAdmin: false,
-            isProfessor: false,
-            isStudent: false,
-            isLoggedIn: false,
-            loading: false,
+            session,
+            user: session.user
           }));
         }
       }
     );
 
-    // Nettoyer l'abonnement
+    // Rafraîchir la session lors du montage du composant
+    refreshSession();
+
     return () => {
       subscription.unsubscribe();
     };
-  }, [refreshSession]);
+  }, [refreshSession]); // Ajout de refreshSession comme dépendance
 
   // Fonction de connexion
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      return { data: data.session, error };
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) throw error;
+      
+      return { error: null };
     } catch (error) {
-      console.error('Erreur lors de la connexion:', error);
-      return { data: null, error: error as Error };
+      console.error('Erreur de connexion:', error);
+      return { error: error as Error };
     }
   };
 
@@ -233,149 +232,169 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await supabase.auth.signOut();
       setAuthState({
-        ...initialAuthState,
-        loading: false,
+        ...defaultAuthState,
+        loading: false
       });
     } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
+      console.error('Erreur de déconnexion:', error);
+      setAuthState(prev => ({
+        ...prev,
+        error: error as Error
+      }));
     }
   };
 
-  // Fonction de réinitialisation du mot de passe
+  // Fonction pour réinitialiser le mot de passe
   const resetPassword = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/reset-password`
       });
-
-      return { data: {}, error };
+      
+      if (error) throw error;
+      
+      return { error: null };
     } catch (error) {
-      console.error('Erreur lors de la réinitialisation du mot de passe:', error);
-      return { data: null, error: error as Error };
+      console.error('Erreur de réinitialisation de mot de passe:', error);
+      return { error: error as Error };
     }
   };
 
-  // Fonction de mise à jour du profil
+  // Fonction pour mettre à jour le profil
   const updateProfile = async (profileData: Partial<Profile>) => {
     try {
-      if (!authState.user) throw new Error('Utilisateur non connecté');
+      // Vérifier et convertir le rôle si présent
+      const updatedProfileData = { ...profileData };
+      if (profileData.role && 
+          (profileData.role === 'admin' || 
+           profileData.role === 'professor' || 
+           profileData.role === 'student')) {
+        updatedProfileData.role = profileData.role as Role;
+      }
 
       const { data, error } = await supabase
         .from('profiles')
-        .update(profileData)
-        .eq('id', authState.user.id)
+        .update(updatedProfileData)
+        .eq('id', authState.user?.id)
         .select()
         .single();
-
+      
       if (error) throw error;
-
-      // Mettre à jour l'état local
-      setAuthState(prev => ({
-        ...prev,
-        profile: data,
-      }));
-
-      return { data, error: null };
+      
+      // Mise à jour de l'état
+      if (data) {
+        // Valider et assigner le rôle
+        const validatedRole: Role = 
+          data.role === 'admin' || 
+          data.role === 'professor' || 
+          data.role === 'student' 
+            ? data.role as Role 
+            : 'student'; // Valeur par défaut
+            
+        setAuthState(prev => ({
+          ...prev,
+          profile: { ...data, role: validatedRole },
+          isAdmin: validatedRole === 'admin',
+          isProfessor: validatedRole === 'professor',
+          isStudent: validatedRole === 'student'
+        }));
+      }
+      
+      return { error: null, data: data as Profile };
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du profil:', error);
-      return { data: null, error: error as Error };
+      console.error('Erreur de mise à jour du profil:', error);
+      return { error: error as Error, data: null };
     }
   };
 
-  // Fonction de création de compte (réservée aux administrateurs)
-  const createUserAccount = async (userData: {
-    email: string;
-    password: string;
-    full_name: string;
-    role: 'admin' | 'professor' | 'student';
-    department_id?: number | null;
-    additional_data?: Record<string, any>;
-  }) => {
+  // Fonction pour créer un compte utilisateur
+  const createUserAccount = async (
+    email: string,
+    password: string,
+    profileData: {
+      full_name: string;
+      role: Role;
+      department_id?: number;
+    }
+  ) => {
     try {
-      // Vérifier que l'utilisateur actuel est un administrateur
-      if (!authState.isAdmin) {
-        throw new Error('Accès non autorisé. Seuls les administrateurs peuvent créer des comptes.');
-      }
-
-      // Créer l'utilisateur dans Supabase Auth
-      const { data, error } = await supabase.auth.admin.createUser({
-        email: userData.email,
-        password: userData.password,
-        email_confirm: true, // L'email est automatiquement confirmé
+      // Créer l'utilisateur avec Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password
       });
-
-      if (error) throw error;
-
-      if (data.user) {
-        // Créer le profil utilisateur
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            email: userData.email,
-            full_name: userData.full_name,
-            role: userData.role,
-            department_id: userData.department_id || null,
-            is_active: true,
-          });
-
-        if (profileError) throw profileError;
-
-        // Créer les données spécifiques au rôle
-        if (userData.role === 'student') {
-          // Générer un numéro d'étudiant unique
-          const studentNumber = `STU${Date.now().toString().slice(-6)}`;
-          
-          // Créer un enregistrement étudiant
-          const { error: studentError } = await supabase
-            .from('students')
-            .insert({
-              profile_id: data.user.id,
-              student_number: userData.additional_data?.student_number || studentNumber,
-              entry_year: userData.additional_data?.entry_year || new Date().getFullYear(),
-              level: userData.additional_data?.level || 'L1',
-              status: 'active',
-            });
-
-          if (studentError) throw studentError;
-        } else if (userData.role === 'professor') {
-          // Générer un numéro d'employé unique
-          const employeeNumber = `PROF${Date.now().toString().slice(-6)}`;
-          
-          // Créer un enregistrement professeur
-          const { error: professorError } = await supabase
-            .from('professors')
-            .insert({
-              profile_id: data.user.id,
-              employee_number: userData.additional_data?.employee_number || employeeNumber,
-              hire_date: userData.additional_data?.hire_date || new Date().toISOString().split('T')[0],
-              specialties: userData.additional_data?.specialties || [],
-              status: 'active',
-            });
-
-          if (professorError) throw professorError;
-        }
+      
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Erreur: Utilisateur non créé');
+      
+      const userId = authData.user.id;
+      
+      // Créer le profil utilisateur
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email,
+          full_name: profileData.full_name,
+          role: profileData.role,
+          department_id: profileData.department_id || null,
+          is_active: true
+        });
+      
+      if (profileError) throw profileError;
+      
+      // Créer l'entrée spécifique au rôle (étudiant ou professeur)
+      if (profileData.role === 'student') {
+        const { error: studentError } = await supabase
+          .from('students')
+          .insert([{
+            profile_id: userId,
+            student_number: `STD-${Date.now().toString().slice(-6)}`,
+            entry_year: new Date().getFullYear(),
+            graduation_year: null,
+            level: 'Licence 1', // Niveau par défaut
+            specialization: null,
+            status: 'active'
+          }]);
+        
+        if (studentError) throw studentError;
+      } else if (profileData.role === 'professor') {
+        const { error: professorError } = await supabase
+          .from('professors')
+          .insert([{
+            profile_id: userId,
+            title: 'Dr.',
+            specialization: '',
+            status: 'active'
+          }]);
+        
+        if (professorError) throw professorError;
       }
-
-      return { data: data.user, error: null };
+      
+      return { error: null, userId };
     } catch (error) {
-      console.error('Erreur lors de la création du compte:', error);
-      return { data: null, error: error as Error };
+      console.error('Erreur de création de compte:', error);
+      return { error: error as Error, userId: null };
     }
   };
+
+  // Alias pour signOut
+  const logout = signOut;
 
   // Valeur du contexte
-  const value = {
+  const contextValue: AuthContextType = {
     authState,
     signIn,
     signOut,
+    logout, // Ajout de l'alias
     resetPassword,
     updateProfile,
-    refreshSession,
-    createUserAccount,
+    createUserAccount
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
-
-export default AuthProvider;
