@@ -1,18 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useState, useEffect, ReactNode } from "react";
 import { Student, AppState } from "../types";
 import { toast } from 'react-hot-toast';
 import supabase, { checkSupabaseConnection as checkConnection } from '../supabase';
-
-// Stockage local des étudiants actifs (fallback si Supabase échoue)
-interface ActiveStudent {
-  student_id: string;
-  student_name: string;
-  status: 'connected' | 'in_progress' | 'completed';
-  cheating_attempts: number;
-  connected_at: string;
-  last_activity: string;
-  has_completed?: boolean;
-}
+import { completedQuizzes, activeStudents } from './authUtils';
 
 interface AuthContextType {
   appState: AppState;
@@ -26,19 +16,12 @@ const defaultState: AppState = {
   isAuthenticated: false
 };
 
-// Store completed quiz names to prevent retakes (fallback local storage)
-const completedQuizzes = new Set<string>();
-
-// Stockage local des étudiants actifs
-const activeStudents: Record<string, ActiveStudent> = {};
-
-const AuthContext = createContext<AuthContextType>({
+// Contexte d'authentification
+export const AuthContext = createContext<AuthContextType>({
   appState: defaultState,
   login: async () => false,
   logout: async () => {}
 });
-
-export const useAuth = () => useContext(AuthContext);
 
 interface AuthProviderProps {
   children: ReactNode;

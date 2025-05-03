@@ -3,11 +3,12 @@ import { useQuiz } from "../context/QuizContext";
 import { useAuth } from "../context/AuthContext";
 import { Timer, QuizResult } from "../types";
 import { Clock } from "lucide-react";
+import { SupabaseClient } from '@supabase/supabase-js';
 
 // Déclaration pour TypeScript - permet d'accéder à window.supabase
 declare global {
   interface Window {
-    supabase: any;
+    supabase: SupabaseClient;
   }
 }
 
@@ -23,8 +24,8 @@ interface ActiveStudent {
 }
 
 const AdminDashboard: React.FC = () => {
-  const { quizResults: contextQuizResults, timer } = useQuiz() as any;
-  const { logout } = useAuth() as any;
+  const { quizResults: contextQuizResults, timer } = useQuiz();
+  const { logout } = useAuth();
   const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
   const [activeStudents, setActiveStudents] = useState<ActiveStudent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -42,32 +43,41 @@ const AdminDashboard: React.FC = () => {
     // Vérifier si Supabase est disponible
     const checkSupabaseConnection = async () => {
       try {
+        // Vérifier d'abord si supabase est défini
+        if (!supabase) {
+          console.warn('Client Supabase non initialisé');
+          setSupabaseAvailable(false);
+          setError("Client Supabase non disponible. Affichage des données locales uniquement.");
+          return false;
+        }
+        
         // Tenter une requête simple pour vérifier la connexion
         const { error } = await supabase
           .from('quiz_results')
-          .select('count(*)', { count: 'exact', head: true })
+          .select('*')
           .limit(1);
           
         if (error) {
           console.warn('Problème de connexion à Supabase:', error);
           setSupabaseAvailable(false);
           setError("Impossible de se connecter à la base de données. Affichage des données locales uniquement.");
+          return false;
         } else {
           console.log('Connexion à Supabase établie');
           setSupabaseAvailable(true);
+          return true;
         }
       } catch (err) {
         console.error('Erreur lors de la vérification de la connexion Supabase:', err);
         setSupabaseAvailable(false);
         setError("Erreur de connexion à la base de données. Affichage des données locales uniquement.");
+        return false;
       }
     };
     
-    checkSupabaseConnection();
-    
     // Récupération des résultats depuis Supabase
     const fetchQuizResults = async () => {
-      if (!supabaseAvailable) return;
+      if (!supabase || !supabaseAvailable) return;
       
       try {
         const { data, error } = await supabase
@@ -80,10 +90,11 @@ const AdminDashboard: React.FC = () => {
         }
         
         if (data) {
+          const typedData = data as QuizResult[];
           setQuizResults(prevResults => {
             // Fusionner les résultats locaux et ceux de Supabase en évitant les doublons
-            const existingIds = new Set(prevResults.map(r => r.studentId));
-            const newResults = data.filter(r => !existingIds.has(r.studentId));
+            const existingIds = new Set(prevResults.map((r: QuizResult) => r.studentId));
+            const newResults = typedData.filter((r: QuizResult) => !existingIds.has(r.studentId));
             return [...prevResults, ...newResults];
           });
         }
@@ -97,7 +108,7 @@ const AdminDashboard: React.FC = () => {
       try {
         setLoading(true);
         
-        if (!supabaseAvailable) {
+        if (!supabase || !supabaseAvailable) {
           setLoading(false);
           return;
         }
@@ -115,7 +126,8 @@ const AdminDashboard: React.FC = () => {
         }
         
         if (data) {
-          setActiveStudents(data);
+          const typedData = data as ActiveStudent[];
+          setActiveStudents(typedData);
           setError(null);
         }
       } catch (err) {
@@ -126,58 +138,69 @@ const AdminDashboard: React.FC = () => {
       }
     };
     
-    fetchQuizResults();
-    fetchActiveStudents();
-    
-    // Mise en place de l'abonnement temps réel pour les nouveaux résultats
-    let resultsSubscription: any;
-    
-    if (supabaseAvailable) {
-      resultsSubscription = supabase
-        .channel('public:quiz_results')
-        .on('INSERT', (payload: { new: QuizResult }) => {
-          console.log('Nouveau résultat reçu:', payload.new);
-          setQuizResults((currentResults) => [...currentResults, payload.new]);
-        })
-        .subscribe();
-    }
-    
-    // Mise en place de l'abonnement temps réel pour les étudiants actifs
-    let studentsSubscription: any;
-    
-    if (supabaseAvailable) {
-      studentsSubscription = supabase
-        .channel('public:active_students')
-        .on('INSERT', (payload: { new: ActiveStudent }) => {
-          console.log('Nouvel étudiant connecté:', payload.new);
-          setActiveStudents((current) => [payload.new, ...current]);
-        })
-        .on('UPDATE', (payload: { new: ActiveStudent }) => {
-          console.log('Mise à jour étudiant:', payload.new);
-          setActiveStudents((current) => 
-            current.map(student => 
-              student.student_id === payload.new.student_id ? payload.new : student
-            )
-          );
-        })
-        .subscribe();
-    }
-      
-    // Nettoyage des abonnements à la destruction du composant
-    return () => {
-      if (resultsSubscription) {
-        resultsSubscription.unsubscribe();
-      }
-      if (studentsSubscription) {
-        studentsSubscription.unsubscribe();
+    // Exécuter les fonctions de manière séquentielle
+    const initializeData = async () => {
+      const isConnected = await checkSupabaseConnection();
+      if (isConnected) {
+        await fetchQuizResults();
+        await fetchActiveStudents();
+        setupRealtimeSubscriptions();
       }
     };
-  }, [contextQuizResults]);
+    
+    // Configuration des abonnements temps réel
+    const setupRealtimeSubscriptions = () => {
+      if (!supabase || !supabaseAvailable) return;
+      
+      // Mise en place de l'abonnement temps réel pour les nouveaux résultats
+      try {
+        const resultsSubscription = supabase
+          .channel('public:quiz_results')
+          .on('INSERT', (payload: { new: QuizResult }) => {
+            console.log('Nouveau résultat reçu:', payload.new);
+            setQuizResults((currentResults) => [...currentResults, payload.new]);
+          })
+          .subscribe();
+          
+        // Mise en place de l'abonnement temps réel pour les étudiants actifs
+        const studentsSubscription = supabase
+          .channel('public:active_students')
+          .on('INSERT', (payload: { new: ActiveStudent }) => {
+            console.log('Nouvel étudiant connecté:', payload.new);
+            setActiveStudents((current) => [payload.new, ...current]);
+          })
+          .on('UPDATE', (payload: { new: ActiveStudent }) => {
+            console.log('Mise à jour étudiant:', payload.new);
+            setActiveStudents((current) => 
+              current.map(student => 
+                student.student_id === payload.new.student_id ? payload.new : student
+              )
+            );
+          })
+          .subscribe();
+          
+        // Nettoyage des abonnements à la destruction du composant
+        return () => {
+          if (resultsSubscription) {
+            resultsSubscription.unsubscribe();
+          }
+          if (studentsSubscription) {
+            studentsSubscription.unsubscribe();
+          }
+        };
+      } catch (error) {
+        console.error("Erreur lors de la configuration des abonnements temps réel:", error);
+        return () => {}; // Retourner une fonction de nettoyage vide en cas d'erreur
+      }
+    };
+    
+    initializeData();
+  }, [contextQuizResults, supabase, supabaseAvailable]);
   
   // Fonction pour signaler une tentative de triche pour un étudiant spécifique
   const reportCheatingForStudent = async (studentId: string) => {
     try {
-      if (!supabaseAvailable) {
+      if (!supabase || !supabaseAvailable) {
         // Mise à jour locale
         setActiveStudents(current => 
           current.map(student => {
