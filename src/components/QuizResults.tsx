@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuiz } from "../context/QuizContext";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 
 const QuizResults: React.FC = () => {
   const { questions, userAnswers, calculateScore, cheatingAttempts } = useQuiz();

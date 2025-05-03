@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useQuiz } from "../context/QuizContext";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { Timer, QuizResult } from "../types";
 import { Clock } from "lucide-react";
 import { SupabaseClient } from '@supabase/supabase-js';

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Question, QuizResult, QuizStatus, Timer } from "../types";
 import { getRandomizedQuestions } from "../data/questions";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import emailjs from '@emailjs/browser';
 import toast from 'react-hot-toast';
 
