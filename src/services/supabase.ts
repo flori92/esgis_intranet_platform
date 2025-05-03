@@ -6,7 +6,7 @@ import {
   Professor,
   Department,
   ExamResult,
-  Role,
+  RoleEnum,
   ConversationWithParticipants,
   MessageWithSender
 } from '../types/supabase.types';
@@ -92,7 +92,22 @@ export const getUserProfile = async (userId: string): Promise<Profile & {
       throw error;
     }
     
-    return data;
+    // Transformer le type string en type Role
+    const validRole = (data.role === 'admin' || data.role === 'professor' || data.role === 'student') 
+      ? data.role as RoleEnum 
+      : 'student' as RoleEnum;
+
+    // Créer un nouveau profil avec le rôle correct
+    const validatedData = {
+      ...data,
+      role: validRole
+    } as Profile & {
+      departments: Department | null;
+      student_info: Student | null;
+      professor_info: Professor | null;
+    };
+    
+    return validatedData;
   } catch (err) {
     console.error('Exception lors de la récupération du profil utilisateur:', err);
     throw err;
@@ -190,7 +205,9 @@ export const deleteFile = async (bucket: string, path: string) => {
 export const subscribeToChanges = <T>(table: string, callback: (payload: { new: T; old: T | null }) => void) => {
   const subscription = supabase
     .channel(`public:${table}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table }, callback)
+    .on('*', { event: '*', schema: 'public', table }, (payload: any) => {
+      callback(payload as { new: T; old: T | null });
+    })
     .subscribe();
   
   // Retourne une fonction pour se désabonner

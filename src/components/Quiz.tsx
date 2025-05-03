@@ -19,7 +19,17 @@ interface QuizContextValue {
 
 const Quiz: React.FC = () => {
   // Utilisation de types spécifiques au lieu de 'any'
-  const { appState } = useAuth() as { appState: AppState };
+  const { authState } = useAuth();
+  // Créer un état d'application équivalent pour la rétrocompatibilité
+  const appState: AppState = {
+    currentUser: authState.user ? {
+      id: authState.user.id,
+      name: authState.profile?.full_name || "Utilisateur",
+      role: authState.isAdmin ? "admin" : authState.isProfessor ? "professor" : "student",
+    } : null,
+    isAdmin: authState.isAdmin,
+  };
+
   const { 
     questions, 
     currentQuestionIndex, 
