@@ -10,14 +10,23 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
-  base: '/intranet-esgis/', // Pour le déploiement sur GitHub Pages
+  // Ajout du slash final important pour les chemins relatifs
+  base: '/intranet-esgis/', 
   build: {
     // Configuration pour améliorer la stabilité du build
     outDir: 'dist',
     sourcemap: false,
     reportCompressedSize: false,
     chunkSizeWarningLimit: 5000,
+    // Assurer que les assets sont correctement référencés
+    assetsDir: 'assets',
     rollupOptions: {
+      output: {
+        // Garantir des noms de fichiers stables pour le cache
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash].[ext]'
+      },
       onwarn(warning, warn) {
         // Ignorer certaines erreurs courantes
         if (warning.code === 'MODULE_LEVEL_DIRECTIVE' || 
