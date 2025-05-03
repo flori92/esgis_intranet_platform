@@ -9,6 +9,7 @@ export interface Student {
   id: string;
   name: string;
   email?: string;
+  role?: string;
 }
 
 export interface QuizResult {

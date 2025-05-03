@@ -28,6 +28,7 @@ const Quiz: React.FC = () => {
       role: authState.isAdmin ? "admin" : authState.isProfessor ? "professor" : "student",
     } : null,
     isAdmin: authState.isAdmin,
+    isAuthenticated: !!authState.user,
   };
 
   const { 
@@ -43,6 +44,8 @@ const Quiz: React.FC = () => {
   const alertRef = useRef<HTMLDivElement>(null);
   // Référence pour suivre si une triche a été détectée
   const cheatingDetectedRef = useRef<boolean>(false);
+  // Référence pour la fonction de détection de triche
+  const detectCheatingRef = useRef<(() => void) | null>(null);
 
   // Référence stable pour le son d'alerte
   const alertSoundRef = React.useRef<HTMLAudioElement | null>(null);
@@ -103,31 +106,17 @@ const Quiz: React.FC = () => {
     }
   };
 
-  // Fonction stable pour détecter la triche (changement d'onglet)
-  // Utilisation d'une référence pour maintenir la fonction stable entre les rendus
-  // Type précis pour la fonction de détection de triche
-  type CheatingDetectionFn = () => void;
-  
-  // Référence stable qui ne sera pas recréée entre les rendus
-  const detectCheatingRef = useRef<CheatingDetectionFn>(() => {
-    // Implémentation par défaut vide
-  });
-  
-  // Mise à jour de l'implémentation à chaque rendu
-  detectCheatingRef.current = () => {
-    if (quizStatus !== QuizStatus.IN_PROGRESS) return;
-    console.log("Triche détectée! Visibilité:", document.visibilityState);
-    if (cheatingDetectedRef.current) return;
-    cheatingDetectedRef.current = true;
-    showCustomAlert('🚨 TRICHE DÉTECTÉE 🚨\n\nVous avez quitté l\'onglet ou changé de fenêtre pendant l\'examen.\n\nVotre tentative a été enregistrée.');
-    reportCheatingAttempt();
-    setTimeout(() => {
-      cheatingDetectedRef.current = false;
-    }, 5000);
-  };
-  
-  // Setup du hook useEffect avec une référence stable
   useEffect(() => {
+    // Création d'une fonction pour détecter la triche
+    detectCheatingRef.current = () => {
+      if (!cheatingDetectedRef.current) {
+        console.log("Fonction de détection de triche appelée");
+        cheatingDetectedRef.current = true;
+        reportCheatingAttempt();
+        showCustomAlert("⚠️ TENTATIVE DE TRICHE DÉTECTÉE ⚠️\n\nVotre activité a été signalée à l'administrateur.\nCette tentative est enregistrée dans le système.");
+      }
+    };
+
     console.log("Configuration de la détection de changement d'onglet");
     
     const handleVisibilityChange = () => {

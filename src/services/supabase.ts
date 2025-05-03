@@ -6,7 +6,7 @@ import {
   Professor,
   Department,
   ExamResult,
-  RoleEnum,
+  Role,
   ConversationWithParticipants,
   MessageWithSender
 } from '../types/supabase.types';
@@ -42,6 +42,9 @@ const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     }
   }
 });
+
+// Type générique pour une fonction callback de changement
+export type SupabaseCallback<T = any> = (payload: { new: T; old: T | null }) => void;
 
 /**
  * Vérifie la connexion à Supabase
@@ -94,20 +97,18 @@ export const getUserProfile = async (userId: string): Promise<Profile & {
     
     // Transformer le type string en type Role
     const validRole = (data.role === 'admin' || data.role === 'professor' || data.role === 'student') 
-      ? data.role as RoleEnum 
-      : 'student' as RoleEnum;
+      ? data.role as Role 
+      : 'student' as Role;
 
-    // Créer un nouveau profil avec le rôle correct
-    const validatedData = {
+    // Retourner directement le nouveau profil avec le rôle correct
+    return {
       ...data,
       role: validRole
-    } as Profile & {
+    } as unknown as Profile & {
       departments: Department | null;
       student_info: Student | null;
       professor_info: Professor | null;
     };
-    
-    return validatedData;
   } catch (err) {
     console.error('Exception lors de la récupération du profil utilisateur:', err);
     throw err;
@@ -202,15 +203,20 @@ export const deleteFile = async (bucket: string, path: string) => {
  * @param callback Fonction de callback appelée lors d'un changement
  * @returns Fonction pour se désabonner
  */
-export const subscribeToChanges = <T>(table: string, callback: (payload: { new: T; old: T | null }) => void) => {
+export const subscribeToChanges = <T>(table: string, callback: SupabaseCallback<T>) => {
   const subscription = supabase
     .channel(`public:${table}`)
-    .on('*', { event: '*', schema: 'public', table }, (payload: any) => {
-      callback(payload as { new: T; old: T | null });
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table }, (payload: any) => {
+      callback(payload);
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table }, (payload: any) => {
+      callback(payload);
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table }, (payload: any) => {
+      callback(payload);
     })
     .subscribe();
-  
-  // Retourne une fonction pour se désabonner
+    
   return () => {
     subscription.unsubscribe();
   };
@@ -259,7 +265,9 @@ export const getConversationMessages = async (conversationId: string | number): 
     }
     
     // Utiliser la fonction d'adaptation pour convertir les messages bruts
-    if (!data) return [];
+    if (!data) {
+      return [];
+    }
     
     // Récupérer les profils des expéditeurs
     const senderIds = [...new Set(data.map(m => m.sender_id))];

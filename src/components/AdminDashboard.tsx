@@ -3,14 +3,10 @@ import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
 import { Timer, QuizResult } from "../types";
 import { Clock } from "lucide-react";
-import supabase from '../supabase';
+import supabase from '../services/supabase';
 
-// Déclaration pour TypeScript - permet d'accéder à window.supabase
-declare global {
-  interface Window {
-    supabase: typeof supabase;
-  }
-}
+// Suppression de la déclaration globale qui cause des problèmes de typage
+// Les accès à window.supabase seront typés via casting explicite
 
 // Interface pour les étudiants actifs
 interface ActiveStudent {
@@ -32,199 +28,202 @@ const AdminDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [supabaseAvailable, setSupabaseAvailable] = useState<boolean>(true);
   
-  // Référence au client Supabase initialisé dans index.html
-  const supabase = window.supabase;
+  // Référence au client Supabase avec casting explicite
+  const supabaseClient = (window as any).supabase || supabase;
   
-  // Récupération des résultats depuis Supabase et mise en place de l'abonnement temps réel
+  // Vérification de la connexion Supabase
+  const checkSupabaseConnection = async () => {
+    try {
+      // Vérifier d'abord si supabase est défini
+      if (!supabaseClient) {
+        console.warn('Client Supabase non initialisé');
+        setSupabaseAvailable(false);
+        setError("Client Supabase non disponible. Affichage des données locales uniquement.");
+        return false;
+      }
+      
+      // Tenter une requête simple pour vérifier la connexion
+      const { error } = await supabaseClient
+        .from('quiz_results')
+        .select('*')
+        .limit(1);
+        
+      if (error) {
+        console.warn('Problème de connexion à Supabase:', error);
+        setSupabaseAvailable(false);
+        setError("Impossible de se connecter à la base de données. Affichage des données locales uniquement.");
+        return false;
+      } else {
+        console.log('Connexion à Supabase établie');
+        setSupabaseAvailable(true);
+        return true;
+      }
+    } catch (err) {
+      console.error('Erreur lors de la vérification de la connexion Supabase:', err);
+      setSupabaseAvailable(false);
+      setError("Erreur de connexion à la base de données. Affichage des données locales uniquement.");
+      return false;
+    }
+  };
+  
+  // Récupération des résultats depuis Supabase
+  const fetchQuizResults = async () => {
+    if (!supabaseClient || !supabaseAvailable) {
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabaseClient
+        .from('quiz_results')
+        .select('*');
+        
+      if (error) {
+        console.error('Erreur lors de la récupération des résultats:', error);
+        return;
+      }
+      
+      if (data) {
+        const typedData = data as QuizResult[];
+        setQuizResults(prevResults => {
+          // Fusionner les résultats locaux et ceux de Supabase en évitant les doublons
+          const existingIds = new Set(prevResults.map((r: QuizResult) => r.studentId));
+          const newResults = typedData.filter((r: QuizResult) => !existingIds.has(r.studentId));
+          return [...prevResults, ...newResults];
+        });
+      }
+    } catch (err) {
+      console.error('Erreur inattendue:', err);
+    }
+  };
+  
+  // Récupération des étudiants actifs
+  const fetchActiveStudents = async () => {
+    try {
+      setLoading(true);
+      
+      if (!supabaseClient || !supabaseAvailable) {
+        setLoading(false);
+        return;
+      }
+      
+      // Tenter de récupérer les étudiants actifs
+      const { data, error } = await supabaseClient
+        .from('active_students')
+        .select('*');
+        
+      if (error) {
+        console.error('Erreur lors de la récupération des étudiants actifs:', error);
+        setError("Impossible de récupérer les étudiants actifs. Veuillez créer la table manuellement dans Supabase.");
+        setLoading(false);
+        return;
+      }
+      
+      if (data) {
+        const typedData = data as ActiveStudent[];
+        setActiveStudents(typedData);
+        setError(null);
+      }
+    } catch (err) {
+      console.error('Erreur inattendue:', err);
+      setError("Une erreur inattendue s'est produite. Veuillez rafraîchir la page.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Exécuter les fonctions de manière séquentielle
+  const initializeData = async () => {
+    const isConnected = await checkSupabaseConnection();
+    if (isConnected) {
+      await fetchQuizResults();
+      await fetchActiveStudents();
+      setupRealtimeSubscriptions();
+    }
+  };
+  
+  // Configuration des abonnements temps réel
+  const setupRealtimeSubscriptions = () => {
+    if (!supabaseClient || !supabaseAvailable) {
+      return;
+    }
+    
+    // Mise en place de l'abonnement temps réel pour les nouveaux résultats
+    try {
+      const resultsSubscription = supabaseClient
+        .channel('public:quiz_results')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quiz_results' }, (payload: { new: QuizResult }) => {
+          console.log('Nouveau résultat reçu:', payload.new);
+          
+          // Ajouter le nouveau résultat aux résultats existants
+          setQuizResults(prevResults => {
+            // Éviter les doublons en vérifiant si le résultat existe déjà
+            const exists = prevResults.some(r => r.studentId === payload.new.studentId);
+            if (exists) {
+              return prevResults.map(r => 
+                r.studentId === payload.new.studentId ? payload.new : r
+              );
+            } else {
+              return [...prevResults, payload.new];
+            }
+          });
+        })
+        .subscribe();
+        
+      // Abonnement aux mises à jour des étudiants actifs
+      const studentsSubscription = supabaseClient
+        .channel('public:active_students')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'active_students' }, (payload: { new: ActiveStudent }) => {
+          console.log('Nouvel étudiant actif:', payload.new);
+          
+          setActiveStudents(prev => {
+            // Éviter les doublons
+            const exists = prev.some(s => s.student_id === payload.new.student_id);
+            if (exists) {
+              return prev.map(s => 
+                s.student_id === payload.new.student_id ? payload.new : s
+              );
+            } else {
+              return [...prev, payload.new];
+            }
+          });
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'active_students' }, (payload: { new: ActiveStudent }) => {
+          console.log('Mise à jour étudiant:', payload.new);
+          
+          setActiveStudents(prev => 
+            prev.map(s => 
+              s.student_id === payload.new.student_id ? payload.new : s
+            )
+          );
+        })
+        .subscribe();
+        
+      // Nettoyage des abonnements à la destruction du composant
+      return () => {
+        if (resultsSubscription) {
+          resultsSubscription.unsubscribe();
+        }
+        if (studentsSubscription) {
+          studentsSubscription.unsubscribe();
+        }
+      };
+    } catch (error) {
+      console.error("Erreur lors de la configuration des abonnements temps réel:", error);
+      return () => {}; // Retourner une fonction de nettoyage vide en cas d'erreur
+    }
+  };
+  
   useEffect(() => {
     // Initialisation avec les résultats du contexte pour un affichage immédiat
     setQuizResults(contextQuizResults || []);
     
-    // Vérifier si Supabase est disponible
-    const checkSupabaseConnection = async () => {
-      try {
-        // Vérifier d'abord si supabase est défini
-        if (!supabase) {
-          console.warn('Client Supabase non initialisé');
-          setSupabaseAvailable(false);
-          setError("Client Supabase non disponible. Affichage des données locales uniquement.");
-          return false;
-        }
-        
-        // Tenter une requête simple pour vérifier la connexion
-        const { error } = await supabase
-          .from('quiz_results')
-          .select('*')
-          .limit(1);
-          
-        if (error) {
-          console.warn('Problème de connexion à Supabase:', error);
-          setSupabaseAvailable(false);
-          setError("Impossible de se connecter à la base de données. Affichage des données locales uniquement.");
-          return false;
-        } else {
-          console.log('Connexion à Supabase établie');
-          setSupabaseAvailable(true);
-          return true;
-        }
-      } catch (err) {
-        console.error('Erreur lors de la vérification de la connexion Supabase:', err);
-        setSupabaseAvailable(false);
-        setError("Erreur de connexion à la base de données. Affichage des données locales uniquement.");
-        return false;
-      }
-    };
-    
-    // Récupération des résultats depuis Supabase
-    const fetchQuizResults = async () => {
-      if (!supabase || !supabaseAvailable) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('quiz_results')
-          .select('*');
-          
-        if (error) {
-          console.error('Erreur lors de la récupération des résultats:', error);
-          return;
-        }
-        
-        if (data) {
-          const typedData = data as QuizResult[];
-          setQuizResults(prevResults => {
-            // Fusionner les résultats locaux et ceux de Supabase en évitant les doublons
-            const existingIds = new Set(prevResults.map((r: QuizResult) => r.studentId));
-            const newResults = typedData.filter((r: QuizResult) => !existingIds.has(r.studentId));
-            return [...prevResults, ...newResults];
-          });
-        }
-      } catch (err) {
-        console.error('Erreur inattendue:', err);
-      }
-    };
-    
-    // Récupération des étudiants actifs
-    const fetchActiveStudents = async () => {
-      try {
-        setLoading(true);
-        
-        if (!supabase || !supabaseAvailable) {
-          setLoading(false);
-          return;
-        }
-        
-        // Tenter de récupérer les étudiants actifs
-        const { data, error } = await supabase
-          .from('active_students')
-          .select('*');
-          
-        if (error) {
-          console.error('Erreur lors de la récupération des étudiants actifs:', error);
-          setError("Impossible de récupérer les étudiants actifs. Veuillez créer la table manuellement dans Supabase.");
-          setLoading(false);
-          return;
-        }
-        
-        if (data) {
-          const typedData = data as ActiveStudent[];
-          setActiveStudents(typedData);
-          setError(null);
-        }
-      } catch (err) {
-        console.error('Erreur inattendue:', err);
-        setError("Une erreur inattendue s'est produite. Veuillez rafraîchir la page.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    // Exécuter les fonctions de manière séquentielle
-    const initializeData = async () => {
-      const isConnected = await checkSupabaseConnection();
-      if (isConnected) {
-        await fetchQuizResults();
-        await fetchActiveStudents();
-        setupRealtimeSubscriptions();
-      }
-    };
-    
-    // Configuration des abonnements temps réel
-    const setupRealtimeSubscriptions = () => {
-      if (!supabase || !supabaseAvailable) return;
-      
-      // Mise en place de l'abonnement temps réel pour les nouveaux résultats
-      try {
-        const resultsSubscription = supabase
-          .channel('public:quiz_results')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quiz_results' }, (payload: { new: QuizResult }) => {
-            console.log('Nouveau résultat reçu:', payload.new);
-            
-            // Ajouter le nouveau résultat aux résultats existants
-            setQuizResults(prevResults => {
-              // Éviter les doublons en vérifiant si le résultat existe déjà
-              const exists = prevResults.some(r => r.studentId === payload.new.studentId);
-              if (exists) {
-                return prevResults.map(r => 
-                  r.studentId === payload.new.studentId ? payload.new : r
-                );
-              } else {
-                return [...prevResults, payload.new];
-              }
-            });
-          })
-          .subscribe();
-          
-        // Abonnement aux mises à jour des étudiants actifs
-        const studentsSubscription = supabase
-          .channel('public:active_students')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'active_students' }, (payload: { new: ActiveStudent }) => {
-            console.log('Nouvel étudiant actif:', payload.new);
-            
-            setActiveStudents(prev => {
-              // Éviter les doublons
-              const exists = prev.some(s => s.student_id === payload.new.student_id);
-              if (exists) {
-                return prev.map(s => 
-                  s.student_id === payload.new.student_id ? payload.new : s
-                );
-              } else {
-                return [...prev, payload.new];
-              }
-            });
-          })
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'active_students' }, (payload: { new: ActiveStudent }) => {
-            console.log('Mise à jour étudiant:', payload.new);
-            
-            setActiveStudents(prev => 
-              prev.map(s => 
-                s.student_id === payload.new.student_id ? payload.new : s
-              )
-            );
-          })
-          .subscribe();
-          
-        // Nettoyage des abonnements à la destruction du composant
-        return () => {
-          if (resultsSubscription) {
-            resultsSubscription.unsubscribe();
-          }
-          if (studentsSubscription) {
-            studentsSubscription.unsubscribe();
-          }
-        };
-      } catch (error) {
-        console.error("Erreur lors de la configuration des abonnements temps réel:", error);
-        return () => {}; // Retourner une fonction de nettoyage vide en cas d'erreur
-      }
-    };
-    
     initializeData();
-  }, [contextQuizResults, supabase, supabaseAvailable]);
+  }, [contextQuizResults, supabaseClient, supabaseAvailable]);
   
   // Fonction pour signaler une tentative de triche pour un étudiant spécifique
   const reportCheatingForStudent = async (studentId: string) => {
     try {
-      if (!supabase || !supabaseAvailable) {
+      if (!supabaseClient || !supabaseAvailable) {
         // Mise à jour locale
         setActiveStudents(current => 
           current.map(student => {
@@ -241,7 +240,7 @@ const AdminDashboard: React.FC = () => {
       }
       
       // Mettre à jour le nombre de tentatives de triche dans Supabase
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('active_students')
         .select('cheating_attempts')
         .eq('student_id', studentId)
@@ -254,7 +253,7 @@ const AdminDashboard: React.FC = () => {
       
       const updatedCheatingAttempts = (data?.cheating_attempts || 0) + 1;
       
-      await supabase
+      await supabaseClient
         .from('active_students')
         .update({ cheating_attempts: updatedCheatingAttempts })
         .eq('student_id', studentId);

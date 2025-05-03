@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Lucide } from '../base-components';
 
 const Login: React.FC = () => {
