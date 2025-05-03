@@ -5,6 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Définition explicite des permissions
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -51,6 +57,7 @@ jobs:
         with:
           folder: dist
           branch: gh-pages
+          token: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Notification de fin de déploiement 📢
         run: echo "🎉 Déploiement terminé avec succès ! Le site est accessible à l'adresse https://[organisation].github.io/intranet-esgis/"
