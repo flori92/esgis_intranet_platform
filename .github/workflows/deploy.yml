@@ -35,10 +35,10 @@ jobs:
           echo "::endgroup::"
         continue-on-error: true
         
-      - name: Build du projet 
+      - name: Build du projet avec configuration optimisée
         run: |
           echo "::group::Build du projet"
-          CI=false npm run build
+          npm run build:simple
           echo "::endgroup::"
         env:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -52,6 +52,38 @@ jobs:
           fi
           echo " Le build a réussi, le dossier dist existe."
           
+      - name: Création du fichier env-config.js avec les secrets Supabase
+        run: |
+          cat > dist/env-config.js << EOL
+          // Configuration des variables d'environnement pour Supabase
+          // Généré automatiquement lors du déploiement le $(date)
+          window.ENV = {
+            SUPABASE_URL: "${{ secrets.SUPABASE_URL }}",
+            SUPABASE_ANON_KEY: "${{ secrets.SUPABASE_ANON_KEY }}"
+          };
+          EOL
+          
+      - name: Création du fichier .nojekyll et 404.html
+        run: |
+          touch dist/.nojekyll
+          cat > dist/404.html << EOL
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Redirection vers l'application</title>
+            <script>
+              // Redirection vers la page index avec le chemin comme paramètre
+              const path = window.location.pathname.substr('/esgis_intranet_platform'.length);
+              window.location.href = '/esgis_intranet_platform/#' + path;
+            </script>
+          </head>
+          <body>
+            <p>Redirection en cours...</p>
+          </body>
+          </html>
+          EOL
+          
       - name: Déploiement sur GitHub Pages 
         uses: JamesIves/github-pages-deploy-action@v4
         with:
@@ -60,4 +92,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Notification de fin de déploiement 
-        run: echo " Déploiement terminé avec succès ! Le site est accessible à l'adresse https://[organisation].github.io/intranet-esgis/"
+        run: echo " Déploiement terminé avec succès ! Le site est accessible à l'adresse https://flori92.github.io/esgis_intranet_platform/"

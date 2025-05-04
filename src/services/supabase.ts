@@ -12,12 +12,36 @@ import {
 } from '../types/supabase.types';
 
 // Récupération des variables d'environnement
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+// Utilisation d'une approche hybride qui fonctionne à la fois en développement et en production
+const getSupabaseConfig = () => {
+  // En priorité, utiliser les variables d'environnement Vite standard
+  if (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return {
+      supabaseUrl: import.meta.env.VITE_SUPABASE_URL as string,
+      supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string
+    };
+  }
+  
+  // Sinon, essayer de récupérer depuis window.ENV (défini dans env-config.js)
+  if (typeof window !== 'undefined' && window.ENV) {
+    return {
+      supabaseUrl: window.ENV.SUPABASE_URL,
+      supabaseAnonKey: window.ENV.SUPABASE_ANON_KEY
+    };
+  }
+  
+  // Valeurs par défaut pour le développement local (à modifier selon vos besoins)
+  return {
+    supabaseUrl: 'http://localhost:54321',
+    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+  };
+};
+
+const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
 
 // Vérification de la présence des variables d'environnement
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Les variables d\'environnement VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY doivent être définies.');
+  console.error('Les variables d\'environnement pour Supabase ne sont pas définies correctement.');
 }
 
 // Création du client Supabase avec gestion des erreurs et mécanismes de retry
@@ -134,7 +158,18 @@ export const updateUserProfile = async (userId: string, updates: Partial<Profile
       throw error;
     }
     
-    return data;
+    // Vérification et assertion de type pour garantir que data est du type Profile
+    if (!data) {
+      throw new Error('Profil mis à jour est incomplet ou invalide');
+    }
+    
+    // Vérification de la structure des données et typage
+    const profile = data as Profile;
+    if (!profile.id) {
+      throw new Error('Profil mis à jour ne contient pas d\'identifiant valide');
+    }
+    
+    return profile;
   } catch (err) {
     console.error('Exception lors de la mise à jour du profil utilisateur:', err);
     throw err;
