@@ -84,6 +84,12 @@ jobs:
           </html>
           EOL
           
+      - name: Vérification du contenu de env-config.js
+        run: |
+          echo '--- CONTENU DE dist/env-config.js ---'
+          cat dist/env-config.js || echo 'Fichier non trouvé !'
+          echo '--- FIN DU CONTENU ---'
+          
       - name: Déploiement sur GitHub Pages 
         uses: JamesIves/github-pages-deploy-action@v4
         with:
