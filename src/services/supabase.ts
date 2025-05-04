@@ -21,7 +21,6 @@ const getSupabaseConfig = () => {
       supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string
     };
   }
-  
   // Sinon, essayer de récupérer depuis window.ENV (défini dans env-config.js)
   if (typeof window !== 'undefined' && window.ENV) {
     return {
@@ -29,8 +28,11 @@ const getSupabaseConfig = () => {
       supabaseAnonKey: window.ENV.SUPABASE_ANON_KEY
     };
   }
-  
-  // Valeurs par défaut pour le développement local (à modifier selon vos besoins)
+  // En production, lever une erreur claire
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Aucune configuration Supabase valide trouvée en production.');
+  }
+  // Valeurs par défaut pour le développement local
   return {
     supabaseUrl: 'http://localhost:54321',
     supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
