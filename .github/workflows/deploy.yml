@@ -1,11 +1,11 @@
-name: Déploiement sur GitHub Pages
+name: Déploiement GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
-# Définition explicite des permissions
+# Permissions explicites pour GitHub Pages
 permissions:
   contents: write
   pages: write
@@ -16,26 +16,26 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout 🛎️
+      - name: Checkout 
         uses: actions/checkout@v4
 
-      - name: Configuration de Node.js ⚙️
+      - name: Configuration de Node.js 
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           
-      - name: Installation des dépendances 📦
+      - name: Installation des dépendances 
         run: npm ci
         
-      - name: Vérification TypeScript (non-bloquante) 🔍
+      - name: Vérification TypeScript (non-bloquante) 
         run: |
           echo "::group::Vérification TypeScript"
           npx tsc --noEmit || echo "Des erreurs TypeScript ont été détectées, mais le déploiement continuera."
           echo "::endgroup::"
         continue-on-error: true
         
-      - name: Build du projet 🛠️
+      - name: Build du projet 
         run: |
           echo "::group::Build du projet"
           CI=false npm run build
@@ -44,20 +44,20 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           
-      - name: Vérification du build 🧪
+      - name: Vérification du build 
         run: |
           if [ ! -d "dist" ]; then
             echo "::error::Le dossier dist n'a pas été créé. Le build a échoué."
             exit 1
           fi
-          echo "✅ Le build a réussi, le dossier dist existe."
+          echo " Le build a réussi, le dossier dist existe."
           
-      - name: Déploiement sur GitHub Pages 🚀
+      - name: Déploiement sur GitHub Pages 
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: dist
           branch: gh-pages
           token: ${{ secrets.GITHUB_TOKEN }}
           
-      - name: Notification de fin de déploiement 📢
-        run: echo "🎉 Déploiement terminé avec succès ! Le site est accessible à l'adresse https://[organisation].github.io/intranet-esgis/"
+      - name: Notification de fin de déploiement 
+        run: echo " Déploiement terminé avec succès ! Le site est accessible à l'adresse https://[organisation].github.io/intranet-esgis/"
