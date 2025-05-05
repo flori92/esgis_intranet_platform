@@ -28,83 +28,94 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Candidature, Entretien } from '../types';
-import { useAuth } from '../../../context/AuthContext';
-import { fetchRecords, updateRecord, deleteRecord } from '../../../utils/supabase-helpers';
-import { InputChangeEvent } from '../../../types/events';
+import { useAuth } from '../../../hooks/useAuth';
 
-interface MesCandidaturesProps {
-  onUpdate: () => void;
-}
+/**
+ * @typedef {import('../types').Candidature} Candidature
+ * @typedef {import('../types').Entretien} Entretien
+ */
 
-const MesCandidatures: React.FC<MesCandidaturesProps> = ({ onUpdate }) => {
+/**
+ * Composant affichant les candidatures de l'étudiant
+ * @param {Object} props - Propriétés du composant
+ * @param {Candidature[]} props.candidatures - Liste des candidatures
+ * @param {Entretien[]} props.entretiens - Liste des entretiens
+ * @param {function} props.onAnnuler - Fonction pour annuler une candidature
+ * @param {function} props.supprimerCandidature - Fonction pour supprimer une candidature
+ * @param {function} props.modifierCandidature - Fonction pour modifier une candidature
+ * @returns {JSX.Element} Composant d'affichage des candidatures
+ */
+const MesCandidatures = ({ 
+  candidatures, 
+  entretiens, 
+  onAnnuler, 
+  supprimerCandidature, 
+  modifierCandidature 
+}) => {
   const { authState } = useAuth();
-  const [candidatures, setCandidatures] = useState<Candidature[]>([]);
-  const [selectedCandidature, setSelectedCandidature] = useState<Candidature | null>(null);
+  const [selectedCandidature, setSelectedCandidature] = useState(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [lettreMotivation, setLettreMotivation] = useState('');
-  const [entretiens, setEntretiens] = useState<Entretien[]>([]);
+  const [entretienDialogOpen, setEntretienDialogOpen] = useState(false);
+  const [selectedEntretien, setSelectedEntretien] = useState(null);
 
-  useEffect(() => {
-    fetchCandidatures();
-  }, [authState.student?.id]);
-
-  const fetchCandidatures = async () => {
-    try {
-      if (!authState.student?.id) return;
-
-      const data = await fetchRecords<'candidatures'>('candidatures', {
-        filters: [{ column: 'student_id', operator: 'eq', value: authState.student.id }]
-      });
-
-      setCandidatures(data);
-    } catch (error) {
-      console.error('Erreur lors de la récupération des candidatures:', error);
-    }
-  };
-
-  const handleEdit = (candidature: Candidature) => {
+  /**
+   * Gérer l'édition d'une candidature
+   * @param {Candidature} candidature - Candidature à éditer
+   */
+  const handleEdit = (candidature) => {
     setSelectedCandidature(candidature);
-    setLettreMotivation(candidature.lettre_motivation || '');
+    setLettreMotivation(candidature.lettreMotivation || '');
     setEditDialogOpen(true);
   };
 
+  /**
+   * Fermer le dialogue d'édition
+   */
   const handleCloseEdit = () => {
     setSelectedCandidature(null);
     setLettreMotivation('');
     setEditDialogOpen(false);
   };
 
+  /**
+   * Sauvegarder les modifications d'une candidature
+   */
   const handleSaveEdit = async () => {
     try {
-      if (!selectedCandidature) return;
+      if (!selectedCandidature) {
+        return;
+      }
 
-      await updateRecord('candidatures', selectedCandidature.id, {
-        lettre_motivation: lettreMotivation
-      });
-
+      await modifierCandidature(selectedCandidature.id, lettreMotivation);
       handleCloseEdit();
-      fetchCandidatures();
-      onUpdate();
     } catch (error) {
       console.error('Erreur lors de la mise à jour de la candidature:', error);
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette candidature ?')) return;
+  /**
+   * Supprimer une candidature
+   * @param {number} id - ID de la candidature à supprimer
+   */
+  const handleDelete = async (id) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette candidature ?')) {
+      return;
+    }
 
     try {
-      await deleteRecord('candidatures', id);
-      fetchCandidatures();
-      onUpdate();
+      await supprimerCandidature(id);
     } catch (error) {
       console.error('Erreur lors de la suppression de la candidature:', error);
     }
   };
 
-  // Fonction pour obtenir le statut formaté d'une candidature
-  const getStatusChip = (status: string) => {
+  /**
+   * Obtenir le statut formaté d'une candidature
+   * @param {string} status - Statut de la candidature
+   * @returns {JSX.Element} Composant Chip représentant le statut
+   */
+  const getStatusChip = (status) => {
     switch (status) {
       case 'pending':
         return <Chip label="En attente" color="primary" variant="outlined" size="small" />;
@@ -119,38 +130,37 @@ const MesCandidatures: React.FC<MesCandidaturesProps> = ({ onUpdate }) => {
     }
   };
 
-  // Fonction pour ouvrir le dialog d'entretien
-  const handleOpenEntretienDialog = (candidatureId: number) => {
+  /**
+   * Ouvrir le dialogue d'entretien
+   * @param {number} candidatureId - ID de la candidature
+   */
+  const handleOpenEntretienDialog = (candidatureId) => {
     const entretien = entretiens.find(e => e.candidatureId === candidatureId) || null;
-    setSelectedCandidature(candidatures.find(c => c.id === candidatureId) || null);
-    setLettreMotivation(selectedCandidature?.lettreMotivation || '');
-    setEditDialogOpen(true);
+    setSelectedEntretien(entretien);
+    setEntretienDialogOpen(true);
   };
 
-  // Fonction pour fermer le dialog d'entretien
+  /**
+   * Fermer le dialogue d'entretien
+   */
   const handleCloseEntretienDialog = () => {
-    setSelectedCandidature(null);
-    setLettreMotivation('');
-    setEditDialogOpen(false);
+    setSelectedEntretien(null);
+    setEntretienDialogOpen(false);
   };
 
-  // Fonction pour obtenir le type d'entretien formaté
-  const getTypeEntretien = (type: string) => {
+  /**
+   * Obtenir le type d'entretien formaté
+   * @param {string} type - Type d'entretien
+   * @returns {string} Type d'entretien formaté
+   */
+  const getTypeEntretien = (type) => {
     switch (type) {
       case 'presentiel':
-        return (
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <BusinessIcon fontSize="small" sx={{ mr: 0.5 }} />
-            <span>Présentiel</span>
-          </Box>
-        );
+        return 'Présentiel';
       case 'visioconference':
-        return (
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <EventIcon fontSize="small" sx={{ mr: 0.5 }} />
-            <span>Visioconférence</span>
-          </Box>
-        );
+        return 'Visioconférence';
+      case 'telephonique':
+        return 'Téléphonique';
       default:
         return type;
     }
@@ -164,7 +174,7 @@ const MesCandidatures: React.FC<MesCandidaturesProps> = ({ onUpdate }) => {
       
       {candidatures.length === 0 ? (
         <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1">
             Vous n'avez pas encore postulé à des offres de stage.
           </Typography>
         </Paper>
@@ -173,11 +183,11 @@ const MesCandidatures: React.FC<MesCandidaturesProps> = ({ onUpdate }) => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Offre</TableCell>
                 <TableCell>Entreprise</TableCell>
+                <TableCell>Offre</TableCell>
                 <TableCell>Date de candidature</TableCell>
                 <TableCell>Statut</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -187,20 +197,21 @@ const MesCandidatures: React.FC<MesCandidaturesProps> = ({ onUpdate }) => {
                 return (
                   <TableRow key={candidature.id}>
                     <TableCell>
-                      {candidature.offre?.titre || 'N/A'}
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <BusinessIcon sx={{ mr: 1, color: 'primary.main' }} />
+                        {candidature.offre.entreprise.nom}
+                      </Box>
                     </TableCell>
-                    <TableCell>
-                      {candidature.offre?.entreprise.nom || 'N/A'}
-                    </TableCell>
+                    <TableCell>{candidature.offre.titre}</TableCell>
                     <TableCell>
                       {format(new Date(candidature.date_candidature), 'dd/MM/yyyy', { locale: fr })}
                     </TableCell>
                     <TableCell>
                       {getStatusChip(candidature.status)}
                     </TableCell>
-                    <TableCell align="right">
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                        <Tooltip title="Voir les détails">
+                    <TableCell>
+                      <Box sx={{ display: 'flex' }}>
+                        <Tooltip title="Voir/Modifier">
                           <IconButton
                             size="small"
                             onClick={() => handleEdit(candidature)}
@@ -209,7 +220,7 @@ const MesCandidatures: React.FC<MesCandidaturesProps> = ({ onUpdate }) => {
                           </IconButton>
                         </Tooltip>
                         
-                        <Tooltip title="Supprimer ma candidature">
+                        <Tooltip title="Annuler ma candidature">
                           <IconButton
                             size="small"
                             onClick={() => handleDelete(candidature.id)}
@@ -278,7 +289,7 @@ const MesCandidatures: React.FC<MesCandidaturesProps> = ({ onUpdate }) => {
                 rows={8}
                 variant="outlined"
                 value={lettreMotivation}
-                onChange={(e: InputChangeEvent) => setLettreMotivation(e.target.value)}
+                onChange={(e) => setLettreMotivation(e.target.value)}
               />
               
               <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
@@ -325,6 +336,71 @@ const MesCandidatures: React.FC<MesCandidaturesProps> = ({ onUpdate }) => {
               Enregistrer
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog d'entretien */}
+      <Dialog
+        open={entretienDialogOpen}
+        onClose={handleCloseEntretienDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Détails de l'entretien
+        </DialogTitle>
+        
+        <DialogContent>
+          {selectedEntretien && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Type : {getTypeEntretien(selectedEntretien.type)}
+              </Typography>
+              
+              <Typography variant="subtitle1" gutterBottom>
+                Date : {format(new Date(selectedEntretien.date), 'dd MMMM yyyy à HH:mm', { locale: fr })}
+              </Typography>
+              
+              <Typography variant="subtitle1" gutterBottom>
+                Lieu : {selectedEntretien.lieu}
+              </Typography>
+              
+              {selectedEntretien.lien_visio && (
+                <Typography variant="subtitle1" gutterBottom>
+                  Lien : <a href={selectedEntretien.lien_visio} target="_blank" rel="noopener noreferrer">
+                    {selectedEntretien.lien_visio}
+                  </a>
+                </Typography>
+              )}
+              
+              <Typography variant="subtitle1" gutterBottom>
+                Contact : {selectedEntretien.contact}
+              </Typography>
+              
+              <Typography variant="subtitle1" gutterBottom>
+                Durée : {selectedEntretien.duree} minutes
+              </Typography>
+              
+              {selectedEntretien.notes && (
+                <>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Notes :
+                  </Typography>
+                  <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
+                    <Typography variant="body2" style={{ whiteSpace: 'pre-line' }}>
+                      {selectedEntretien.notes}
+                    </Typography>
+                  </Paper>
+                </>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={handleCloseEntretienDialog}>
+            Fermer
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

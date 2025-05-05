@@ -15,67 +15,71 @@ import {
   FormHelperText,
   Alert,
   Autocomplete,
-  InputAdornment,
-  SelectChangeEvent
+  InputAdornment
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { fr } from 'date-fns/locale';
-import { Offre } from '../types';
 import { supabase } from '@/services/supabase';
 
-interface AjouterOffreProps {
-  onSubmit: (nouvelleOffre: Omit<Offre, "id">) => Promise<{ success: boolean; message: string; }>;
-  departementId: number;
-}
+/**
+ * @typedef {import('../types').Offre} Offre
+ * 
+ * @typedef {Object} Entreprise
+ * @property {number} id - ID de l'entreprise
+ * @property {string} nom - Nom de l'entreprise
+ * @property {string} secteur - Secteur d'activité de l'entreprise
+ * 
+ * @typedef {Object} Departement
+ * @property {number} id - ID du département
+ * @property {string} nom - Nom du département
+ * 
+ * @typedef {'temps_plein'|'temps_partiel'|'alternance'|'stage_etude'} TypeStage
+ */
 
-interface Entreprise {
-  id: number;
-  nom: string;
-  secteur: string;
-}
-
-interface Departement {
-  id: number;
-  nom: string;
-}
-
-type TypeStage = 'temps_plein' | 'temps_partiel' | 'alternance' | 'stage_etude';
-
-const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) => {
+/**
+ * Composant pour ajouter une nouvelle offre de stage
+ * @param {Object} props - Propriétés du composant
+ * @param {function} props.onSubmit - Fonction pour soumettre la nouvelle offre
+ * @param {number} props.departementId - ID du département du professeur
+ * @returns {JSX.Element} Composant d'ajout d'offre
+ */
+const AjouterOffre = ({ onSubmit, departementId }) => {
   // États pour le formulaire
   const [titre, setTitre] = useState('');
   const [description, setDescription] = useState('');
-  const [entrepriseId, setEntrepriseId] = useState<number | null>(null);
-  const [dateDebut, setDateDebut] = useState<Date | null>(null);
-  const [dateFin, setDateFin] = useState<Date | null>(null);
+  const [entrepriseId, setEntrepriseId] = useState(null);
+  const [entrepriseSelectionnee, setEntrepriseSelectionnee] = useState(null);
+  const [dateDebut, setDateDebut] = useState(null);
+  const [dateFin, setDateFin] = useState(null);
   const [lieu, setLieu] = useState('');
-  const [typeStage, setTypeStage] = useState<TypeStage>('stage_etude');
-  const [competencesRequises, setCompetencesRequises] = useState<string[]>([]);
-  const [remuneration, setRemuneration] = useState<string>('');
-  const [duree, setDuree] = useState<string>('');
-  const [niveauxRequis, setNiveauxRequis] = useState<string[]>([]);
+  const [typeStage, setTypeStage] = useState('stage_etude');
+  const [competencesRequises, setCompetencesRequises] = useState([]);
+  const [remuneration, setRemuneration] = useState('');
+  const [duree, setDuree] = useState('');
+  const [niveauxRequis, setNiveauxRequis] = useState([]);
   const [nouvelleCompetence, setNouvelleCompetence] = useState('');
 
   // États pour les données externes
-  const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
-  const [departements, setDepartements] = useState<Departement[]>([]);
+  const [entreprises, setEntreprises] = useState([]);
+  const [departements, setDepartements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
   
   // Validation
-  const [errors, setErrors] = useState<{
-    [key: string]: string;
-  }>({});
+  const [errors, setErrors] = useState({});
 
   // Chargement initial des données
   useEffect(() => {
     chargerDonnees();
   }, []);
 
+  /**
+   * Charger les données nécessaires au formulaire
+   */
   const chargerDonnees = async () => {
     try {
       // Charger les entreprises
@@ -112,44 +116,83 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
     }
   };
 
-  // Gestionnaires d'événements
-  const handleTitreChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  /**
+   * Gérer le changement du titre
+   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
+   */
+  const handleTitreChange = (event) => {
     setTitre(event.target.value);
   };
 
-  const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  /**
+   * Gérer le changement de la description
+   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
+   */
+  const handleDescriptionChange = (event) => {
     setDescription(event.target.value);
   };
 
-  const handleEntrepriseChange = (_: unknown, newValue: Entreprise | null) => {
+  /**
+   * Gérer le changement de l'entreprise
+   * @param {any} _ - Événement non utilisé
+   * @param {Entreprise|null} newValue - Nouvelle entreprise sélectionnée
+   */
+  const handleEntrepriseChange = (_, newValue) => {
+    setEntrepriseSelectionnee(newValue);
     setEntrepriseId(newValue ? newValue.id : null);
   };
 
-  const handleLieuChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  /**
+   * Gérer le changement du lieu
+   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
+   */
+  const handleLieuChange = (event) => {
     setLieu(event.target.value);
   };
 
-  const handleTypeStageChange = (event: SelectChangeEvent<TypeStage>) => {
-    setTypeStage(event.target.value as TypeStage);
+  /**
+   * Gérer le changement du type de stage
+   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
+   */
+  const handleTypeStageChange = (event) => {
+    setTypeStage(event.target.value);
   };
 
-  const handleRemunerationChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  /**
+   * Gérer le changement de la rémunération
+   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
+   */
+  const handleRemunerationChange = (event) => {
     setRemuneration(event.target.value);
   };
 
-  const handleDureeChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  /**
+   * Gérer le changement de la durée
+   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
+   */
+  const handleDureeChange = (event) => {
     setDuree(event.target.value);
   };
 
-  const handleNiveauxRequisChange = (event: SelectChangeEvent<string[]>) => {
-    setNiveauxRequis(event.target.value as string[]);
+  /**
+   * Gérer le changement des niveaux requis
+   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
+   */
+  const handleNiveauxRequisChange = (event) => {
+    setNiveauxRequis(event.target.value);
   };
 
-  const handleNouvelleCompetenceChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  /**
+   * Gérer le changement de la nouvelle compétence
+   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
+   */
+  const handleNouvelleCompetenceChange = (event) => {
     setNouvelleCompetence(event.target.value);
   };
 
-  // Fonction pour ajouter une compétence
+  /**
+   * Ajouter une compétence à la liste
+   */
   const handleAjouterCompetence = () => {
     if (nouvelleCompetence.trim() && !competencesRequises.includes(nouvelleCompetence.trim())) {
       setCompetencesRequises([...competencesRequises, nouvelleCompetence.trim()]);
@@ -157,64 +200,82 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
     }
   };
 
-  // Fonction pour supprimer une compétence
-  const handleSupprimerCompetence = (competence: string) => {
+  /**
+   * Supprimer une compétence de la liste
+   * @param {string} competence - Compétence à supprimer
+   */
+  const handleSupprimerCompetence = (competence) => {
     setCompetencesRequises(competencesRequises.filter(c => c !== competence));
   };
 
-  // Validation du formulaire
-  const validerFormulaire = (): boolean => {
-    const nouvellesErreurs: { [key: string]: string } = {};
-
+  /**
+   * Valider le formulaire
+   * @returns {boolean} Formulaire valide ou non
+   */
+  const validerFormulaire = () => {
+    const newErrors = {};
+    
+    // Validation du titre
     if (!titre.trim()) {
-      nouvellesErreurs.titre = 'Le titre est requis';
+      newErrors.titre = 'Le titre est requis';
+    } else if (titre.length < 5) {
+      newErrors.titre = 'Le titre doit contenir au moins 5 caractères';
     }
+    
+    // Validation de la description
     if (!description.trim()) {
-      nouvellesErreurs.description = 'La description est requise';
+      newErrors.description = 'La description est requise';
+    } else if (description.length < 20) {
+      newErrors.description = 'La description doit contenir au moins 20 caractères';
     }
+    
+    // Validation de l'entreprise
     if (!entrepriseId) {
-      nouvellesErreurs.entrepriseId = 'L\'entreprise est requise';
+      newErrors.entreprise = 'L\'entreprise est requise';
     }
+    
+    // Validation des dates
     if (!dateDebut) {
-      nouvellesErreurs.dateDebut = 'La date de début est requise';
+      newErrors.dateDebut = 'La date de début est requise';
     }
+    
     if (!dateFin) {
-      nouvellesErreurs.dateFin = 'La date de fin est requise';
+      newErrors.dateFin = 'La date de fin est requise';
+    } else if (dateDebut && dateFin && dateDebut > dateFin) {
+      newErrors.dateFin = 'La date de fin doit être postérieure à la date de début';
     }
-    if (dateDebut && dateFin && dateFin <= dateDebut) {
-      nouvellesErreurs.dateFin = 'La date de fin doit être après la date de début';
-    }
+    
+    // Validation du lieu
     if (!lieu.trim()) {
-      nouvellesErreurs.lieu = 'Le lieu est requis';
-    }
-    if (!typeStage) {
-      nouvellesErreurs.typeStage = 'Le type de stage est requis';
+      newErrors.lieu = 'Le lieu est requis';
     }
     
-    if (competencesRequises.length === 0) {
-      nouvellesErreurs.competencesRequises = 'Au moins une compétence requise est nécessaire';
-    }
-    
-    if (remuneration && isNaN(parseFloat(remuneration))) {
-      nouvellesErreurs.remuneration = 'La rémunération doit être un nombre';
-    }
-    
+    // Validation de la durée
     if (!duree.trim()) {
-      nouvellesErreurs.duree = 'La durée est requise';
-    } else if (isNaN(parseInt(duree, 10))) {
-      nouvellesErreurs.duree = 'La durée doit être un nombre';
+      newErrors.duree = 'La durée est requise';
+    } else if (isNaN(Number(duree)) || Number(duree) <= 0) {
+      newErrors.duree = 'La durée doit être un nombre positif';
     }
     
+    // Validation des niveaux requis
     if (niveauxRequis.length === 0) {
-      nouvellesErreurs.niveauxRequis = 'Au moins un niveau requis est nécessaire';
+      newErrors.niveauxRequis = 'Au moins un niveau d\'études est requis';
     }
-
-    setErrors(nouvellesErreurs);
-    return Object.keys(nouvellesErreurs).length === 0;
+    
+    // Validation des compétences requises
+    if (competencesRequises.length === 0) {
+      newErrors.competencesRequises = 'Au moins une compétence est requise';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  // Soumission du formulaire
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  /**
+   * Soumettre le formulaire
+   * @param {React.FormEvent} e - Événement de soumission
+   */
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validerFormulaire()) {
@@ -226,40 +287,23 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
     setSuccess(false);
     
     try {
-      // Trouver l'entreprise sélectionnée
-      const entrepriseSelectionnee = entreprises.find(e => e.id === entrepriseId);
-      
-      if (!entrepriseSelectionnee) {
-        throw new Error('Entreprise non trouvée');
-      }
-      
-      if (!dateDebut || !dateFin) {
-        throw new Error('Les dates sont requises');
-      }
-      
       // Créer l'objet offre
-      const nouvelleOffre: Omit<Offre, 'id'> = {
+      const nouvelleOffre = {
         titre,
         description,
-        entreprise: {
-          id: entrepriseSelectionnee.id,
-          nom: entrepriseSelectionnee.nom,
-          secteur: entrepriseSelectionnee.secteur
-        },
-        dateDebut: dateDebut.toISOString().split('T')[0],
-        dateFin: dateFin.toISOString().split('T')[0],
+        entreprise: entrepriseSelectionnee,
+        dateDebut: dateDebut ? dateDebut.toISOString().split('T')[0] : '',
+        dateFin: dateFin ? dateFin.toISOString().split('T')[0] : '',
         lieu,
         typeStage,
         competencesRequises,
-        remuneration: remuneration ? parseFloat(remuneration) : null,
-        duree: parseInt(duree, 10),
-        professeurContact: 'À définir', // À remplacer par les données du professeur connecté
-        datePublication: new Date().toISOString().split('T')[0],
-        departementId: departementId,
+        remuneration: remuneration ? Number(remuneration) : 0,
+        duree: Number(duree),
+        departementId: departementId || 1,
         niveauRequis: niveauxRequis
       };
       
-      // Appeler la fonction onSubmit passée en props
+      // Soumettre l'offre
       const result = await onSubmit(nouvelleOffre);
       
       if (result.success) {
@@ -269,6 +313,7 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
         setTitre('');
         setDescription('');
         setEntrepriseId(null);
+        setEntrepriseSelectionnee(null);
         setDateDebut(null);
         setDateFin(null);
         setLieu('');
@@ -277,11 +322,12 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
         setRemuneration('');
         setDuree('');
         setNiveauxRequis([]);
+        setNouvelleCompetence('');
       } else {
         setError(result.message);
       }
     } catch (err) {
-      console.error('Erreur lors de l\'ajout de l\'offre:', err);
+      console.error('Erreur lors de la soumission de l\'offre:', err);
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
     } finally {
       setLoading(false);
@@ -296,18 +342,18 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
         </Typography>
         
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ mb: 3 }}>
             {error}
           </Alert>
         )}
         
         {success && (
-          <Alert severity="success" sx={{ mb: 2 }}>
+          <Alert severity="success" sx={{ mb: 3 }}>
             L'offre de stage a été publiée avec succès.
           </Alert>
         )}
         
-        <Box component="form" onSubmit={handleSubmit}>
+        <Box component="form" onSubmit={handleSubmit} noValidate>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <TextField
@@ -336,37 +382,37 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
             </Grid>
             
             <Grid item xs={12}>
-              <FormControl fullWidth error={!!errors.entrepriseId} required>
-                <Autocomplete
-                  options={entreprises}
-                  getOptionLabel={(option) => option.nom}
-                  value={entreprises.find(e => e.id === entrepriseId) || null}
-                  onChange={handleEntrepriseChange}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Entreprise"
-                      error={!!errors.entrepriseId}
-                      helperText={errors.entrepriseId}
-                    />
-                  )}
-                />
-              </FormControl>
+              <Autocomplete
+                options={entreprises}
+                getOptionLabel={(option) => `${option.nom} - ${option.secteur}`}
+                value={entrepriseSelectionnee}
+                onChange={handleEntrepriseChange}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Entreprise"
+                    error={!!errors.entreprise}
+                    helperText={errors.entreprise}
+                    required
+                  />
+                )}
+              />
             </Grid>
             
             <Grid item xs={12} md={6}>
               <DatePicker
                 label="Date de début"
                 value={dateDebut}
-                onChange={(newValue) => setDateDebut(newValue)}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    required: true,
-                    error: !!errors.dateDebut,
-                    helperText: errors.dateDebut
-                  }
-                }}
+                onChange={setDateDebut}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    error={!!errors.dateDebut}
+                    helperText={errors.dateDebut}
+                    required
+                  />
+                )}
               />
             </Grid>
             
@@ -374,15 +420,16 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
               <DatePicker
                 label="Date de fin"
                 value={dateFin}
-                onChange={(newValue) => setDateFin(newValue)}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    required: true,
-                    error: !!errors.dateFin,
-                    helperText: errors.dateFin
-                  }
-                }}
+                onChange={setDateFin}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    error={!!errors.dateFin}
+                    helperText={errors.dateFin}
+                    required
+                  />
+                )}
               />
             </Grid>
             
@@ -399,19 +446,18 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth error={!!errors.typeStage} required>
+              <FormControl fullWidth required>
                 <InputLabel>Type de stage</InputLabel>
                 <Select
                   value={typeStage}
-                  onChange={handleTypeStageChange}
                   label="Type de stage"
+                  onChange={handleTypeStageChange}
                 >
                   <MenuItem value="temps_plein">Temps plein</MenuItem>
                   <MenuItem value="temps_partiel">Temps partiel</MenuItem>
                   <MenuItem value="alternance">Alternance</MenuItem>
                   <MenuItem value="stage_etude">Stage d'étude</MenuItem>
                 </Select>
-                {errors.typeStage && <FormHelperText>{errors.typeStage}</FormHelperText>}
               </FormControl>
             </Grid>
             
