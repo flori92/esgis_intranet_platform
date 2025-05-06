@@ -42,6 +42,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
+import MainLayout from '@/components/layout/MainLayout';
 
 /**
  * Page de gestion des stages pour les étudiants
@@ -336,7 +337,7 @@ const StudentInternshipsPage = () => {
   };
 
   return (
-    <Box>
+    <MainLayout>
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -735,7 +736,7 @@ const StudentInternshipsPage = () => {
           </DialogActions>
         </Dialog>
       </Container>
-    </Box>
+    </MainLayout>
   );
 };
 

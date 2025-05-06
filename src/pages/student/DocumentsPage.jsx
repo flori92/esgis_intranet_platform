@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Container, Grid, Tab, Tabs, Typography, Dialog, DialogContent } from '@mui/material';
-import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
+import { useAuth } from '@/context/AuthContext';
 import DocumentService from '@/services/DocumentService';
 import DocumentList from '@/components/documents/DocumentList';
 import { DOCUMENT_TYPES } from '@/types/documents';
@@ -9,7 +9,7 @@ import { DOCUMENT_TYPES } from '@/types/documents';
  * Page de consultation et téléchargement des documents pour les étudiants
  */
 const StudentDocumentsPage = () => {
-  const { user, profile } = useSupabaseAuth();
+  const { authState } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -20,13 +20,13 @@ const StudentDocumentsPage = () => {
   // Charger les documents accessibles à l'étudiant
   useEffect(() => {
     const fetchDocuments = async () => {
-      if (!user?.id) return;
+      if (!authState.user?.id) return;
       
       try {
         setLoading(true);
         
         // Récupérer tous les documents publics et ceux des groupes de l'étudiant
-        const docs = await DocumentService.getUserDocuments(user.id);
+        const docs = await DocumentService.getUserDocuments(authState.user.id);
         
         setDocuments(docs);
         setError(null);
@@ -39,7 +39,7 @@ const StudentDocumentsPage = () => {
     };
 
     fetchDocuments();
-  }, [user]);
+  }, [authState.user]);
 
   // Gérer le changement d'onglet
   const handleTabChange = (event, newValue) => {

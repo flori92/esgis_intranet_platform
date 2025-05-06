@@ -19,7 +19,6 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
-import MainLayout from '@/components/layout/MainLayout';
 import Quiz from '../core/Quiz';
 
 /**
