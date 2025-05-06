@@ -1,3 +1,6 @@
+// Importer le mock Jest en premier pour éviter les erreurs
+import './mockJest';
+
 import * as React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

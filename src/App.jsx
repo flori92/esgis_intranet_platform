@@ -1,28 +1,3 @@
-// Mock de l'AuthProvider pour les tests
-jest.mock('./context/AuthContext', () => ({
-  AuthProvider: ({ children }) => <div data-testid="auth-provider">{children}</div>,
-  useAuth: jest.fn(() => ({
-    authState: {
-      user: null,
-      profile: null,
-      student: null,
-      professor: null,
-      session: null,
-      isAdmin: false,
-      isProfessor: false,
-      isStudent: false,
-      error: null,
-      loading: false
-    },
-    signIn: jest.fn(),
-    signOut: jest.fn(),
-    logout: jest.fn(),
-    resetPassword: jest.fn(),
-    updateProfile: jest.fn(),
-    createUserAccount: jest.fn()
-  }))
-}), { virtual: true });
-
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -79,7 +54,6 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        {/** Correction : Ajout des children dans AuthProvider */}
         <Routes>
           {/* Routes d'authentification */}
           <Route path="/login" element={<LoginPage />} />

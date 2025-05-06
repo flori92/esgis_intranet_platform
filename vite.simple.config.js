@@ -24,7 +24,7 @@ export default defineConfig({
         chunkFileNames: '[name].[hash].js',
         assetFileNames: '[name].[ext]'
       },
-      // Ignorer les erreurs de Jest dans la production
+      // Ignorer les erreurs dans la production
       onwarn(warning, warn) {
         if (warning.code === 'MODULE_LEVEL_DIRECTIVE' || 
             warning.code === 'CIRCULAR_DEPENDENCY' ||
@@ -33,7 +33,22 @@ export default defineConfig({
           return;
         }
         warn(warning);
-      }
+      },
+      // Exclure les fichiers de test
+      external: [
+        /\.test\.(js|jsx)$/,
+        /\.spec\.(js|jsx)$/,
+        /setupTests\.js/
+      ]
     }
+  },
+  // Exclure les fichiers de test du build
+  optimizeDeps: {
+    exclude: ['@testing-library/jest-dom']
+  },
+  // Définir les variables d'environnement pour la production
+  define: {
+    // Définir jest comme un objet vide pour éviter les erreurs
+    'jest': '{}'
   }
 });
