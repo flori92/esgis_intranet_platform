@@ -15,7 +15,7 @@ export const getTestAccountsInfo = () => {
 };
 
 /**
- * Initialise les comptes de test dans Supabase
+ * Initialise les comptes de test dans Supabase avec un délai entre chaque compte
  * @returns {Promise<Object>} Résultat de l'initialisation
  */
 export const initializeTestAccounts = async () => {
@@ -26,27 +26,22 @@ export const initializeTestAccounts = async () => {
 
   console.log("Début de l'initialisation des comptes de test...");
 
-  // Créer chaque compte de test
-  for (const [role, account] of Object.entries(TEST_ACCOUNTS)) {
+  // Fonction pour attendre un certain temps
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Créer chaque compte de test avec un délai entre chaque
+  const accounts = Object.entries(TEST_ACCOUNTS);
+  
+  for (let i = 0; i < accounts.length; i++) {
+    const [role, account] = accounts[i];
+    
     try {
+      console.log(`Initialisation du compte ${role}...`);
+      
       // Vérifier si l'utilisateur existe déjà par email dans auth
       console.log(`Vérification de l'existence du compte ${role}...`);
       
-      // Tentative de connexion pour vérifier si le compte existe
-      const { data: authData, error: signInError } = await supabase.auth
-        .signInWithPassword({
-          email: account.email,
-          password: account.password,
-        });
-      
-      if (!signInError && authData && authData.user) {
-        console.log(`Le compte ${role} existe déjà.`);
-        results.success.push(`${role} (déjà existant)`);
-        continue;
-      }
-      
       // Créer l'utilisateur dans auth
-      console.log(`Création du compte ${role}...`);
       const { data: newUser, error: signUpError } = await supabase.auth.signUp({
         email: account.email,
         password: account.password,
@@ -60,11 +55,23 @@ export const initializeTestAccounts = async () => {
       });
       
       if (signUpError) {
-        throw signUpError;
+        // Ignorer l'erreur si l'utilisateur existe déjà
+        if (signUpError.message.includes('User already registered')) {
+          console.log(`Le compte ${role} existe déjà.`);
+          results.success.push(`${role} (déjà existant)`);
+        } else {
+          throw signUpError;
+        }
+      } else {
+        console.log(`Compte ${role} créé avec succès.`);
+        results.success.push(role);
       }
       
-      console.log(`Compte ${role} créé avec succès.`);
-      results.success.push(role);
+      // Attendre 3 secondes entre chaque création de compte pour éviter les limitations de taux
+      if (i < accounts.length - 1) {
+        console.log("Attente de 3 secondes avant la prochaine initialisation...");
+        await delay(3000);
+      }
       
     } catch (error) {
       console.error(`Erreur lors de la création du compte ${role}:`, error);
