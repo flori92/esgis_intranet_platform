@@ -8,7 +8,7 @@
 export const TEST_ACCOUNTS = {
   // Compte administrateur
   admin: {
-    email: 'admin@esgis.edu',
+    email: 'admin.esgis@mailinator.com',
     password: 'Admin123!',
     profile: {
       first_name: 'Admin',
@@ -22,7 +22,7 @@ export const TEST_ACCOUNTS = {
   
   // Compte professeur
   professor: {
-    email: 'prof@esgis.edu',
+    email: 'prof.esgis@mailinator.com',
     password: 'Prof123!',
     profile: {
       first_name: 'Floraice',
@@ -37,7 +37,7 @@ export const TEST_ACCOUNTS = {
   
   // Compte étudiant
   student: {
-    email: 'etudiant@esgis.edu',
+    email: 'etudiant.esgis@mailinator.com',
     password: 'Etudiant123!',
     profile: {
       first_name: 'Marie',
@@ -69,7 +69,7 @@ export const createTestAccounts = async (supabase) => {
       // Vérifier si l'utilisateur existe déjà
       const { data: existingUser } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, email')
         .eq('email', account.email)
         .maybeSingle();
 
