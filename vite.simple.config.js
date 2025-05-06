@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { resolve } from 'path';
+import path from 'path';
 
 // Configuration simplifiée pour GitHub Pages
 export default defineConfig({
@@ -9,20 +9,30 @@ export default defineConfig({
   base: '/esgis_intranet_platform/',
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   build: {
     // Désactiver la minification pour le débogage
     minify: false,
-    // Ne pas utiliser de répertoire d'assets
-    assetsDir: '',
+    outDir: 'dist',
+    assetsDir: 'assets',
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         // Garantir des noms de fichiers cohérents
         entryFileNames: '[name].js',
-        chunkFileNames: '[name].[hash].js',
-        assetFileNames: '[name].[ext]'
+        chunkFileNames: 'chunks/[name].[hash].js',
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name.endsWith('.css')) {
+            return '[name].css';
+          }
+          // Placer les images et autres ressources statiques à la racine
+          if (/\.(png|jpe?g|gif|svg|ico)$/.test(assetInfo.name)) {
+            return '[name][extname]';
+          }
+          return 'assets/[name].[hash][extname]';
+        },
       },
       // Ignorer les erreurs dans la production
       onwarn(warning, warn) {
@@ -50,5 +60,7 @@ export default defineConfig({
   define: {
     // Définir jest comme un objet vide pour éviter les erreurs
     'jest': '{}'
-  }
+  },
+  // Exclure les fichiers de test
+  exclude: ['**/*.test.js', '**/*.test.jsx', '**/*.spec.js', '**/*.spec.jsx'],
 });
