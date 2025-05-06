@@ -16,6 +16,7 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   Chip,
+  Badge // Ajout de l'import du composant Badge
 } from '@mui/material';
 import {
   AccessTime as AccessTimeIcon,
@@ -510,7 +511,7 @@ const SchedulePage = () => {
                 {weekDays[tabValue]?.sessions.length > 0 ? (
                   <Grid container spacing={2}>
                     {weekDays[tabValue].sessions.map((session) => (
-                      <Grid item xs={12} key={session.id}>
+                      <Grid item xs={12} key={`session-${session.id}`}> // Correction clé unique
                         <Paper
                           elevation={2}
                           sx={{
@@ -579,7 +580,7 @@ const SchedulePage = () => {
                   <Box>
                     {weekDays[tabValue].sessions.map((session) => (
                       <Paper
-                        key={session.id}
+                        key={`session-${session.id}`} // Correction clé unique
                         elevation={2}
                         sx={{
                           p: 2,
@@ -592,6 +593,12 @@ const SchedulePage = () => {
                             <Typography variant="h6" component="div">
                               {session.course.name}
                             </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                              <TodayIcon fontSize="small" sx={{ mr: 1 }} />
+                              <Typography variant="body2">
+                                {weekDays[tabValue].date.toLocaleDateString('fr-FR', { weekday: 'long' })} {weekDays[tabValue].date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                              </Typography>
+                            </Box>
                             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                               <SchoolIcon fontSize="small" sx={{ mr: 1 }} />
                               <Typography variant="body2">{session.course.code}</Typography>
@@ -646,7 +653,7 @@ const SchedulePage = () => {
                 <Grid container spacing={2}>
                   {weekDays.map((day) =>
                     day.sessions.map((session) => (
-                      <Grid item xs={12} key={`${day.date.toLocaleDateString('fr-FR', { weekday: 'long' })}-${session.id}`}>
+                      <Grid item xs={12} key={`session-${session.id}`}> // Correction clé unique
                         <Paper
                           elevation={2}
                           sx={{

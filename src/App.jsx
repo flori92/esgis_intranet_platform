@@ -14,6 +14,7 @@ import MessagesPage from './pages/messages/MessagesPage';
 import NotificationsPage from './pages/notifications/NotificationsPage';
 import StagesPage from './pages/stages/StagesPage';
 import StudentExamsList from './pages/exams/student/StudentExamsList'; // Import du composant StudentExamsList
+import StudentSchedulePage from './pages/student/SchedulePage';
 
 /**
  * Composant de protection des routes
@@ -112,8 +113,8 @@ function App() {
             <Route 
               path="/schedule" 
               element={
-                <ProtectedRoute>
-                  <SchedulePage />
+                <ProtectedRoute requiredRole="student">
+                  <StudentSchedulePage />
                 </ProtectedRoute>
               } 
             />
