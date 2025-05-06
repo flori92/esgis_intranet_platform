@@ -21,6 +21,7 @@ import AuthLayout from '../../components/layout/AuthLayout';
 import StyledLoginForm from '../../components/auth/StyledLoginForm';
 import { getTestAccountsInfo } from '../../utils/initTestAccounts';
 import { initializeTestAccounts } from '../../utils/initTestAccounts';
+import toast from 'react-hot-toast'; // Importer la bibliothèque de notifications
 
 /**
  * Page de connexion à l'intranet ESGIS
@@ -83,13 +84,30 @@ const LoginPage = () => {
     setInitializationResult(null);
     
     try {
+      // Utiliser la nouvelle fonction d'initialisation
       const result = await initializeTestAccounts();
-      setInitializationResult(result);
-    } catch (err) {
-      console.error('Erreur lors de l\'initialisation des comptes de test:', err);
-      setInitializationResult({ 
-        success: [], 
-        errors: [{ role: 'global', error: err.message }] 
+      
+      // Afficher les résultats
+      if (result.success.length > 0) {
+        toast.success(`Comptes initialisés avec succès: ${result.success.join(', ')}`);
+      }
+      
+      if (result.errors.length > 0) {
+        const errorMessages = result.errors.map(e => `${e.role}: ${e.error}`).join(', ');
+        setInitializationResult({
+          success: result.success.length > 0 ? result.success : [],
+          errors: result.errors
+        });
+        toast.error(`Initialisation partielle des comptes de test\nErreurs: ${errorMessages}`);
+      } else if (result.success.length === 0) {
+        toast.error('Aucun compte n\'a été initialisé');
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'initialisation des comptes de test:', error);
+      toast.error(`Erreur: ${error.message}`);
+      setInitializationResult({
+        success: [],
+        errors: [{ role: 'global', error: error.message }]
       });
     } finally {
       setInitializingAccounts(false);
