@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
@@ -31,15 +31,13 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   }
   
   // Vérifier le rôle si nécessaire
-  if (requiredRole) {
-    if (
-      (requiredRole === 'admin' && !authState.isAdmin) ||
-      (requiredRole === 'professor' && !authState.isProfessor) ||
-      (requiredRole === 'student' && !authState.isStudent)
-    ) {
-      // Rediriger vers la page appropriée selon le rôle
-      return <Navigate to="/login" replace />;
-    }
+  if (requiredRole && (
+    (requiredRole === 'admin' && !authState.isAdmin) ||
+    (requiredRole === 'professor' && !authState.isProfessor) ||
+    (requiredRole === 'student' && !authState.isStudent)
+  )) {
+    // Rediriger vers la page appropriée selon le rôle
+    return <Navigate to="/login" replace />;
   }
   
   return <>{children}</>;

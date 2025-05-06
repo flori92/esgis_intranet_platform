@@ -215,11 +215,12 @@ const LoginPage = () => {
           >
             <Box sx={{ textAlign: 'center', mb: 2 }}>
               <img 
-                src="/esgis-logo.png" 
+                src="https://esgis.org/wp-content/uploads/2023/01/logo-esgis-2.png" 
                 alt="Logo ESGIS" 
                 style={{ height: 80, marginBottom: 16 }}
                 onError={(e) => {
-                  e.target.src = "https://esgis.org/wp-content/uploads/2023/01/logo-esgis-2.png";
+                  console.error("Erreur de chargement du logo ESGIS");
+                  e.target.style.display = 'none';
                 }}
               />
               <Typography variant="h5" component="h1" fontWeight="bold" fontFamily="Montserrat">
