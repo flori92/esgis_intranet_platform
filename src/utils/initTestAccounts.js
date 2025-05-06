@@ -2,6 +2,19 @@ import { supabase } from '../supabase';
 import { TEST_ACCOUNTS } from './testAccounts';
 
 /**
+ * Récupère les informations des comptes de test
+ * @returns {Array} Informations des comptes de test
+ */
+export const getTestAccountsInfo = () => {
+  return Object.entries(TEST_ACCOUNTS).map(([role, account]) => ({
+    role,
+    email: account.email,
+    password: account.password,
+    fullName: `${account.profile.first_name} ${account.profile.last_name}`
+  }));
+};
+
+/**
  * Initialise les comptes de test dans Supabase
  * @returns {Promise<Object>} Résultat de l'initialisation
  */
