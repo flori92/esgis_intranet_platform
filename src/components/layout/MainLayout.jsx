@@ -172,7 +172,7 @@ const MainLayout = () => {
       }}>
         <Box
           component="img"
-          src="/logo-esgis-white.png"
+          src="https://raw.githubusercontent.com/flori92/esgis_intranet_platform/main/public/logo-esgis-white.png"
           alt="Logo ESGIS"
           sx={{
             height: 60,

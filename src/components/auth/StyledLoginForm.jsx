@@ -84,9 +84,10 @@ const StyledLoginForm = ({ onTestAccountsClick }) => {
             placeholder="Mot de passe" 
             className="input-field" 
             type="password"
+            autoComplete="current-password"
+            required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
           />
         </div>
         <div className="btn">

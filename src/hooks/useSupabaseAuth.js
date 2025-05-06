@@ -100,7 +100,25 @@ export const useSupabaseAuth = () => {
    */
   const fetchUserProfile = async (userId) => {
     try {
-      // Tentative de récupération du profil
+      // Tenter d'abord de récupérer les métadonnées utilisateur directement
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      // Créer un profil de secours basé sur les métadonnées
+      let fallbackProfile = null;
+      
+      if (!userError && userData && userData.user) {
+        const userMetadata = userData.user.user_metadata || {};
+        fallbackProfile = {
+          id: userId,
+          email: userData.user.email,
+          role: userMetadata.role || 'user',
+          first_name: userMetadata.first_name || '',
+          last_name: userMetadata.last_name || '',
+          avatar_url: userMetadata.avatar_url || null
+        };
+      }
+      
+      // Tentative de récupération du profil complet
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -110,24 +128,10 @@ export const useSupabaseAuth = () => {
       if (error) {
         console.error('Erreur lors de la récupération du profil:', error);
         
-        // Si l'erreur est liée à la table profiles, créer un profil minimal
-        // basé sur les données d'authentification
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        
-        if (!userError && userData && userData.user) {
-          // Utiliser les métadonnées de l'utilisateur comme profil de secours
-          const userMetadata = userData.user.user_metadata || {};
-          const userProfile = {
-            id: userId,
-            email: userData.user.email,
-            role: userMetadata.role || 'user',
-            first_name: userMetadata.first_name || '',
-            last_name: userMetadata.last_name || '',
-            avatar_url: userMetadata.avatar_url || null
-          };
-          
-          console.log('Utilisation d\'un profil de secours basé sur les métadonnées:', userProfile);
-          return userProfile;
+        // Si nous avons un profil de secours, utilisons-le
+        if (fallbackProfile) {
+          console.log('Utilisation d\'un profil de secours basé sur les métadonnées:', fallbackProfile);
+          return fallbackProfile;
         }
         
         throw error;
@@ -236,7 +240,9 @@ export const useSupabaseAuth = () => {
         redirectTo: `${window.location.origin}/reset-password`
       });
       
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       
       return { error: null };
     } catch (error) {
@@ -263,7 +269,9 @@ export const useSupabaseAuth = () => {
         .select()
         .single();
         
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       
       // Mettre à jour l'état
       setAuthState(prev => ({
@@ -293,17 +301,44 @@ export const useSupabaseAuth = () => {
         password
       });
       
-      if (authError) throw authError;
-      
+      if (authError) {
+        throw authError;
+      }
+
       const userId = authData.user.id;
+
+      const accountProfileData = {
+        id: userId,
+        email: email,
+        first_name: profileData.first_name,
+        last_name: profileData.last_name,
+        role: profileData.role,
+        phone: profileData.phone,
+        avatar_url: profileData.avatar_url
+      };
+      
+      if (profileData.role === 'professor' && profileData.speciality) {
+        accountProfileData.speciality = profileData.speciality;
+      }
+      
+      if (profileData.role === 'student') {
+        if (profileData.student_id) {
+          accountProfileData.student_id = profileData.student_id;
+        }
+        if (profileData.level) {
+          accountProfileData.level = profileData.level;
+        }
+      }
       
       // Créer le profil
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert([{ id: userId, ...profileData }]);
+        .insert([{ ...accountProfileData }]);
         
-      if (profileError) throw profileError;
-      
+      if (profileError) {
+        throw profileError;
+      }
+
       return { userId, error: null };
     } catch (error) {
       console.error('Erreur lors de la création du compte:', error);
