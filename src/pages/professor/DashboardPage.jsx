@@ -32,8 +32,7 @@ import {
   CalendarToday as CalendarTodayIcon,
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-// Correction du chemin d'importation de Supabase
+import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';

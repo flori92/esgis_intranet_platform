@@ -26,8 +26,7 @@ import {
   Notifications as NotificationsIcon,
   Description as DescriptionIcon,
 } from '@mui/icons-material';
-import { useAuth } from '../../context/AuthContext';
-// Correction du chemin d'importation de Supabase
+import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
 
 const AdminDashboardPage = () => {

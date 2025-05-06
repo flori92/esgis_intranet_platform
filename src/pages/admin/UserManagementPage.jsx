@@ -43,8 +43,8 @@ import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 
-import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '@/services/supabase';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/supabase';
 import Papa from 'papaparse';
 
 // Style pour le composant de téléchargement de fichier

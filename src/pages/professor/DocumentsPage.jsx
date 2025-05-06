@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Container, Grid, Tab, Tabs, Typography, Button, Dialog, DialogContent } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
-import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
+import { useAuth } from '@/context/AuthContext';
 import DocumentService from '@/services/DocumentService';
 import DocumentList from '@/components/documents/DocumentList';
 import DocumentUpload from '@/components/documents/DocumentUpload';
@@ -11,7 +11,7 @@ import { DOCUMENT_TYPES } from '@/types/documents';
  * Page de gestion des documents pour les professeurs
  */
 const ProfessorDocumentsPage = () => {
-  const { user, profile } = useSupabaseAuth();
+  const { authState } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,11 +27,11 @@ const ProfessorDocumentsPage = () => {
   // Charger les documents du professeur
   useEffect(() => {
     const fetchDocuments = async () => {
-      if (!user?.id) return;
+      if (!authState.user?.id) return;
       
       try {
         setLoading(true);
-        const docs = await DocumentService.getUserDocuments(user.id);
+        const docs = await DocumentService.getUserDocuments(authState.user.id);
         setDocuments(docs);
         setError(null);
       } catch (err) {
@@ -43,12 +43,12 @@ const ProfessorDocumentsPage = () => {
     };
 
     fetchDocuments();
-  }, [user]);
+  }, [authState.user]);
 
   // Charger les cours du professeur
   useEffect(() => {
     const fetchCourses = async () => {
-      if (!user?.id) return;
+      if (!authState.user?.id) return;
       
       try {
         // TODO: Implémenter le service pour récupérer les cours du professeur
@@ -67,7 +67,7 @@ const ProfessorDocumentsPage = () => {
     };
 
     fetchCourses();
-  }, [user]);
+  }, [authState.user]);
 
   // Gérer le changement d'onglet
   const handleTabChange = (event, newValue) => {
@@ -88,7 +88,7 @@ const ProfessorDocumentsPage = () => {
 
   // Gérer le téléversement d'un document
   const handleUploadDocument = async (file, documentData) => {
-    if (!user?.id) return;
+    if (!authState.user?.id) return;
     
     try {
       setUploadLoading(true);
@@ -96,7 +96,7 @@ const ProfessorDocumentsPage = () => {
       
       // Générer un chemin unique pour le fichier
       const timestamp = new Date().getTime();
-      const filePath = `${user.id}/${timestamp}_${file.name}`;
+      const filePath = `${authState.user.id}/${timestamp}_${file.name}`;
       
       // Téléverser le fichier
       const uploadResult = await DocumentService.uploadFile(file, filePath);
@@ -105,7 +105,7 @@ const ProfessorDocumentsPage = () => {
       const newDocument = await DocumentService.createDocument({
         ...documentData,
         file_url: uploadResult.publicUrl,
-        created_by: user.id,
+        created_by: authState.user.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
