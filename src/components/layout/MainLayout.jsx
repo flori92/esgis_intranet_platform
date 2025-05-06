@@ -145,9 +145,9 @@ const MainLayout = () => {
       // Étudiant (par défaut)
       return [
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/student' },
+        { text: 'Mes examens', icon: <AssignmentIcon />, path: '/student/exams' },
         { text: 'Emploi du temps', icon: <CalendarMonthIcon />, path: '/schedule' },
         { text: 'Cours', icon: <SchoolIcon />, path: '/courses' },
-        { text: 'Mes examens', icon: <AssignmentIcon />, path: '/student/exams' },
         { text: 'Notes', icon: <GradingIcon />, path: '/grades' },
         { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/stages' },
         { text: 'Documents', icon: <FolderIcon />, path: '/documents' },
@@ -204,33 +204,16 @@ const MainLayout = () => {
             fontFamily: 'Montserrat'
           }}
         />
-        <Typography 
-          variant="subtitle1" 
-          fontWeight="bold"
-          fontFamily="Montserrat"
-        >
-          {profile?.full_name || 'Utilisateur'}
-        </Typography>
-        <Typography 
-          variant="body2" 
-          color="text.secondary"
-          fontFamily="Montserrat"
-          sx={{ mb: 1 }}
-        >
-          {user?.email || ''}
-        </Typography>
-        <Typography 
-          variant="caption" 
-          sx={{ 
-            bgcolor: '#e0e0e0', 
-            px: 1, 
-            py: 0.5, 
-            borderRadius: 1,
-            fontFamily: 'Montserrat'
-          }}
-        >
-          {isAdmin ? 'Administrateur' : isProfessor ? 'Professeur' : 'Étudiant'}
-        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2, mb: 2 }}>
+          {profile?.full_name && (
+            <Typography variant="subtitle1" fontWeight="bold" fontFamily="Montserrat" sx={{ mt: 1, textAlign: 'center' }}>
+              {profile?.full_name}
+            </Typography>
+          )}
+          <Typography variant="body2" color="text.secondary" fontFamily="Montserrat" sx={{ textAlign: 'center' }}>
+            {user?.email}
+          </Typography>
+        </Box>
       </Box>
       
       <Divider />

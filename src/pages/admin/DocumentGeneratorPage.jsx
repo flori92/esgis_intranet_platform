@@ -42,6 +42,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getRecordsWithRelation as fetchRecords, insertRecord, getRecordsWithRelation as fetchWithRelations } from '@/utils/supabase-helpers';
+import { triggerDownload } from '@/utils/DownloadLinkUtil';
 
 const DocumentGeneratorPage = () => {
   const { authState } = useAuth();
@@ -477,21 +478,10 @@ const DocumentGeneratorPage = () => {
   };
 
   // Télécharger le document
-  const downloadDocument = () => {
-    if (!documentData) {
-      setError('Aucun document à télécharger');
-      return;
-    }
-    
-    const blob = new Blob([documentData], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `document_${new Date().getTime()}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+  const downloadDocument = (pdfBlob) => {
+    const url = URL.createObjectURL(pdfBlob);
+    triggerDownload({ url, filename: `document_${new Date().getTime()}.pdf` });
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
   // Prévisualiser un document existant
@@ -826,7 +816,7 @@ const DocumentGeneratorPage = () => {
             Fermer
           </Button>
           <Button
-            onClick={downloadDocument}
+            onClick={() => downloadDocument(documentData)}
             startIcon={<DownloadIcon />}
             color="primary"
           >

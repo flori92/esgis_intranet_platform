@@ -46,6 +46,7 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
 import Papa from 'papaparse';
+import { triggerDownload } from '@/utils/DownloadLinkUtil';
 
 // Style pour le composant de téléchargement de fichier
 const inputUploadStyle = {
@@ -550,27 +551,8 @@ const UserManagementPage = () => {
   };
 
   const exportUsersTemplate = () => {
-    // Créer le contenu CSV
-    const header = ['full_name', 'email', 'role', 'department', 'academic_year'];
-    const exampleRow = ['John Doe', 'john.doe@example.com', 'student', 'Informatique', '2023-2024'];
-    
-    const csvContent = [
-      header.join(','),
-      exampleRow.join(',')
-    ].join('\n');
-    
-    // Créer un Blob et télécharger
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'template_utilisateurs.csv');
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const templateUrl = '/templates/template_utilisateurs.csv';
+    triggerDownload({ url: templateUrl, filename: 'template_utilisateurs.csv' });
   };
 
   return (

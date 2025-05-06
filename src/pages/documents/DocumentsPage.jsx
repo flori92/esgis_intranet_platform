@@ -49,6 +49,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 // Correction du chemin d'importation de Supabase
 import { supabase } from '@/supabase';
+import { triggerDownload } from '@/utils/DownloadLinkUtil';
 
 /**
  * @typedef {Object} Document
@@ -398,18 +399,8 @@ const DocumentsPage = () => {
         throw new Error(`Erreur lors de la création de l'URL de téléchargement: ${error.message}`);
       }
       
-      // Créer un élément a temporaire pour le téléchargement
-      if (data && data.signedUrl) {
-        const downloadLink = document.createElement('a');
-        downloadLink.href = data.signedUrl;
-        downloadLink.download = document.title || 'document';
-        downloadLink.target = '_blank';
-        
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        
-        document.body.removeChild(downloadLink);
-      }
+      // Utilisation de l'utilitaire mutualisé
+      triggerDownload({ url: data.signedUrl, filename: document.title || 'document' });
     } catch (err) {
       console.error('Erreur lors du téléchargement du document:', err);
       setError(`Erreur lors du téléchargement: ${err.message}`);

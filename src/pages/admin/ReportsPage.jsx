@@ -45,6 +45,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 // Correction du chemin d'importation de Supabase
 import { supabase } from '@/supabase';
+import { triggerDownload } from '@/utils/DownloadLinkUtil';
 
 // Couleurs pour les graphiques
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -256,16 +257,13 @@ const ReportsPage = () => {
 
     const csvString = csvRows.join('\n');
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    
     const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', fileName);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    // Utilisation de l'utilitaire mutualisé
+    triggerDownload({ url, filename: fileName });
+
+    // Nettoyage de l'URL Blob après téléchargement
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
   if (loading) {

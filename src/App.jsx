@@ -13,6 +13,7 @@ import DocumentsPage from './pages/documents/DocumentsPage';
 import MessagesPage from './pages/messages/MessagesPage';
 import NotificationsPage from './pages/notifications/NotificationsPage';
 import StagesPage from './pages/stages/StagesPage';
+import StudentExamsList from './pages/student/StudentExamsList'; // Import du composant StudentExamsList
 
 /**
  * Composant de protection des routes
@@ -77,6 +78,14 @@ function App() {
                   <StudentDashboardPage />
                 </ProtectedRoute>
               } 
+            />
+            <Route 
+              path="/student/exams" 
+              element={
+                <ProtectedRoute requiredRole="student">
+                  <StudentExamsList />
+                </ProtectedRoute>
+              }
             />
             
             {/* Routes pour les professeurs */}

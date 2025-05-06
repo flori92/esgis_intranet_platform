@@ -42,6 +42,7 @@ import {
 import { useAuth } from '../../../hooks/useAuth';
 import { supabase } from '@/supabase';
 import { useNavigate } from 'react-router-dom';
+import { triggerDownload } from '@/utils/DownloadLinkUtil';
 
 const StudentsListPage = () => {
   const { authState } = useAuth();
@@ -289,20 +290,10 @@ const StudentsListPage = () => {
       // Joindre les lignes avec des sauts de ligne
       const csvContent = csvRows.join('\n');
       
-      // Créer un blob et un lien de téléchargement
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
-      
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `etudiants_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      
-      link.click();
-      
-      // Nettoyer
-      URL.revokeObjectURL(url);
-      document.body.removeChild(link);
+      triggerDownload({ url, filename: `etudiants_${new Date().toISOString().split('T')[0]}.csv` });
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
     } catch (err) {
       console.error('Erreur lors de l\'export:', err);
       setError('Une erreur est survenue lors de l\'export des données.');

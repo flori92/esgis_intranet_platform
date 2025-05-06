@@ -16,7 +16,8 @@ export const useSupabaseAuth = () => {
     isStudent: false,
     isAuthenticated: false,
     error: null,
-    loading: true
+    loading: true,
+    fullName: ''
   });
 
   // Récupérer la session au chargement
@@ -47,6 +48,20 @@ export const useSupabaseAuth = () => {
         // Récupérer le profil utilisateur
         const userProfile = await fetchUserProfile(session.user.id);
         
+        // Déterminer le nom complet (full_name)
+        let fullName = '';
+        if (userProfile) {
+          if (userProfile.full_name) {
+            fullName = userProfile.full_name;
+          } else if (userProfile.first_name || userProfile.last_name) {
+            fullName = `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim();
+          } else if (userProfile.nom && userProfile.prenom) {
+            fullName = `${userProfile.prenom} ${userProfile.nom}`.trim();
+          } else if (userProfile.nom_complet) {
+            fullName = userProfile.nom_complet;
+          }
+        }
+        
         // Déterminer le rôle de l'utilisateur
         const isAdmin = userProfile?.role === 'admin';
         const isProfessor = userProfile?.role === 'professor';
@@ -55,6 +70,7 @@ export const useSupabaseAuth = () => {
         setAuthState({
           user: session.user,
           profile: userProfile,
+          fullName, // Ajout du nom complet dans authState
           session,
           isAdmin,
           isProfessor,
@@ -68,6 +84,7 @@ export const useSupabaseAuth = () => {
         setAuthState({
           user: session.user,
           profile: null,
+          fullName: '',
           session,
           isAdmin: false,
           isProfessor: false,
@@ -82,6 +99,7 @@ export const useSupabaseAuth = () => {
       setAuthState({
         user: null,
         profile: null,
+        fullName: '',
         session: null,
         isAdmin: false,
         isProfessor: false,
