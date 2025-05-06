@@ -14,6 +14,7 @@ export const useSupabaseAuth = () => {
     isAdmin: false,
     isProfessor: false,
     isStudent: false,
+    student: null,
     isAuthenticated: false,
     error: null,
     loading: true,
@@ -67,14 +68,28 @@ export const useSupabaseAuth = () => {
         const isProfessor = userProfile?.role === 'professor';
         const isStudent = userProfile?.role === 'student';
         
+        // Ajout d'un objet student si étudiant (même en fallback)
+        let student = null;
+        if (isStudent) {
+          student = {
+            id: userProfile.id,
+            email: userProfile.email,
+            first_name: userProfile.first_name || userProfile.prenom || '',
+            last_name: userProfile.last_name || userProfile.nom || '',
+            level: userProfile.level || userProfile.niveau || '',
+            student_id: userProfile.student_id || userProfile.id,
+          };
+        }
+        
         setAuthState({
           user: session.user,
           profile: userProfile,
-          fullName, // Ajout du nom complet dans authState
+          fullName,
           session,
           isAdmin,
           isProfessor,
           isStudent,
+          student, // Injection de l'objet student dans authState
           isAuthenticated: true,
           error: null,
           loading: false
@@ -89,6 +104,7 @@ export const useSupabaseAuth = () => {
           isAdmin: false,
           isProfessor: false,
           isStudent: false,
+          student: null,
           isAuthenticated: true,
           error,
           loading: false
@@ -104,6 +120,7 @@ export const useSupabaseAuth = () => {
         isAdmin: false,
         isProfessor: false,
         isStudent: false,
+        student: null,
         isAuthenticated: false,
         error: null,
         loading: false
