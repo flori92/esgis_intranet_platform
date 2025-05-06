@@ -13,7 +13,7 @@ import DocumentsPage from './pages/documents/DocumentsPage';
 import MessagesPage from './pages/messages/MessagesPage';
 import NotificationsPage from './pages/notifications/NotificationsPage';
 import StagesPage from './pages/stages/StagesPage';
-import StudentExamsList from './pages/student/StudentExamsList'; // Import du composant StudentExamsList
+import StudentExamsList from './pages/exams/student/StudentExamsList'; // Import du composant StudentExamsList
 
 /**
  * Composant de protection des routes
