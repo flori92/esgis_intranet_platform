@@ -5,6 +5,7 @@ import {
   Typography,
   Paper,
   Alert,
+  AlertTitle,
   CircularProgress,
   Card,
   CardContent,
@@ -33,7 +34,7 @@ import toast from 'react-hot-toast'; // Importer la bibliothèque de notificatio
  */
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { signIn, authState } = useAuth();
+  const { signIn, authState, handleQuickLogin } = useAuth();
   
   // États
   const [testAccounts, setTestAccounts] = useState([]);
@@ -64,19 +65,8 @@ const LoginPage = () => {
    * Connexion rapide avec un compte de test
    * @param {Object} account - Compte de test
    */
-  const handleTestLogin = async (account) => {
-    try {
-      const { error } = await signIn(account.email, account.password);
-      
-      if (error) {
-        throw error;
-      }
-      
-      // La redirection sera gérée par l'effet useEffect ci-dessus
-    } catch (err) {
-      console.error('Erreur de connexion avec compte de test:', err);
-      alert(`Erreur de connexion avec le compte ${account.role}. ${err.message}`);
-    }
+  const handleTestLogin = (account) => {
+    handleQuickLogin(account.email, account.password);
   };
 
   /**
