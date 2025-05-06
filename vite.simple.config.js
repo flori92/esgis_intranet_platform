@@ -23,6 +23,16 @@ export default defineConfig({
         entryFileNames: '[name].js',
         chunkFileNames: '[name].[hash].js',
         assetFileNames: '[name].[ext]'
+      },
+      // Ignorer les erreurs de Jest dans la production
+      onwarn(warning, warn) {
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' || 
+            warning.code === 'CIRCULAR_DEPENDENCY' ||
+            warning.code === 'MISSING_EXPORT' || 
+            warning.code === 'UNUSED_EXTERNAL_IMPORT') {
+          return;
+        }
+        warn(warning);
       }
     }
   }

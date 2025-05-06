@@ -5,6 +5,8 @@ import './index.css';
 import { AuthProvider } from './context/AuthContext';
 import { checkSupabaseConnection } from './supabase';
 import { SnackbarProvider } from 'notistack';
+// Import du gestionnaire d'erreurs Jest
+import './setupJest';
 
 /**
  * Fichier principal d'initialisation de l'application React
