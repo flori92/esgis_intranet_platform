@@ -5,7 +5,12 @@ import StudentDashboard from '../pages/student/DashboardPage';
 import StudentExamsList from '../pages/exams/student/StudentExamsList';
 import TakeExamPage from '../pages/exams/student/TakeExamPage';
 import ExamResultsPage from '../pages/exams/student/ExamResultsPage';
-// Suppression de l'import du type ExamResult
+import StudentSchedulePage from '../pages/student/SchedulePage';
+import StudentGradesPage from '../pages/student/GradesPage';
+import StudentDocumentsPage from '../pages/student/DocumentsPage';
+import StudentMessagesPage from '../pages/student/MessagesPage';
+import StudentInternshipsPage from '../pages/student/InternshipsPage';
+import StudentGroupsPage from '../pages/student/GroupsPage';
 
 /**
  * Routes pour les étudiants
@@ -22,6 +27,8 @@ const StudentRoutes = () => {
   return (
     <Routes>
       <Route index element={<StudentDashboard />} />
+      
+      {/* Routes pour les examens */}
       <Route path="exams">
         <Route index element={<StudentExamsList />} />
         <Route path=":id/take" element={<TakeExamPage />} />
@@ -42,7 +49,24 @@ const StudentRoutes = () => {
           }
         />
       </Route>
-      {/* Ajouter ici d'autres routes étudiant si nécessaire */}
+      
+      {/* Routes pour l'emploi du temps */}
+      <Route path="schedule" element={<StudentSchedulePage />} />
+      
+      {/* Routes pour les notes */}
+      <Route path="grades" element={<StudentGradesPage />} />
+      
+      {/* Routes pour les documents */}
+      <Route path="documents" element={<StudentDocumentsPage />} />
+      
+      {/* Routes pour les messages */}
+      <Route path="messages" element={<StudentMessagesPage />} />
+      
+      {/* Routes pour les stages */}
+      <Route path="internships" element={<StudentInternshipsPage />} />
+      
+      {/* Routes pour les groupes */}
+      <Route path="groups" element={<StudentGroupsPage />} />
     </Routes>
   );
 };

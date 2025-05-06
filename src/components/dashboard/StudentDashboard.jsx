@@ -246,14 +246,14 @@ const StudentDashboard = () => {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={4}>
           <Card sx={{ height: '100%' }}>
-            <RouterLink to="/student/documents" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <RouterLink to="/documents" style={{ textDecoration: 'none', color: 'inherit' }}>
               <CardActionArea>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                     <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
                       <DescriptionIcon />
                     </Avatar>
-                    <Typography variant="h6">Documents</Typography>
+                  <Typography variant="h6">Documents</Typography>
                   </Box>
                   <Typography variant="body2" color="text.secondary">
                     Accédez à tous vos documents de cours, sujets de TP et examens. Téléchargez vos attestations et certificats.
@@ -265,14 +265,14 @@ const StudentDashboard = () => {
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
           <Card sx={{ height: '100%' }}>
-            <RouterLink to="/student/groups" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <RouterLink to="/groups" style={{ textDecoration: 'none', color: 'inherit' }}>
               <CardActionArea>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                     <Avatar sx={{ bgcolor: 'secondary.main', mr: 2 }}>
                       <GroupsIcon />
                     </Avatar>
-                    <Typography variant="h6">Groupes de TP</Typography>
+                  <Typography variant="h6">Groupes de TP</Typography>
                   </Box>
                   <Typography variant="body2" color="text.secondary">
                     Rejoignez des groupes de TP et accédez aux documents partagés par vos professeurs.
@@ -284,14 +284,14 @@ const StudentDashboard = () => {
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
           <Card sx={{ height: '100%' }}>
-            <RouterLink to="/student/courses" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <RouterLink to="/schedule" style={{ textDecoration: 'none', color: 'inherit' }}>
               <CardActionArea>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                     <Avatar sx={{ bgcolor: 'info.main', mr: 2 }}>
                       <MenuBookIcon />
                     </Avatar>
-                    <Typography variant="h6">Mes Cours</Typography>
+                  <Typography variant="h6">Mes Cours</Typography>
                   </Box>
                   <Typography variant="body2" color="text.secondary">
                     Consultez vos cours, emplois du temps et notes. Suivez votre progression académique.
@@ -335,7 +335,7 @@ const StudentDashboard = () => {
                       variant="contained" 
                       color="primary"
                       component={RouterLink}
-                      to={`/student/courses/${nextCourse.id}`}
+                      to={`/exams/${nextCourse.id}`}
                     >
                       Détails du cours
                     </Button>
@@ -370,7 +370,7 @@ const StudentDashboard = () => {
               action={
                 <Button 
                   component={RouterLink} 
-                  to="/student/exams" 
+                  to="/exams" 
                   size="small" 
                   variant="outlined"
                 >
@@ -388,7 +388,7 @@ const StudentDashboard = () => {
                       divider 
                       button 
                       component={RouterLink} 
-                      to={`/student/exams/${exam.id}`}
+                      to={`/exams/${exam.id}`}
                     >
                       <ListItemIcon>
                         <AssignmentIcon color="secondary" />
@@ -435,7 +435,7 @@ const StudentDashboard = () => {
               action={
                 <Button 
                   component={RouterLink} 
-                  to="/student/grades" 
+                  to="/grades" 
                   size="small" 
                   variant="outlined"
                 >
@@ -453,7 +453,7 @@ const StudentDashboard = () => {
                       divider 
                       button 
                       component={RouterLink} 
-                      to={`/student/grades/${grade.id}`}
+                      to={`/grades/${grade.id}`}
                     >
                       <ListItemIcon>
                         <GradeIcon color={grade.value >= grade.max_value * 0.5 ? "success" : "error"} />
@@ -493,7 +493,7 @@ const StudentDashboard = () => {
               action={
                 <Button 
                   component={RouterLink} 
-                  to="/student/schedule" 
+                  to="/schedule" 
                   size="small" 
                   variant="outlined"
                 >
