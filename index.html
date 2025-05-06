@@ -1,14 +1,12 @@
 <!DOCTYPE html>
 <html lang="fr">
   <head>
-    <base href="/" />
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Intranet ESGIS</title>
     <!-- Configuration des variables d'environnement pour Supabase -->
-    <script type="module" src="/env-config.js"></script>
-    <!-- Assurer que les chemins sont relatifs -->
+    <script type="module" src="./env-config.js"></script>
     <!-- Aider les navigateurs à trouver les ressources -->
     <link rel="preconnect" href="https://flori92.github.io" />
     <!-- Script pour gérer les routes SPA -->
@@ -18,8 +16,13 @@
         // Définir dynamiquement la base URL
         const baseUrl = '/esgis_intranet_platform/';
         document.write('<base href="' + baseUrl + '" />');
+      } else {
+        // Pour le développement local
+        document.write('<base href="/" />');
       }
     </script>
+    <script type="module" crossorigin src="./assets/index.BwdYn9P4.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index.C3kheJv2.css">
   </head>
   <body>
     <div id="root"></div>
