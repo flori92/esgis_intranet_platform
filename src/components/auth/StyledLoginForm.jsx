@@ -53,7 +53,7 @@ const StyledLoginForm = ({ onTestAccountsClick }) => {
       <form className="form" onSubmit={handleSubmit}>
         <div className="logo-container">
           <img 
-            src="https://esgis.org/wp-content/uploads/2023/01/logo-esgis-2.png" 
+            src="https://raw.githubusercontent.com/flori92/esgis_intranet_platform/main/public/logo-esgis-white.png" 
             alt="Logo ESGIS" 
             className="logo"
           />

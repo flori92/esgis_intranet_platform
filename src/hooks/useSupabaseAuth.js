@@ -45,22 +45,16 @@ export const useSupabaseAuth = () => {
         setAuthState(prev => ({ ...prev, loading: true }));
         
         // Récupérer le profil utilisateur
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-          
-        if (profileError) throw profileError;
+        const userProfile = await fetchUserProfile(session.user.id);
         
         // Déterminer le rôle de l'utilisateur
-        const isAdmin = profile?.role === 'admin';
-        const isProfessor = profile?.role === 'professor';
-        const isStudent = profile?.role === 'student';
+        const isAdmin = userProfile?.role === 'admin';
+        const isProfessor = userProfile?.role === 'professor';
+        const isStudent = userProfile?.role === 'student';
         
         setAuthState({
           user: session.user,
-          profile,
+          profile: userProfile,
           session,
           isAdmin,
           isProfessor,
@@ -96,6 +90,53 @@ export const useSupabaseAuth = () => {
         error: null,
         loading: false
       });
+    }
+  };
+
+  /**
+   * Récupère le profil de l'utilisateur connecté
+   * @param {string} userId - ID de l'utilisateur
+   * @returns {Promise<Object>} Profil de l'utilisateur
+   */
+  const fetchUserProfile = async (userId) => {
+    try {
+      // Tentative de récupération du profil
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Erreur lors de la récupération du profil:', error);
+        
+        // Si l'erreur est liée à la table profiles, créer un profil minimal
+        // basé sur les données d'authentification
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        
+        if (!userError && userData && userData.user) {
+          // Utiliser les métadonnées de l'utilisateur comme profil de secours
+          const userMetadata = userData.user.user_metadata || {};
+          const userProfile = {
+            id: userId,
+            email: userData.user.email,
+            role: userMetadata.role || 'user',
+            first_name: userMetadata.first_name || '',
+            last_name: userMetadata.last_name || '',
+            avatar_url: userMetadata.avatar_url || null
+          };
+          
+          console.log('Utilisation d\'un profil de secours basé sur les métadonnées:', userProfile);
+          return userProfile;
+        }
+        
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération du profil:', error);
+      throw error;
     }
   };
 

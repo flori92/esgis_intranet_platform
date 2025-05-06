@@ -10,11 +10,14 @@ import {
   CardContent,
   Grid,
   Chip,
+  Avatar,
+  CardActions,
+  Button
 } from '@mui/material';
 import {
-  AdminPanelSettings,
-  School,
-  Person,
+  AdminPanelSettings as AdminPanelSettingsIcon,
+  School as SchoolIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import AuthLayout from '../../components/layout/AuthLayout';
@@ -114,20 +117,6 @@ const LoginPage = () => {
     }
   };
 
-  // Icônes pour les différents rôles
-  const roleIcons = {
-    admin: <AdminPanelSettings />,
-    professor: <School />,
-    student: <Person />
-  };
-
-  // Couleurs pour les différents rôles
-  const roleColors = {
-    admin: 'error',
-    professor: 'primary',
-    student: 'success'
-  };
-
   return (
     <AuthLayout>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%', maxWidth: 800, margin: '0 auto' }}>
@@ -136,128 +125,145 @@ const LoginPage = () => {
         
         {/* Section des comptes de test */}
         {showTestAccounts && (
-          <Paper
-            elevation={3}
-            sx={{
-              p: 4,
-              width: '100%',
+          <Paper 
+            elevation={3} 
+            sx={{ 
+              p: 3, 
+              mb: 3, 
               borderRadius: 2,
-              mt: 3
+              backgroundColor: '#fff',
             }}
           >
-            <Typography variant="h6" component="h2" fontWeight="bold" sx={{ mb: 2 }}>
+            <Typography variant="h6" gutterBottom>
               Comptes de test
             </Typography>
-            
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography variant="body2" color="text.secondary" paragraph>
               Utilisez ces comptes pour tester les différentes fonctionnalités de l'application.
             </Typography>
-
+            
             {initializationResult && (
               <Alert 
-                severity={initializationResult.errors.length > 0 ? "warning" : "success"} 
-                sx={{ mb: 3 }}
+                severity={initializationResult.errors.length > 0 ? "warning" : "success"}
+                sx={{ mb: 2 }}
               >
-                {initializationResult.errors.length > 0 ? (
-                  <>
-                    <Typography variant="subtitle2">
-                      Initialisation partielle des comptes de test
-                    </Typography>
-                    <Typography variant="body2">
-                      Succès: {initializationResult.success.join(', ') || 'Aucun'}
-                    </Typography>
-                    <Typography variant="body2">
-                      Erreurs: {initializationResult.errors.map(e => `${e.role}: ${e.error}`).join(', ')}
-                    </Typography>
-                  </>
-                ) : (
-                  <>
-                    <Typography variant="subtitle2">
-                      Initialisation réussie des comptes de test
-                    </Typography>
-                    <Typography variant="body2">
-                      Comptes créés: {initializationResult.success.join(', ')}
-                    </Typography>
-                  </>
+                <AlertTitle>Initialisation {initializationResult.errors.length > 0 ? "partielle" : "réussie"} des comptes de test</AlertTitle>
+                {initializationResult.success.length > 0 && (
+                  <Typography variant="body2">
+                    Succès: {initializationResult.success.length > 0 ? initializationResult.success.join(', ') : 'Aucun'}
+                  </Typography>
+                )}
+                {initializationResult.errors.length > 0 && (
+                  <Typography variant="body2">
+                    Erreurs: {initializationResult.errors.map(e => `${e.role}: ${e.error}`).join(', ')}
+                  </Typography>
                 )}
               </Alert>
             )}
-
+            
             <Grid container spacing={2}>
               {testAccounts.map((account) => (
-                <Grid item xs={12} md={4} key={account.role}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        {roleIcons[account.role]}
-                        <Typography variant="subtitle1" sx={{ ml: 1, fontWeight: 'bold' }}>
+                <Grid item xs={12} sm={4} key={account.role}>
+                  <Card 
+                    sx={{ 
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      backgroundColor: 
+                        account.role === 'admin' ? '#f8f9fa' : 
+                        account.role === 'professor' ? '#f1f8e9' : 
+                        '#e3f2fd',
+                      border: '1px solid',
+                      borderColor: 
+                        account.role === 'admin' ? '#dee2e6' : 
+                        account.role === 'professor' ? '#c5e1a5' : 
+                        '#90caf9',
+                    }}
+                  >
+                    <CardContent sx={{ flexGrow: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Avatar
+                          sx={{
+                            bgcolor: 
+                              account.role === 'admin' ? '#dc3545' : 
+                              account.role === 'professor' ? '#198754' : 
+                              '#0d6efd',
+                            width: 30,
+                            height: 30,
+                            fontSize: '0.875rem',
+                            mr: 1
+                          }}
+                        >
+                          {account.role === 'admin' ? <AdminPanelSettingsIcon fontSize="small" /> : 
+                           account.role === 'professor' ? <SchoolIcon fontSize="small" /> : 
+                           <PersonIcon fontSize="small" />}
+                        </Avatar>
+                        <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'bold' }}>
                           {account.fullName}
                         </Typography>
-                        <Chip 
-                          label={account.role.charAt(0).toUpperCase() + account.role.slice(1)} 
-                          size="small" 
-                          color={roleColors[account.role]} 
-                          sx={{ ml: 'auto' }} 
-                        />
                       </Box>
-                      
+                      <Box sx={{ 
+                        display: 'inline-block', 
+                        px: 1, 
+                        py: 0.5, 
+                        borderRadius: 1, 
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold',
+                        textTransform: 'uppercase',
+                        mb: 1,
+                        backgroundColor: 
+                          account.role === 'admin' ? '#dc3545' : 
+                          account.role === 'professor' ? '#198754' : 
+                          '#0d6efd',
+                        color: '#fff'
+                      }}>
+                        {account.role === 'admin' ? 'Admin' : 
+                         account.role === 'professor' ? 'Professor' : 
+                         'Student'}
+                      </Box>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                         <strong>Email:</strong> {account.email}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
                         <strong>Mot de passe:</strong> {account.password}
                       </Typography>
-                      
-                      <Box 
+                    </CardContent>
+                    <CardActions>
+                      <Button 
+                        fullWidth 
+                        variant="contained"
+                        size="small"
+                        onClick={() => handleTestLogin(account)}
                         sx={{ 
-                          p: 2, 
-                          bgcolor: roleColors[account.role] + '.50', 
-                          borderRadius: 1,
-                          cursor: 'pointer',
-                          textAlign: 'center',
+                          backgroundColor: 
+                            account.role === 'admin' ? '#dc3545' : 
+                            account.role === 'professor' ? '#198754' : 
+                            '#0d6efd',
                           '&:hover': {
-                            bgcolor: roleColors[account.role] + '.100',
+                            backgroundColor: 
+                              account.role === 'admin' ? '#bb2d3b' : 
+                              account.role === 'professor' ? '#157347' : 
+                              '#0b5ed7',
                           }
                         }}
-                        onClick={() => handleTestLogin(account)}
                       >
-                        <Typography variant="button" color={roleColors[account.role] + '.800'}>
-                          Connexion rapide
-                        </Typography>
-                      </Box>
-                    </CardContent>
+                        CONNEXION RAPIDE
+                      </Button>
+                    </CardActions>
                   </Card>
                 </Grid>
               ))}
             </Grid>
-
-            <Box sx={{ mt: 3, textAlign: 'center' }}>
-              <Box
-                sx={{
-                  p: 2,
-                  bgcolor: 'primary.50',
-                  borderRadius: 2,
-                  display: 'inline-block',
-                  cursor: 'pointer',
-                  '&:hover': {
-                    bgcolor: 'primary.100',
-                  }
-                }}
+            
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+              <Button
+                variant="outlined"
                 onClick={handleInitializeTestAccounts}
+                disabled={initializingAccounts}
+                startIcon={initializingAccounts ? <CircularProgress size={20} /> : null}
+                sx={{ textTransform: 'uppercase' }}
               >
-                {initializingAccounts ? (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CircularProgress size={20} color="primary" />
-                    <Typography variant="button" color="primary.800">
-                      Initialisation en cours...
-                    </Typography>
-                  </Box>
-                ) : (
-                  <Typography variant="button" color="primary.800">
-                    Initialiser les comptes de test
-                  </Typography>
-                )}
-              </Box>
+                {initializingAccounts ? 'Initialisation en cours...' : 'Initialiser les comptes de test'}
+              </Button>
             </Box>
           </Paper>
         )}
