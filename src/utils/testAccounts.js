@@ -15,7 +15,6 @@ export const TEST_ACCOUNTS = {
       last_name: 'ESGIS',
       role: 'admin',
       phone: '+22990123456',
-      department: 'Administration',
       avatar_url: null
     }
   },
@@ -29,7 +28,6 @@ export const TEST_ACCOUNTS = {
       last_name: 'FAVI',
       role: 'professor',
       phone: '+22991234567',
-      department: 'Informatique',
       speciality: 'Cloud Computing',
       avatar_url: null
     }
@@ -44,7 +42,6 @@ export const TEST_ACCOUNTS = {
       last_name: 'Koné',
       role: 'student',
       phone: '+22992345678',
-      department: 'Informatique',
       student_id: 'INF2025001',
       level: 'Licence 3',
       avatar_url: null
@@ -63,10 +60,23 @@ export const createTestAccounts = async (supabase) => {
     errors: []
   };
 
-  // Créer chaque compte de test
+  try {
+    const { data: profileColumns, error: schemaError } = await supabase
+      .from('profiles')
+      .select('*')
+      .limit(1);
+    
+    if (schemaError) {
+      console.error("Erreur lors de la récupération du schéma:", schemaError);
+    } else {
+      console.log("Colonnes disponibles dans profiles:", profileColumns.length > 0 ? Object.keys(profileColumns[0]) : []);
+    }
+  } catch (e) {
+    console.error("Erreur lors de la vérification du schéma:", e);
+  }
+
   for (const [role, account] of Object.entries(TEST_ACCOUNTS)) {
     try {
-      // Vérifier si l'utilisateur existe déjà
       const { data: existingUser } = await supabase
         .from('profiles')
         .select('id, email')
@@ -79,7 +89,6 @@ export const createTestAccounts = async (supabase) => {
         continue;
       }
 
-      // Créer l'utilisateur
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: account.email,
         password: account.password,
@@ -96,14 +105,32 @@ export const createTestAccounts = async (supabase) => {
 
       const userId = authData.user.id;
 
-      // Créer le profil
+      const profileData = {
+        id: userId,
+        email: account.email,
+        first_name: account.profile.first_name,
+        last_name: account.profile.last_name,
+        role: account.profile.role,
+        phone: account.profile.phone,
+        avatar_url: account.profile.avatar_url
+      };
+      
+      if (role === 'professor' && account.profile.speciality) {
+        profileData.speciality = account.profile.speciality;
+      }
+      
+      if (role === 'student') {
+        if (account.profile.student_id) {
+          profileData.student_id = account.profile.student_id;
+        }
+        if (account.profile.level) {
+          profileData.level = account.profile.level;
+        }
+      }
+
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert([{ 
-          id: userId, 
-          email: account.email,
-          ...account.profile 
-        }]);
+        .insert([profileData]);
 
       if (profileError) {
         throw profileError;
