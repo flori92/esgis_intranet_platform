@@ -31,7 +31,7 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { supabase } from '@/services/supabase';
+import { supabase } from '@/supabase';
 
 /**
  * @typedef {import('../types').Offre} Offre

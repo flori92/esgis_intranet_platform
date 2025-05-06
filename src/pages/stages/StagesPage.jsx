@@ -13,8 +13,8 @@ import {
   Add as AddIcon 
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 import OffresList from './components/OffresList';
 import MesCandidatures from './components/MesCandidatures';
 import AjouterOffre from './components/AjouterOffre';

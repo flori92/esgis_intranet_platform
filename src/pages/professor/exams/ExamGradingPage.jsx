@@ -45,8 +45,8 @@ import { fr } from 'date-fns/locale';
 import StudentAnswersList from './components/StudentAnswersList';
 import GradeQuestionItem from './components/GradeQuestionItem';
 
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 
 /**
  * @typedef {Object} Exam - Informations sur un examen

@@ -33,8 +33,8 @@ import {
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { 
@@ -46,7 +46,7 @@ import {
   mockProfessorEvents,
   formatDate,
   formatTime
-} from '../../utils/professorMockData';
+} from '@/utils/professorMockData';
 
 /**
  * Page de tableau de bord pour les professeurs

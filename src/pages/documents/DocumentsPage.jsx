@@ -48,7 +48,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 // Correction du chemin d'importation de Supabase
-import { supabase } from '../../services/supabase';
+import { supabase } from '@/supabase';
 
 /**
  * @typedef {Object} Document

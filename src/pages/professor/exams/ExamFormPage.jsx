@@ -29,8 +29,8 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 
 // Composants du formulaire
 import ExamBasicInfo from './components/ExamBasicInfo';

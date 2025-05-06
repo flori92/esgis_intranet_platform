@@ -39,8 +39,8 @@ import {
   FilterList as FilterListIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 
 const ProfessorCoursesPage = () => {
   const { authState } = useAuth();
@@ -90,14 +90,18 @@ const ProfessorCoursesPage = () => {
         .eq('status', 'active')
         .order('id');
       
-      if (professorsError) throw professorsError;
+      if (professorsError) {
+        throw professorsError;
+      }
 
       // Récupérer les départements
       const { data: departmentsData, error: departmentsError } = await supabase
         .from('departments')
         .select('id, name');
       
-      if (departmentsError) throw departmentsError;
+      if (departmentsError) {
+        throw departmentsError;
+      }
 
       // Récupérer les cours
       const { data: coursesData, error: coursesError } = await supabase
@@ -105,7 +109,9 @@ const ProfessorCoursesPage = () => {
         .select('*')
         .order('name');
       
-      if (coursesError) throw coursesError;
+      if (coursesError) {
+        throw coursesError;
+      }
 
       // Transformer les données des professeurs pour avoir le nom et le département
       const formattedProfessors = (professorsData || []).map(prof => ({
@@ -129,7 +135,9 @@ const ProfessorCoursesPage = () => {
         .select('*')
         .order('id');
       
-      if (assignmentsError) throw assignmentsError;
+      if (assignmentsError) {
+        throw assignmentsError;
+      }
       
       // Transformer les données des assignations pour avoir les noms des professeurs et des cours
       const formattedAssignments = (assignmentsData || []).map(assignment => {
@@ -254,7 +262,9 @@ const ProfessorCoursesPage = () => {
         .insert([newAssignment])
         .select();
       
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       
       // Ajouter les noms pour l'affichage
       const formattedAssignment = {
@@ -296,7 +306,9 @@ const ProfessorCoursesPage = () => {
         .update(updatedAssignment)
         .eq('id', currentAssignment.id);
       
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       
       // Mettre à jour l'état local
       setProfessorCourses(professorCourses.map(assignment => 
@@ -334,7 +346,9 @@ const ProfessorCoursesPage = () => {
         .delete()
         .eq('id', assignmentId);
       
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       
       // Mettre à jour l'état local
       setProfessorCourses(professorCourses.filter(assignment => assignment.id !== assignmentId));

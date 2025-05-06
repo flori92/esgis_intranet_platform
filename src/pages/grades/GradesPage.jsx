@@ -37,8 +37,8 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import SchoolIcon from '@mui/icons-material/School';
 
 import { useAuth } from '../../hooks/useAuth';
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 
 /**
  * @typedef {Object} ExamResultWithUI

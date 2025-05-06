@@ -35,9 +35,9 @@ import {
   FilterList as FilterListIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
-import { fetchRecords, insertRecord, updateRecord, deleteRecord } from '../../utils/supabase-helpers';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
+import { getRecordsWithRelation as fetchRecords, insertRecord, updateRecord, deleteRecord } from '@/utils/supabase-helpers';
 
 const CoursesManagerPage = () => {
   const { authState } = useAuth();

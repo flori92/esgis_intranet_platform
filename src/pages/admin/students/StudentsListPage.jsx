@@ -40,7 +40,7 @@ import {
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../../hooks/useAuth';
-import { supabase } from '@/services/supabase';
+import { supabase } from '@/supabase';
 import { useNavigate } from 'react-router-dom';
 
 const StudentsListPage = () => {
@@ -87,7 +87,9 @@ const StudentsListPage = () => {
         .select('id, name, code')
         .order('name');
       
-      if (departmentsError) throw departmentsError;
+      if (departmentsError) {
+        throw departmentsError;
+      }
       
       // Récupérer les étudiants
       const { data: studentsData, error: studentsError } = await supabase
@@ -104,7 +106,9 @@ const StudentsListPage = () => {
         `)
         .order('id');
       
-      if (studentsError) throw studentsError;
+      if (studentsError) {
+        throw studentsError;
+      }
       
       // Transformer les données des étudiants
       const transformedStudents = studentsData.map(student => {

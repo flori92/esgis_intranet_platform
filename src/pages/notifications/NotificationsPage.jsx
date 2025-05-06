@@ -37,8 +37,8 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 
 /**
  * @typedef {Object} Notification
@@ -118,7 +118,9 @@ const NotificationsPage = () => {
           .eq('user_id', authState.user?.id)
           .order('created_at', { ascending: false });
 
-        if (notificationsError) throw notificationsError;
+        if (notificationsError) {
+          throw notificationsError;
+        }
 
         if (notificationsData) {
           setNotifications(notificationsData);
@@ -155,7 +157,9 @@ const NotificationsPage = () => {
         .update({ read: true })
         .eq('id', notification.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        throw updateError;
+      }
 
       // Mettre à jour l'état local
       setNotifications(
@@ -181,7 +185,9 @@ const NotificationsPage = () => {
         .eq('user_id', authState.user?.id)
         .eq('read', false);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        throw updateError;
+      }
 
       // Mettre à jour l'état local
       setNotifications(
@@ -205,7 +211,9 @@ const NotificationsPage = () => {
         .delete()
         .eq('id', notification.id);
 
-      if (deleteError) throw deleteError;
+      if (deleteError) {
+        throw deleteError;
+      }
 
       // Mettre à jour l'état local
       setNotifications(notifications.filter((n) => n.id !== notification.id));
@@ -228,7 +236,9 @@ const NotificationsPage = () => {
         .eq('user_id', authState.user?.id)
         .eq('read', true);
 
-      if (deleteError) throw deleteError;
+      if (deleteError) {
+        throw deleteError;
+      }
 
       // Mettre à jour l'état local
       setNotifications(notifications.filter((n) => !n.read));
@@ -524,7 +534,9 @@ const NotificationsPage = () => {
               </MenuItem>
             )}
             <MenuItem onClick={() => {
-              if (selectedNotification) handleDeleteNotification(selectedNotification);
+              if (selectedNotification) {
+                handleDeleteNotification(selectedNotification);
+              }
             }}>
               <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
               Supprimer

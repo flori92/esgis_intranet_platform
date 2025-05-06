@@ -43,8 +43,8 @@ import {
 } from 'recharts';
 
 import { useAuth } from '../../hooks/useAuth';
-// Import de Supabase
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 
 // Couleurs pour les graphiques
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];

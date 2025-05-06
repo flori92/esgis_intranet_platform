@@ -28,7 +28,7 @@ import {
   School as SchoolIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '@/services/supabase';
+import { supabase } from '@/supabase';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 

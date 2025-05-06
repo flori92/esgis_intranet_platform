@@ -11,9 +11,8 @@ import {
   CircularProgress
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
-
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 /**
  * @typedef {Object} Profile
  * @property {string} id - ID du profil utilisateur

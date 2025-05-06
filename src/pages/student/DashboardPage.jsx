@@ -30,11 +30,11 @@ import {
   Notifications as NotificationsIcon,
   CalendarToday as CalendarTodayIcon
 } from '@mui/icons-material';
-import { supabase } from '@/services/supabase';
+import { supabase } from '@/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { initializeMockData, mockNews, mockEvents } from '../../utils/mockDataInitializer';
+import { initializeMockData, mockNews, mockEvents } from '@/utils/mockDataInitializer';
 
 /**
  * @typedef {Object} StudentDashboardData

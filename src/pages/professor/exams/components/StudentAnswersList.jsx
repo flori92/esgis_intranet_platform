@@ -31,7 +31,7 @@ import {
   Sort as SortIcon
 } from '@mui/icons-material';
 
-import { supabase } from '@/services/supabase';
+import { supabase } from '@/supabase';
 
 /**
  * Composant pour afficher la liste des étudiants qui ont passé un examen

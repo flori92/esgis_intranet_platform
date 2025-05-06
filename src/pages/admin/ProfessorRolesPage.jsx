@@ -43,8 +43,73 @@ import {
   Settings as SettingsIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '@/services/supabase';
-import { getRecordsWithRelation, insertRecord, updateRecord, deleteRecord } from '../../services/supabase';
+import { supabase } from '@/supabase';
+
+// Créer des fonctions utilitaires pour remplacer les imports manquants
+const getRecordsWithRelation = async (table, options = {}) => {
+  try {
+    let query = supabase.from(table).select(options.select || '*');
+    
+    if (options.filters) {
+      options.filters.forEach(filter => {
+        query = query[filter.operator](filter.column, filter.value);
+      });
+    }
+    
+    if (options.orderBy) {
+      query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending });
+    }
+    
+    if (options.limit) {
+      query = query.limit(options.limit);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error(`Erreur lors de la récupération des données de ${table}:`, error);
+    throw error;
+  }
+};
+
+const insertRecord = async (table, data) => {
+  try {
+    const { data: result, error } = await supabase.from(table).insert(data).select();
+    if (error) throw error;
+    return result[0];
+  } catch (error) {
+    console.error(`Erreur lors de l'insertion dans ${table}:`, error);
+    throw error;
+  }
+};
+
+const updateRecord = async (table, id, data) => {
+  try {
+    const { data: result, error } = await supabase
+      .from(table)
+      .update(data)
+      .eq('id', id)
+      .select();
+    if (error) throw error;
+    return result[0];
+  } catch (error) {
+    console.error(`Erreur lors de la mise à jour dans ${table}:`, error);
+    throw error;
+  }
+};
+
+const deleteRecord = async (table, id) => {
+  try {
+    const { error } = await supabase.from(table).delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error(`Erreur lors de la suppression dans ${table}:`, error);
+    throw error;
+  }
+};
 
 // Composant pour les onglets
 function TabPanel(props) {
@@ -122,17 +187,9 @@ const ProfessorRolesPage = () => {
       setError(null);
       
       // Charger les professeurs
-      const { data: professorsData, error: professorsError } = await supabase
-        .from('professors')
-        .select(`
-          *,
-          profiles(id, full_name, email),
-          departments(id, name, code),
-          professor_roles(
-            role_id,
-            professor_roles_permissions(*)
-          )
-        `);
+      const { data: professorsData, error: professorsError } = await getRecordsWithRelation('professors', {
+        select: '*, profiles(id, full_name, email), departments(id, name, code), professor_roles(role_id, professor_roles_permissions(*))'
+      });
 
       if (professorsError) {
         throw professorsError;
@@ -156,9 +213,7 @@ const ProfessorRolesPage = () => {
       setProfessors(formattedProfessors);
 
       // Charger les départements
-      const { data: departmentsData, error: departmentsError } = await supabase
-        .from('departments')
-        .select('*');
+      const { data: departmentsData, error: departmentsError } = await getRecordsWithRelation('departments');
 
       if (departmentsError) {
         throw departmentsError;
@@ -167,9 +222,7 @@ const ProfessorRolesPage = () => {
       setDepartments(departmentsData);
 
       // Charger les rôles
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('roles')
-        .select('*');
+      const { data: rolesData, error: rolesError } = await getRecordsWithRelation('roles');
 
       if (rolesError) {
         throw rolesError;
@@ -261,23 +314,18 @@ const ProfessorRolesPage = () => {
       setLoading(true);
       
       // Créer un nouveau rôle
-      const { data: roleData, error: roleError } = await supabase
-        .from('roles')
-        .insert([
-          {
-            name: roleName,
-            description: roleDescription,
-            permissions: rolePermissions,
-            created_at: new Date().toISOString()
-          }
-        ])
-        .select();
+      const { data: roleData, error: roleError } = await insertRecord('roles', {
+        name: roleName,
+        description: roleDescription,
+        permissions: rolePermissions,
+        created_at: new Date().toISOString()
+      });
 
       if (roleError) {
         throw roleError;
       }
 
-      setRoles([...roles, roleData[0]]);
+      setRoles([...roles, roleData]);
       setSuccessMessage('Rôle créé avec succès');
       handleCloseRoleDialog();
     } catch (err) {
@@ -298,15 +346,12 @@ const ProfessorRolesPage = () => {
       setLoading(true);
       
       // Mettre à jour le rôle
-      const { error: roleError } = await supabase
-        .from('roles')
-        .update({
-          name: roleName,
-          description: roleDescription,
-          permissions: rolePermissions,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', currentRole.id);
+      const { error: roleError } = await updateRecord('roles', currentRole.id, {
+        name: roleName,
+        description: roleDescription,
+        permissions: rolePermissions,
+        updated_at: new Date().toISOString()
+      });
 
       if (roleError) {
         throw roleError;
@@ -339,20 +384,14 @@ const ProfessorRolesPage = () => {
       setLoading(true);
       
       // Supprimer d'abord les assignations de ce rôle
-      const { error: assignmentsError } = await supabase
-        .from('professor_roles')
-        .delete()
-        .eq('role_id', roleId);
+      const { error: assignmentsError } = await deleteRecord('professor_roles', roleId);
 
       if (assignmentsError) {
         throw assignmentsError;
       }
 
       // Supprimer le rôle
-      const { error: roleError } = await supabase
-        .from('roles')
-        .delete()
-        .eq('id', roleId);
+      const { error: roleError } = await deleteRecord('roles', roleId);
 
       if (roleError) {
         throw roleError;
@@ -391,10 +430,7 @@ const ProfessorRolesPage = () => {
       setLoading(true);
       
       // Supprimer d'abord toutes les assignations existantes
-      const { error: deleteError } = await supabase
-        .from('professor_roles')
-        .delete()
-        .eq('professor_id', professorForAssign.id);
+      const { error: deleteError } = await deleteRecord('professor_roles', professorForAssign.id);
 
       if (deleteError) {
         throw deleteError;
@@ -408,9 +444,7 @@ const ProfessorRolesPage = () => {
           assigned_at: new Date().toISOString()
         }));
 
-        const { error: insertError } = await supabase
-          .from('professor_roles')
-          .insert(assignments);
+        const { error: insertError } = await insertRecord('professor_roles', assignments);
 
         if (insertError) {
           throw insertError;

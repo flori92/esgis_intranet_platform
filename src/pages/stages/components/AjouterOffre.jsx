@@ -22,7 +22,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { fr } from 'date-fns/locale';
-import { supabase } from '@/services/supabase';
+import { supabase } from '@/supabase';
 
 /**
  * @typedef {import('../types').Offre} Offre

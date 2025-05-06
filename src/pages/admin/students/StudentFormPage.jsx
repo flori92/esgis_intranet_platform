@@ -32,7 +32,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { supabase } from '../../../services/supabase';
+import { supabase } from '@/supabase';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { fr } from 'date-fns/locale';

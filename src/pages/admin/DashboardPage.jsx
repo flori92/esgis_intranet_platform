@@ -27,8 +27,8 @@ import {
   Description as DescriptionIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 
 const AdminDashboardPage = () => {
   const { authState } = useAuth();

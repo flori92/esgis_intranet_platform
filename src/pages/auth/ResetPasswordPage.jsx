@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 
 // Correction du chemin d'importation de Supabase
-import { supabase } from '../../services/supabase';
+import { supabase } from '@/supabase';
 
 /**
  * Page de réinitialisation de mot de passe

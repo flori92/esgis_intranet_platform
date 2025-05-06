@@ -36,12 +36,12 @@ import {
   Save as SaveIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { fetchRecords, insertRecord, fetchWithRelations } from '../../utils/supabase-helpers';
+import { getRecordsWithRelation as fetchRecords, insertRecord, getRecordsWithRelation as fetchWithRelations } from '@/utils/supabase-helpers';
 
 const DocumentGeneratorPage = () => {
   const { authState } = useAuth();
@@ -230,7 +230,7 @@ const DocumentGeneratorPage = () => {
       const pdfDoc = await PDFDocument.create();
       
       // Ajouter une nouvelle page
-      const page = pdfDoc.addPage([595.28, 841.89]); // A4
+      let page = pdfDoc.addPage([595.28, 841.89]); // A4
       
       // Obtenir la police
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -352,8 +352,7 @@ const DocumentGeneratorPage = () => {
           
           // Vérifier si on a besoin d'une nouvelle page
           if (yPosition < margin) {
-            const newPage = pdfDoc.addPage([595.28, 841.89]); // A4
-            page = newPage;
+            page = pdfDoc.addPage([595.28, 841.89]); // A4
             yPosition = page.getHeight() - margin;
           }
         }

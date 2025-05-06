@@ -21,8 +21,8 @@ import {
   Check as CheckIcon,
   Save as SaveIcon 
 } from '@mui/icons-material';
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
+// Correction du chemin d'importation de Supabase
+import { supabase } from '@/supabase';
 
 /**
  * Composant pour noter une question d'examen

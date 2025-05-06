@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { AuthProvider } from './context/AuthContext';
-import { checkSupabaseConnection } from './services/supabase';
+import { checkSupabaseConnection } from './supabase';
 import { SnackbarProvider } from 'notistack';
 
 /**
