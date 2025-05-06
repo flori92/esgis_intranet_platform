@@ -128,36 +128,54 @@ const StudentExamsList = () => {
         .order('exams(date)', { ascending: true });
       
       if (fetchError) throw fetchError;
-      
+
       if (!data) {
         setExams([]);
         setFilteredExams([]);
+        setLoading(false);
         return;
       }
-      
-      // Transformer les données
-      const transformedData = data.map(item => ({
-        id: item.id,
-        exam_id: item.exam_id,
-        student_id: item.student_id,
-        seat_number: item.seat_number,
-        attendance_status: item.attendance_status,
-        attempt_status: item.attempt_status,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-        ...item.exams,
-        course_name: item.exams.courses?.name || 'Inconnu',
-        course_code: item.exams.courses?.code || 'Inconnu',
-        professor_name: item.exams.professors?.profiles?.full_name || 'Inconnu'
-      }));
-      
-      setExams(transformedData);
-      setFilteredExams(transformedData);
-    } catch (err) {
-      console.error('Erreur lors du chargement des examens:', err);
-      setError('Une erreur est survenue lors du chargement de vos examens.');
-    } finally {
+
+      // DEBUG : Affichage de la donnée brute reçue pour analyse
+      console.log('DATA_SUPABASE_EXAMS', data);
+
+      // Transformation des données (adaptation selon la structure réelle)
+      const mappedExams = data.map((item) => {
+        // Vérifier si la structure attendue existe
+        const exam = item.exams || {};
+        return {
+          id: item.id,
+          exam_id: item.exam_id,
+          student_id: item.student_id,
+          seat_number: item.seat_number,
+          attendance_status: item.attendance_status,
+          attempt_status: item.attempt_status,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          title: exam.title || '',
+          course_id: exam.course_id || '',
+          course_name: exam.courses?.name || '',
+          course_code: exam.courses?.code || '',
+          professor_id: exam.professor_id || '',
+          professor_name: exam.professors?.profiles?.full_name || '',
+          date: exam.date || '',
+          duration: exam.duration || '',
+          type: exam.type || '',
+          room: exam.room || '',
+          total_points: exam.total_points || '',
+          passing_grade: exam.passing_grade || '',
+          status: exam.status || '',
+          description: exam.description || '',
+        };
+      });
+
+      setExams(mappedExams);
+      setFilteredExams(mappedExams);
       setLoading(false);
+    } catch (err) {
+      setError(err.message || 'Erreur inconnue');
+      // Affichage détaillé de l'erreur pour debug
+      console.error('SUPABASE_EXAMS_ERROR', err);
     }
   });
   
@@ -313,8 +331,9 @@ const StudentExamsList = () => {
       </Typography>
       
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Une erreur est survenue lors du chargement de vos examens.<br />
+          <span style={{ fontSize: '0.85em', color: '#b71c1c' }}>{error}</span>
         </Alert>
       )}
       
