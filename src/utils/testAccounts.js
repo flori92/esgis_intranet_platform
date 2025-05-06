@@ -25,12 +25,12 @@ export const TEST_ACCOUNTS = {
     email: 'prof@esgis.edu',
     password: 'Prof123!',
     profile: {
-      first_name: 'Jean',
-      last_name: 'Dupont',
+      first_name: 'Floraice',
+      last_name: 'FAVI',
       role: 'professor',
       phone: '+22991234567',
       department: 'Informatique',
-      speciality: 'Développement Web',
+      speciality: 'Cloud Computing',
       avatar_url: null
     }
   },
