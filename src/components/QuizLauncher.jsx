@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/supabase';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../supabase';
 import Quiz from './Quiz';
 import { virtualizationQuizData, getRandomizedQuestions } from '../data/virtualizationQuizData';
 
@@ -48,11 +48,11 @@ const QuizLauncher = () => {
       try {
         // Vérifier si c'est le quiz de virtualisation
         if (examId === 'quiz1' || examId.includes('virtualization')) {
-          console.log('Chargement du quiz Virtualization Cloud et Datacenter advanced avec randomisation');
+          console.log('Chargement du quiz Virtualization Cloud et Datacenter advanced');
           
-          // Créer une copie du quiz avec des questions randomisées
-          const randomizedQuestions = getRandomizedQuestions(20); // Sélectionner 20 questions aléatoires
-          console.log(`Sélection de ${randomizedQuestions.length} questions aléatoires parmi ${virtualizationQuizData.questions.length} disponibles`);
+          // Randomiser les questions pour éviter la communication des réponses entre étudiants
+          const randomizedQuestions = getRandomizedQuestions(virtualizationQuizData.questions);
+          console.log(`Questions randomisées: ${randomizedQuestions.length}`);
           
           const randomizedQuiz = {
             ...virtualizationQuizData,
@@ -114,11 +114,11 @@ const QuizLauncher = () => {
         
         // Solution de secours: utiliser les données du quiz de virtualisation
         if (examId.toLowerCase().includes('virtual') || examId.toLowerCase().includes('cloud')) {
-          console.log('Utilisation des données de secours pour le quiz Virtualization avec randomisation');
+          console.log('Utilisation des données de secours pour le quiz Virtualization');
           
-          // Créer une copie du quiz avec des questions randomisées
-          const randomizedQuestions = getRandomizedQuestions(20); // Sélectionner 20 questions aléatoires
-          console.log(`Sélection de ${randomizedQuestions.length} questions aléatoires parmi ${virtualizationQuizData.questions.length} disponibles`);
+          // Randomiser les questions pour éviter la communication des réponses entre étudiants
+          const randomizedQuestions = getRandomizedQuestions(virtualizationQuizData.questions);
+          console.log(`Questions randomisées: ${randomizedQuestions.length}`);
           
           const randomizedQuiz = {
             ...virtualizationQuizData,

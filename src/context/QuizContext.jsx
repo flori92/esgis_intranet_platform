@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 
 // Import des services API
 import * as quizService from '../api/quiz';
+import { getRandomizedQuestions } from '../data/virtualizationQuizData';
 
 /**
  * Création du contexte Quiz avec des valeurs par défaut
@@ -284,7 +285,10 @@ export const QuizProvider = ({ children }) => {
         return;
       }
       
-      setQuestions(examQuestions);
+      // Randomiser les questions pour éviter la communication des réponses entre étudiants
+const randomizedQuestions = getRandomizedQuestions(examQuestions);
+console.log(`Questions randomisées: ${randomizedQuestions.length}`);
+setQuestions(randomizedQuestions);
       setUserAnswers({});
       setCurrentQuestionIndex(0);
       setCheatingAttempts(0);
