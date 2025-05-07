@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Badge from '@mui/material/Badge';
 import { Outlet, useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   AppBar,

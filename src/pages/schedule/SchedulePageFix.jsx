@@ -79,18 +79,18 @@ import { styled } from '@mui/material/styles';
  */
 
 // Styles personnalisés
-const SessionCard = styled(Paper)(({ theme, status: sessionStatus }) => ({
+const SessionCard = styled(Paper)(({ theme, status }) => ({
   padding: theme.spacing(2),
   marginBottom: theme.spacing(2),
   borderLeft: `5px solid ${
-    sessionStatus === 'completed' 
+    status === 'completed' 
       ? theme.palette.success.main 
-      : sessionStatus === 'cancelled' 
+      : status === 'cancelled' 
         ? theme.palette.error.main 
         : theme.palette.primary.main
   }`,
-  backgroundColor: sessionStatus === 'cancelled' ? '#fff5f5' : 'white',
-  opacity: sessionStatus === 'cancelled' ? 0.8 : 1,
+  backgroundColor: status === 'cancelled' ? '#fff5f5' : 'white',
+  opacity: status === 'cancelled' ? 0.8 : 1,
   transition: 'transform 0.2s',
   '&:hover': {
     transform: 'translateY(-2px)',
@@ -102,17 +102,17 @@ const ViewToggle = styled(ToggleButtonGroup)(({ theme }) => ({
   marginBottom: theme.spacing(2),
 }));
 
-const StatusChip = styled(Chip)(({ theme, status: chipStatus }) => ({
+const StatusChip = styled(Chip)(({ theme, status }) => ({
   backgroundColor: 
-    sessionStatus === 'completed' 
+    status === 'completed' 
       ? theme.palette.success.light 
-      : sessionStatus === 'cancelled' 
+      : status === 'cancelled' 
         ? theme.palette.error.light 
         : theme.palette.primary.light,
   color: 
-    sessionStatus === 'completed' 
+    status === 'completed' 
       ? theme.palette.success.contrastText 
-      : sessionStatus === 'cancelled' 
+      : status === 'cancelled' 
         ? theme.palette.error.contrastText 
         : theme.palette.primary.contrastText,
 }));
@@ -133,9 +133,9 @@ const SchedulePage = () => {
   const [selectedCourse, setSelectedCourse] = useState('all');
 
   // Déterminer le rôle de l'utilisateur
-  const { isAdmin } = authState;
-  const { isProfessor } = authState;
-  const { isStudent } = authState;
+  const isAdmin = authState.isAdmin;
+  const isProfessor = authState.isProfessor;
+  const isStudent = authState.isStudent;
 
   /**
    * Chargement des sessions de cours
@@ -277,7 +277,6 @@ const SchedulePage = () => {
    * @param {string} newView - Nouvelle vue
    */
   const handleViewChange = (event, newView) => {
-    // @ts-ignore - Ignorer les erreurs de type pour cet événement Material-UI
     if (newView !== null) {
       setView(newView);
     }
@@ -301,7 +300,6 @@ const SchedulePage = () => {
    * @param {number} newValue - Nouvel index d'onglet
    */
   const handleTabChange = (event, newValue) => {
-    // @ts-ignore - Ignorer les erreurs de type pour cet événement Material-UI
     setTabValue(newValue);
   };
 
@@ -310,7 +308,6 @@ const SchedulePage = () => {
    * @param {Event} event - Événement de changement
    */
   const handleCourseChange = (event) => {
-    // @ts-ignore - Ignorer les erreurs de type pour cet événement Material-UI
     setSelectedCourse(event.target.value);
   };
 
@@ -334,7 +331,7 @@ const SchedulePage = () => {
         );
       case 2: // Annulés
         return sessions.filter(session => 
-          session.sessionStatus === 'cancelled'
+          session.status === 'cancelled'
         );
       default:
         return sessions;
@@ -420,14 +417,14 @@ const SchedulePage = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, mb: 1 }}>
             <AccessTimeIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
             <Typography variant="body2">
-              {formatTime(session.date)} - {format(new Date(parseISO(session.date).getTime() + (session.duration * 60 * 1000)), 'HH:mm')}
+              {formatTime(session.date)} - {format(addDays(parseISO(session.date), 0, session.duration * 60 * 1000), 'HH:mm')}
             </Typography>
           </Box>
           
           <StatusChip 
             label={
-              session.sessionStatus === 'completed' ? 'Terminé' : 
-              session.sessionStatus === 'cancelled' ? 'Annulé' : 
+              session.status === 'completed' ? 'Terminé' : 
+              session.status === 'cancelled' ? 'Annulé' : 
               'Programmé'
             }
             size="small"
@@ -592,7 +589,7 @@ const SchedulePage = () => {
           <Tab 
             label={
               <Badge 
-                badgeContent={getFilteredSessions().filter(s => s.sessionStatus === 'cancelled').length} 
+                badgeContent={getFilteredSessions().filter(s => s.status === 'cancelled').length} 
                 color="error"
                 showZero
               >
