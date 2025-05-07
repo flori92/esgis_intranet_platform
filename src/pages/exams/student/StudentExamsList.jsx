@@ -440,7 +440,24 @@ const StudentExamsList = () => {
         </Alert>
       ) : (
         <Box>
-          {filteredExams.map(renderExam)}
+          {(Array.isArray(filteredExams) ? filteredExams : []).length === 0 ? (
+            <Alert severity="info">
+              Aucun examen disponible à afficher.
+            </Alert>
+          ) : (
+            (Array.isArray(filteredExams) ? filteredExams : []).map((exam, idx) => {
+              try {
+                return renderExam(exam, idx);
+              } catch (err) {
+                console.error('Erreur lors du rendu de l\'examen', exam, err);
+                return (
+                  <Alert severity="error" key={exam?.id || idx}>
+                    Erreur d'affichage pour un examen. Veuillez contacter l'administrateur.
+                  </Alert>
+                );
+              }
+            })
+          )}
         </Box>
       )}
     </Box>

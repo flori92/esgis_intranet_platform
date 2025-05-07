@@ -18,7 +18,6 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Badge,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
