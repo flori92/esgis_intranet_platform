@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
+import styled from 'styled-components';
 import { useAuth } from '../../context/AuthContext';
+import { getAssetPath } from '../../utils/assetUtils';
 
 /**
  * Formulaire de connexion stylisé pour l'intranet ESGIS
@@ -53,7 +54,7 @@ const StyledLoginForm = ({ onTestAccountsClick }) => {
       <form className="form" onSubmit={handleSubmit}>
         <div className="logo-container">
           <img 
-            src="/images/logo-esgis-white.svg" 
+            src={getAssetPath('images/logo-esgis-white.svg')} 
             alt="Logo ESGIS" 
             className="logo"
           />
