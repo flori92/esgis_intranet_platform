@@ -52,11 +52,12 @@ export const getExamQuestions = async (examId) => {
 
 /**
  * Crée une nouvelle question avec ses options
- * @param {Object} questionInputData Données de la question
- * @param {Array<Object>} options Options de la question
- * @param {string} options[].text Texte de l'option
- * @param {boolean} options[].is_correct Indique si l'option est correcte
- * @param {number} options[].display_order Ordre d'affichage de l'option
+ * @param {Object} questionInputData - Données de la question
+ * @param {Array<Object>} options - Options de la question
+ * Chaque option doit contenir:
+ * - text {string} - Texte de l'option
+ * - is_correct {boolean} - Indique si l'option est correcte
+ * - display_order {number} - Ordre d'affichage de l'option
  * @returns {Promise<Object>} Résultat contenant la question créée avec ses options et une erreur éventuelle
  */
 export const createQuestion = async (questionInputData, options) => {
@@ -122,13 +123,14 @@ export const createQuestion = async (questionInputData, options) => {
 
 /**
  * Met à jour une question et ses options
- * @param {number} questionId ID de la question à mettre à jour
- * @param {Object} updates Modifications à appliquer à la question
- * @param {Array<Object>} [options] Nouvelles options de la question (facultatif)
- * @param {number} [options[].id] ID de l'option existante (si mise à jour)
- * @param {string} options[].text Texte de l'option
- * @param {boolean} options[].is_correct Indique si l'option est correcte
- * @param {number} options[].display_order Ordre d'affichage de l'option
+ * @param {number} questionId - ID de la question à mettre à jour
+ * @param {Object} updates - Modifications à appliquer à la question
+ * @param {Array<Object>} [options] - Nouvelles options de la question (facultatif)
+ * Chaque option peut contenir:
+ * - id {number} - ID de l'option existante (si mise à jour)
+ * - text {string} - Texte de l'option
+ * - is_correct {boolean} - Indique si l'option est correcte
+ * - display_order {number} - Ordre d'affichage de l'option
  * @returns {Promise<Object>} Résultat contenant la question mise à jour avec ses options et une erreur éventuelle
  */
 export const updateQuestion = async (questionId, updates, options) => {
