@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
-import { Clock } from "lucide-react";
-// Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '../services/supabase';
+// Remplacer l'import de lucide-react par une icône de Material-UI
+import { AccessTime as Clock } from "@mui/icons-material";
+// Import du client Supabase depuis le bon chemin
+import { supabase } from '../supabase';
 
 /**
  * @typedef {Object} ActiveStudent
@@ -31,7 +32,7 @@ const AdminDashboard = () => {
   const [supabaseAvailable, setSupabaseAvailable] = useState(true);
   
   // Référence au client Supabase
-  const supabaseClient = window.supabase || supabase;
+  const supabaseClient = supabase;
   
   /**
    * Vérification de la connexion Supabase
@@ -359,10 +360,14 @@ const AdminDashboard = () => {
     try {
       const lastActivityDate = new Date(lastActivity);
       const now = new Date();
-      const diffInSeconds = Math.floor((now - lastActivityDate) / 1000);
+      const diffInSeconds = Math.floor((now.getTime() - lastActivityDate.getTime()) / 1000);
       
-      if (diffInSeconds < 60) return `${diffInSeconds}s`;
-      if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m`;
+      if (diffInSeconds < 60) {
+        return `${diffInSeconds}s`;
+      }
+      if (diffInSeconds < 3600) {
+        return `${Math.floor(diffInSeconds / 60)}m`;
+      }
       return `${Math.floor(diffInSeconds / 3600)}h ${Math.floor((diffInSeconds % 3600) / 60)}m`;
     } catch (error) {
       return 'N/A';

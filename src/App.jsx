@@ -15,6 +15,8 @@ import NotificationsPage from './pages/notifications/NotificationsPage';
 import StagesPage from './pages/stages/StagesPage';
 import StudentExamsList from './pages/exams/student/StudentExamsList'; // Import du composant StudentExamsList
 import StudentSchedulePage from './pages/student/SchedulePage';
+import QuizLauncher from './components/QuizLauncher'; // Import du composant QuizLauncher
+import { QuizProvider } from './context/QuizContext'; // Import du provider de contexte Quiz
 
 /**
  * Composant de protection des routes
@@ -85,6 +87,16 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="student">
                   <StudentExamsList />
+                </ProtectedRoute>
+              }
+            />
+            <Route 
+              path="/student/quiz/:examId" 
+              element={
+                <ProtectedRoute requiredRole="student">
+                  <QuizProvider>
+                    <QuizLauncher />
+                  </QuizProvider>
                 </ProtectedRoute>
               }
             />

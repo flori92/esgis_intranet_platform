@@ -10,8 +10,10 @@ import { Toaster } from 'react-hot-toast';
 /**
  * Composant principal du Quiz
  * Gère l'affichage des questions, la navigation et la détection de triche
+ * @param {Object} props - Propriétés du composant
+ * @param {Object} props.quizData - Données du quiz (titre, description, questions, etc.)
  */
-const Quiz = () => {
+const Quiz = ({ quizData }) => {
   // Utilisation des hooks
   const { authState } = useAuth();
   
@@ -27,14 +29,53 @@ const Quiz = () => {
   };
 
   const { 
-    questions, 
+    questions: contextQuestions, 
     currentQuestionIndex, 
     quizStatus,
     timer,
-    startQuiz, 
+    startQuiz: contextStartQuiz, 
     reportCheatingAttempt 
   } = useQuiz();
   
+  // Utiliser les questions du contexte ou les questions fournies via props
+  const questions = quizData?.questions || contextQuestions;
+  
+  // Fonction pour démarrer le quiz avec les données fournies via props
+  const startQuiz = () => {
+    if (quizData && contextStartQuiz) {
+      contextStartQuiz(quizData.questions, quizData.duration || 45);
+    } else if (contextStartQuiz) {
+      contextStartQuiz();
+    }
+  };
+  
+  // Fonction pour configurer la détection de triche
+  const setupCheatingDetection = () => {
+    console.log("Configuration de la détection de triche");
+    // La configuration de la détection de triche est gérée dans l'useEffect ci-dessous
+  };
+  
+  // Fonction pour nettoyer la détection de triche
+  const cleanupCheatingDetection = () => {
+    console.log("Nettoyage de la détection de triche");
+    // Le nettoyage est géré dans la fonction de retour de l'useEffect ci-dessous
+  };
+  
+  useEffect(() => {
+    // Démarrer le quiz automatiquement si des questions sont disponibles
+    if (questions && questions.length > 0) {
+      startQuiz();
+    }
+    
+    // Configurer la détection de triche
+    setupCheatingDetection();
+    
+    // Nettoyer lors du démontage
+    return () => {
+      cleanupCheatingDetection();
+    };
+  }, [questions]);
+
   // Référence pour le div d'alerte personnalisé
   const alertRef = useRef(null);
   // Référence pour suivre si une triche a été détectée
