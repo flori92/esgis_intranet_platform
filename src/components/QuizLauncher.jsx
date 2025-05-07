@@ -48,12 +48,17 @@ const QuizLauncher = () => {
       try {
         // Vérifier si c'est le quiz de virtualisation
         if (examId === 'quiz1' || examId.includes('virtualization')) {
-          console.log('Chargement du quiz Virtualization Cloud et Datacenter advanced');
-          // Utiliser la fonction de randomisation pour sélectionner 20 questions aléatoires
+          console.log('Chargement du quiz Virtualization Cloud et Datacenter advanced avec randomisation');
+          
+          // Créer une copie du quiz avec des questions randomisées
+          const randomizedQuestions = getRandomizedQuestions(20); // Sélectionner 20 questions aléatoires
+          console.log(`Sélection de ${randomizedQuestions.length} questions aléatoires parmi ${virtualizationQuizData.questions.length} disponibles`);
+          
           const randomizedQuiz = {
             ...virtualizationQuizData,
-            questions: getRandomizedQuestions(20) // Sélectionner 20 questions aléatoires parmi les 40
+            questions: randomizedQuestions
           };
+          
           setQuizData(randomizedQuiz);
           setLoading(false);
           return;
@@ -109,12 +114,17 @@ const QuizLauncher = () => {
         
         // Solution de secours: utiliser les données du quiz de virtualisation
         if (examId.toLowerCase().includes('virtual') || examId.toLowerCase().includes('cloud')) {
-          console.log('Utilisation des données de secours pour le quiz Virtualization');
-          // Utiliser la fonction de randomisation pour sélectionner 20 questions aléatoires
+          console.log('Utilisation des données de secours pour le quiz Virtualization avec randomisation');
+          
+          // Créer une copie du quiz avec des questions randomisées
+          const randomizedQuestions = getRandomizedQuestions(20); // Sélectionner 20 questions aléatoires
+          console.log(`Sélection de ${randomizedQuestions.length} questions aléatoires parmi ${virtualizationQuizData.questions.length} disponibles`);
+          
           const randomizedQuiz = {
             ...virtualizationQuizData,
-            questions: getRandomizedQuestions(20) // Sélectionner 20 questions aléatoires parmi les 40
+            questions: randomizedQuestions
           };
+          
           setQuizData(randomizedQuiz);
         }
       } finally {
