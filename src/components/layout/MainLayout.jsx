@@ -149,6 +149,7 @@ const MainLayout = () => {
         { text: 'Emploi du temps', icon: <CalendarMonthIcon />, path: '/schedule' },
         { text: 'Cours', icon: <SchoolIcon />, path: '/courses' },
         { text: 'Notes', icon: <GradingIcon />, path: '/grades' },
+        { text: 'Certificat de scolarité', icon: <DescriptionIcon />, path: '/student/certificate' },
         { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/stages' },
         { text: 'Documents', icon: <FolderIcon />, path: '/documents' },
         { text: 'Messages', icon: <ChatIcon />, path: '/messages' },
