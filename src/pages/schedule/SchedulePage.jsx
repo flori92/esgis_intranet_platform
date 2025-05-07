@@ -17,7 +17,6 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   Chip,
-  Badge
 } from '@mui/material';
 import {
   AccessTime as AccessTimeIcon,
@@ -56,7 +55,7 @@ import { styled } from '@mui/material/styles';
  * @typedef {Object} WeekDay
  * @property {Date} date - Date du jour
  * @property {string} name - Nom du jour
- * @property {CourseSessionWithDetails[]} sessions - Sessions de cours pour ce jour
+ * @property {Array} sessions - Sessions de cours pour ce jour
  */
 
 /**
@@ -79,18 +78,23 @@ import { styled } from '@mui/material/styles';
  */
 
 // Styles personnalisés
-const SessionCard = styled(Paper)(({ theme, status: sessionStatus }) => ({
+/**
+ * Carte de session qui accepte une prop 'status' pour le style
+ */
+const SessionCard = styled(Paper, {
+  shouldForwardProp: (prop) => prop !== 'status',
+})(({ theme, status }) => ({
   padding: theme.spacing(2),
   marginBottom: theme.spacing(2),
   borderLeft: `5px solid ${
-    sessionStatus === 'completed' 
-      ? theme.palette.success.main 
-      : sessionStatus === 'cancelled' 
-        ? theme.palette.error.main 
+    status === 'completed'
+      ? theme.palette.success.main
+      : status === 'cancelled'
+        ? theme.palette.error.main
         : theme.palette.primary.main
   }`,
-  backgroundColor: sessionStatus === 'cancelled' ? '#fff5f5' : 'white',
-  opacity: sessionStatus === 'cancelled' ? 0.8 : 1,
+  backgroundColor: status === 'cancelled' ? '#fff5f5' : 'white',
+  opacity: status === 'cancelled' ? 0.8 : 1,
   transition: 'transform 0.2s',
   '&:hover': {
     transform: 'translateY(-2px)',
@@ -102,26 +106,32 @@ const ViewToggle = styled(ToggleButtonGroup)(({ theme }) => ({
   marginBottom: theme.spacing(2),
 }));
 
-const StatusChip = styled(Chip)(({ theme, status: chipStatus }) => ({
-  backgroundColor: 
-    sessionStatus === 'completed' 
-      ? theme.palette.success.light 
-      : sessionStatus === 'cancelled' 
-        ? theme.palette.error.light 
+/**
+ * Puce de statut qui accepte une prop 'status' pour le style
+ */
+const StatusChip = styled(Chip, {
+  shouldForwardProp: (prop) => prop !== 'status',
+})(({ theme, status }) => ({
+  backgroundColor:
+    status === 'completed'
+      ? theme.palette.success.light
+      : status === 'cancelled'
+        ? theme.palette.error.light
         : theme.palette.primary.light,
-  color: 
-    sessionStatus === 'completed' 
-      ? theme.palette.success.contrastText 
-      : sessionStatus === 'cancelled' 
-        ? theme.palette.error.contrastText 
+  color:
+    status === 'completed'
+      ? theme.palette.success.contrastText
+      : status === 'cancelled'
+        ? theme.palette.error.contrastText
         : theme.palette.primary.contrastText,
 }));
 
 /**
- * Page d'emploi du temps
- * @returns {JSX.Element} Composant SchedulePage
+ * Page principale d'emploi du temps ESGIS
+ * @returns {React.ReactElement} Composant SchedulePage
  */
 const SchedulePage = () => {
+  // Hooks d'état
   const { authState } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -133,40 +143,21 @@ const SchedulePage = () => {
   const [selectedCourse, setSelectedCourse] = useState('all');
 
   // Déterminer le rôle de l'utilisateur
-  const { isAdmin } = authState;
-  const { isProfessor } = authState;
-  const { isStudent } = authState;
+  const { isAdmin, isProfessor, isStudent } = authState;
 
   /**
-   * Chargement des sessions de cours
+   * Chargement des sessions de cours depuis Supabase
    */
   const fetchSessions = async () => {
     setLoading(true);
     setError(null);
-    
     try {
-      // Requête de base
       let query = supabase
         .from('course_sessions')
         .select(`
-          id,
-          date,
-          duration,
-          room,
-          status,
-          course_id,
-          professor_id,
-          courses:course_id (
-            id,
-            name,
-            code,
-            semester
-          ),
-          professors:professor_id (
-            id,
-            profile_id,
-            full_name
-          )
+          id, date, duration, room, status, course_id, professor_id, 
+          courses:course_id (id, name, code, semester), 
+          professors:professor_id (id, profile_id, full_name)
         `);
 
       // Filtrer par étudiant
@@ -205,7 +196,7 @@ const SchedulePage = () => {
         throw sessionsError;
       }
 
-      // Transformer les données pour l'affichage en gérant tous les cas possibles
+      // Transformer les données pour l'affichage
       const formattedSessions = sessionsData.map(session => {
         // Gestion sécurisée des données de cours
         let courseData = null;
@@ -227,22 +218,22 @@ const SchedulePage = () => {
           }
         }
         
-        // Construction de l'objet session formaté avec vérifications
+        // Construction de l'objet session formaté
         return {
           id: session.id,
           date: session.date,
-          duration: session.duration || 60, // Valeur par défaut si null
-          room: session.room || 'Salle non définie',
-          status: session.status || 'scheduled',
+          duration: session.duration,
+          room: session.room,
+          status: session.status,
           course: {
-            id: courseData?.id || session.course_id || null,
+            id: courseData?.id,
             name: courseData?.name || 'Cours inconnu',
             code: courseData?.code || '',
-            semester: courseData?.semester || null
+            semester: courseData?.semester || ''
           },
           professor: {
-            id: session.professor_id || null,
-            name: professorData?.full_name || 'Professeur inconnu'
+            id: professorData?.id,
+            name: professorData?.full_name || professorData?.name || 'Professeur inconnu'
           }
         };
       });
@@ -273,11 +264,10 @@ const SchedulePage = () => {
 
   /**
    * Changement de vue (semaine, jour, liste)
-   * @param {Event} event - Événement de clic
+   * @param {React.SyntheticEvent} event - Événement de clic
    * @param {string} newView - Nouvelle vue
    */
   const handleViewChange = (event, newView) => {
-    // @ts-ignore - Ignorer les erreurs de type pour cet événement Material-UI
     if (newView !== null) {
       setView(newView);
     }
@@ -297,30 +287,28 @@ const SchedulePage = () => {
 
   /**
    * Changement d'onglet (à venir, passés, annulés)
-   * @param {Event} event - Événement de changement
+   * @param {React.SyntheticEvent} event - Événement de changement
    * @param {number} newValue - Nouvel index d'onglet
    */
   const handleTabChange = (event, newValue) => {
-    // @ts-ignore - Ignorer les erreurs de type pour cet événement Material-UI
     setTabValue(newValue);
   };
 
   /**
    * Changement de cours sélectionné
-   * @param {Event} event - Événement de changement
+   * @param {React.ChangeEvent} event - Événement de changement
    */
   const handleCourseChange = (event) => {
-    // @ts-ignore - Ignorer les erreurs de type pour cet événement Material-UI
     setSelectedCourse(event.target.value);
   };
 
   /**
    * Filtrer les sessions selon l'onglet actif
-   * @returns {CourseSessionWithDetails[]} Sessions filtrées
+   * @returns {Array} Sessions filtrées
    */
   const getFilteredSessions = () => {
     const now = new Date();
-    
+  
     switch (tabValue) {
       case 0: // À venir
         return sessions.filter(session => 
@@ -334,7 +322,7 @@ const SchedulePage = () => {
         );
       case 2: // Annulés
         return sessions.filter(session => 
-          session.sessionStatus === 'cancelled'
+          session.status === 'cancelled'
         );
       default:
         return sessions;
@@ -343,7 +331,7 @@ const SchedulePage = () => {
 
   /**
    * Obtenir les jours de la semaine courante
-   * @returns {WeekDay[]} Jours de la semaine
+   * @returns {Array} Jours de la semaine avec leurs sessions associées
    */
   const getWeekDays = () => {
     const days = [];
@@ -382,8 +370,8 @@ const SchedulePage = () => {
 
   /**
    * Rendu d'une session de cours
-   * @param {CourseSessionWithDetails} session - Session de cours
-   * @returns {JSX.Element} Carte de session
+   * @param {Object} session - Session de cours
+   * @returns {React.ReactElement} Carte de session
    */
   const renderSessionCard = (session) => (
     <SessionCard key={session.id} status={session.status} elevation={2}>
@@ -397,42 +385,35 @@ const SchedulePage = () => {
               </Typography>
             )}
           </Typography>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-            <PersonIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-            <Typography variant="body2">{session.professor.name}</Typography>
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-            <RoomIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-            <Typography variant="body2">{session.room}</Typography>
-          </Box>
-        </Grid>
-        
-        <Grid item xs={12} sm={4} sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, mb: 1 }}>
-            <TodayIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-            <Typography variant="body2">
-              {format(parseISO(session.date), 'EEEE d MMMM', { locale: fr })}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, mb: 1 }}>
-            <AccessTimeIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-            <Typography variant="body2">
-              {formatTime(session.date)} - {format(new Date(parseISO(session.date).getTime() + (session.duration * 60 * 1000)), 'HH:mm')}
-            </Typography>
-          </Box>
-          
           <StatusChip 
-            label={
-              session.sessionStatus === 'completed' ? 'Terminé' : 
-              session.sessionStatus === 'cancelled' ? 'Annulé' : 
-              'Programmé'
-            }
+            label={session.status === 'completed' ? 'Terminé' : session.status === 'cancelled' ? 'Annulé' : 'Programmé'}
             size="small"
             status={session.status}
           />
+          <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <AccessTimeIcon fontSize="small" color="action" />
+              <Typography variant="body2">
+                {formatDateTime(session.date)} ({session.duration} min)
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <RoomIcon fontSize="small" color="action" />
+              <Typography variant="body2">{session.room}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PersonIcon fontSize="small" color="action" />
+              <Typography variant="body2">{session.professor.name || session.professor.full_name}</Typography>
+            </Box>
+          </Box>
+        </Grid>
+        <Grid item xs={12} sm={4} sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
+          <Typography variant="h4" component="div" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+            {formatTime(session.date)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Durée: {session.duration} min
+          </Typography>
         </Grid>
       </Grid>
     </SessionCard>
@@ -440,43 +421,38 @@ const SchedulePage = () => {
 
   /**
    * Rendu de la vue semaine
-   * @returns {JSX.Element} Vue semaine
+   * @returns {React.ReactElement} Vue semaine
    */
   const renderWeekView = () => {
     const weekDays = getWeekDays();
     
     return (
       <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
           <Button 
-            variant="outlined" 
-            onClick={() => handleWeekChange(-1)}
             startIcon={<TodayIcon />}
+            onClick={() => setCurrentWeek(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+            variant="outlined"
+            size="small"
           >
-            Semaine précédente
+            Semaine actuelle
           </Button>
-          
-          <Typography variant="h6">
-            Semaine du {format(currentWeek, 'd MMMM', { locale: fr })}
-          </Typography>
-          
-          <Button 
-            variant="outlined" 
-            onClick={() => handleWeekChange(1)}
-            endIcon={<TodayIcon />}
-          >
-            Semaine suivante
-          </Button>
+          <Box>
+            <Button onClick={() => handleWeekChange(-1)} sx={{ mr: 1 }}>
+              Semaine précédente
+            </Button>
+            <Button onClick={() => handleWeekChange(1)}>
+              Semaine suivante
+            </Button>
+          </Box>
         </Box>
-        
         <Grid container spacing={2}>
           {weekDays.map(day => (
             <Grid item xs={12} md={day.name === 'samedi' || day.name === 'dimanche' ? 6 : 12} key={day.name}>
-              <Paper sx={{ p: 2, mb: 2 }}>
+              <Box sx={{ p: 2, mb: 2, borderRadius: 2, boxShadow: 1, bgcolor: 'background.paper' }}>
                 <Typography variant="h6" sx={{ mb: 2, textTransform: 'capitalize' }}>
                   {day.name} {format(day.date, 'd MMMM', { locale: fr })}
                 </Typography>
-                
                 {day.sessions.length > 0 ? (
                   day.sessions.map(session => renderSessionCard(session))
                 ) : (
@@ -484,7 +460,7 @@ const SchedulePage = () => {
                     Aucun cours programmé ce jour
                   </Typography>
                 )}
-              </Paper>
+              </Box>
             </Grid>
           ))}
         </Grid>
@@ -493,12 +469,23 @@ const SchedulePage = () => {
   };
 
   /**
+   * Rendu de la vue jour
+   * @returns {React.ReactElement} Vue jour
+   */
+  const renderDayView = () => (
+    <Box>
+      <Typography variant="h6" color="error">
+        Vue Jour - À implémenter
+      </Typography>
+    </Box>
+  );
+
+  /**
    * Rendu de la vue liste
-   * @returns {JSX.Element} Vue liste
+   * @returns {React.ReactElement} Vue liste
    */
   const renderListView = () => {
     const filteredSessions = getFilteredSessions();
-    
     return (
       <Box>
         {filteredSessions.length > 0 ? (
@@ -512,42 +499,41 @@ const SchedulePage = () => {
     );
   };
 
+  // Rendu principal (JSX)
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        <SchoolIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-        Emploi du temps
-      </Typography>
-      
+    <Box sx={{ py: 3 }}>
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
-      
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <ViewToggle
-          value={view}
-          exclusive
-          onChange={handleViewChange}
-          aria-label="vue de l'emploi du temps"
-        >
-          <ToggleButton value="week" aria-label="vue semaine">
-            <ViewWeek sx={{ mr: 1 }} /> Semaine
-          </ToggleButton>
-          <ToggleButton value="list" aria-label="vue liste">
-            <ViewList sx={{ mr: 1 }} /> Liste
-          </ToggleButton>
-        </ViewToggle>
-        
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel id="course-select-label">Filtrer par cours</InputLabel>
+
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Emploi du temps
+        </Typography>
+
+        {isAdmin || isProfessor ? (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<SchoolIcon />}
+            href="/schedule/manage"
+          >
+            Gérer les cours
+          </Button>
+        ) : null}
+      </Box>
+
+      <Box sx={{ mb: 3 }}>
+        <FormControl sx={{ minWidth: 200, mr: 2 }}>
+          <InputLabel id="course-select-label">Cours</InputLabel>
           <Select
             labelId="course-select-label"
+            id="course-select"
             value={selectedCourse}
             onChange={handleCourseChange}
-            label="Filtrer par cours"
-            size="small"
+            label="Cours"
           >
             <MenuItem value="all">Tous les cours</MenuItem>
             {courses.map(course => (
@@ -557,58 +543,71 @@ const SchedulePage = () => {
             ))}
           </Select>
         </FormControl>
-      </Box>
-      
-      <Paper sx={{ mb: 3 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          indicatorColor="primary"
-          textColor="primary"
-          variant="fullWidth"
+
+        <ViewToggle
+          value={view}
+          exclusive
+          onChange={handleViewChange}
+          aria-label="vue emploi du temps"
         >
-          <Tab 
-            label={
-              <Badge 
-                badgeContent={getFilteredSessions().filter(s => isAfter(parseISO(s.date), new Date()) && s.status !== 'cancelled').length} 
-                color="primary"
-                showZero
-              >
-                À venir
-              </Badge>
-            } 
-          />
-          <Tab 
-            label={
-              <Badge 
-                badgeContent={getFilteredSessions().filter(s => isBefore(parseISO(s.date), new Date()) && s.status !== 'cancelled').length} 
-                color="secondary"
-                showZero
-              >
-                Passés
-              </Badge>
-            } 
-          />
-          <Tab 
-            label={
-              <Badge 
-                badgeContent={getFilteredSessions().filter(s => s.sessionStatus === 'cancelled').length} 
-                color="error"
-                showZero
-              >
-                Annulés
-              </Badge>
-            } 
-          />
-        </Tabs>
-      </Paper>
-      
+          <ToggleButton value="week" aria-label="vue semaine">
+            <ViewWeek sx={{ mr: 1 }} />
+            Semaine
+          </ToggleButton>
+          <ToggleButton value="day" aria-label="vue jour">
+            <ViewDay sx={{ mr: 1 }} />
+            Jour
+          </ToggleButton>
+          <ToggleButton value="list" aria-label="vue liste">
+            <ViewList sx={{ mr: 1 }} />
+            Liste
+          </ToggleButton>
+        </ViewToggle>
+      </Box>
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
           <CircularProgress />
         </Box>
       ) : (
-        view === 'week' ? renderWeekView() : renderListView()
+        <Box>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs 
+              value={tabValue} 
+              onChange={handleTabChange} 
+              aria-label="filtres de sessions"
+            >
+              <Tab 
+                label={
+                  <Badge badgeContent={getFilteredSessions().filter(s => isAfter(parseISO(s.date), new Date()) && s.status !== 'cancelled').length} 
+                    color="primary">
+                    À venir
+                  </Badge>
+                } 
+              />
+              <Tab 
+                label={
+                  <Badge badgeContent={getFilteredSessions().filter(s => isBefore(parseISO(s.date), new Date()) && s.status !== 'cancelled').length} 
+                    color="success">
+                    Passés
+                  </Badge>
+                } 
+              />
+              <Tab 
+                label={
+                  <Badge badgeContent={getFilteredSessions().filter(s => s.status === 'cancelled').length} 
+                    color="error">
+                    Annulés
+                  </Badge>
+                } 
+              />
+            </Tabs>
+          </Box>
+          
+          {view === 'week' && renderWeekView()}
+          {view === 'day' && renderDayView()}
+          {view === 'list' && renderListView()}
+        </Box>
       )}
     </Box>
   );

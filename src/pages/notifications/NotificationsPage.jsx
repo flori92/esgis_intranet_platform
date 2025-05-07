@@ -20,7 +20,6 @@ import {
   Tab,
   Menu,
   MenuItem,
-  Badge,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,

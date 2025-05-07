@@ -18,7 +18,6 @@ import {
   InputAdornment,
   CircularProgress,
   Alert,
-  Badge,
   Tooltip
 } from '@mui/material';
 import {
@@ -101,7 +100,9 @@ const StudentAnswersList = ({
           .select('*')
           .eq('exam_id', examId);
         
-        if (examError) throw examError;
+        if (examError) {
+          throw examError;
+        }
         
         if (!studentExams || studentExams.length === 0) {
           setStudents([]);
@@ -118,7 +119,9 @@ const StudentAnswersList = ({
           .select('id, profiles:profile_id(full_name, email, avatar_url)')
           .in('id', studentIds);
         
-        if (studentError) throw studentError;
+        if (studentError) {
+          throw studentError;
+        }
         
         if (!studentData) {
           throw new Error('Aucune donnée étudiant trouvée');
@@ -128,12 +131,17 @@ const StudentAnswersList = ({
         const studentsWithExams = studentExams.map(exam => {
           const student = studentData.find(s => s.id === exam.student_id);
           
+          // Accéder au premier élément du tableau profiles s'il existe
+          const profile = student?.profiles && Array.isArray(student.profiles) && student.profiles.length > 0 
+            ? student.profiles[0] 
+            : null;
+          
           return {
             student: {
               id: student?.id || 0,
-              name: student?.profiles?.full_name || 'Étudiant inconnu',
-              email: student?.profiles?.email || '',
-              profile_image: student?.profiles?.avatar_url || null
+              name: profile?.full_name || 'Étudiant inconnu',
+              email: profile?.email || '',
+              profile_image: profile?.avatar_url || null
             },
             studentExam: exam
           };
@@ -291,7 +299,7 @@ const StudentAnswersList = ({
   /**
    * Obtenir la couleur du statut
    * @param {string} status Statut de l'examen
-   * @returns {string} Couleur du statut pour Material-UI
+   * @returns {'success'|'info'|'primary'|'error'|'default'} Couleur du statut pour Material-UI
    */
   const getStatusColor = (status) => {
     switch (status) {
@@ -334,7 +342,9 @@ const StudentAnswersList = ({
    * @returns {string} Initiales
    */
   const getInitials = (name) => {
-    if (!name) return '?';
+    if (!name) {
+      return '?';
+    }
     
     return name
       .split(' ')
