@@ -212,7 +212,7 @@ const StudentExamsList = () => {
                 courses: { name: 'Virtualization Cloud et Datacenter', code: 'VCD101' },
                 professor_id: 'prof3',
                 professors: { profiles: { full_name: 'Prof. Cloud Expert' } },
-                date: new Date(2025, 5, 10).toISOString(), // 5 jours avant l'examen principal
+                date: new Date(Date.now() + 86400000).toISOString(), // Toujours 1 jour dans le futur
                 duration: 45,
                 type: 'quiz',
                 room: 'Salle Datacenter',

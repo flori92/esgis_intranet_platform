@@ -30,17 +30,26 @@ export const filterExamsByStatus = (exams, status) => {
   
   const now = new Date();
   
+  // Toujours inclure le quiz de virtualisation
+  const isVirtualizationQuiz = (exam) => {
+    return exam.exam_id === 'quiz1' || 
+           (exam.exams?.title && exam.exams.title.includes('Virtualization')) ||
+           (exam.title && exam.title.includes('Virtualization'));
+  };
+  
   switch (status) {
     case 'upcoming':
-      // Examens à venir (date future)
+      // Examens à venir (date future) + quiz de virtualisation
       return exams.filter(exam => {
-        const examDate = new Date(exam.exams?.date);
+        if (isVirtualizationQuiz(exam)) return true;
+        const examDate = new Date(exam.exams?.date || exam.date);
         return examDate > now;
       });
     case 'past':
-      // Examens passés (date passée)
+      // Examens passés (date passée) + quiz de virtualisation
       return exams.filter(exam => {
-        const examDate = new Date(exam.exams?.date);
+        if (isVirtualizationQuiz(exam)) return true;
+        const examDate = new Date(exam.exams?.date || exam.date);
         return examDate < now;
       });
     case 'all':
