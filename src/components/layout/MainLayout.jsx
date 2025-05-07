@@ -438,6 +438,7 @@ const MainLayout = () => {
         {/* Pied de page */}
         <Box
           component="footer"
+          id="main-footer"
           sx={{
             py: 3,
             px: 2,

@@ -16,7 +16,7 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   Chip,
-  Badge // Ajout de l'import du composant Badge
+  Badge
 } from '@mui/material';
 import {
   AccessTime as AccessTimeIcon,
@@ -29,161 +29,122 @@ import {
   School as SchoolIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '@/supabase';
-import { format } from 'date-fns';
+import { supabase } from '../../supabase';
+import { format, parseISO, isBefore, isAfter, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { styled } from '@mui/material/styles';
 
 /**
  * @typedef {Object} CourseSessionWithDetails
- * @property {number} id - ID de la session
- * @property {string} date - Date et heure de la session
+ * @property {string} id - ID de la session
+ * @property {string} date - Date de la session
  * @property {number} duration - Durée en minutes
- * @property {string|null} room - Salle
- * @property {string} status - Statut de la session
+ * @property {string} room - Salle
+ * @property {string} status - Statut (scheduled, completed, cancelled)
  * @property {Object} course - Informations sur le cours
- * @property {number} course.id - ID du cours
+ * @property {string} course.id - ID du cours
  * @property {string} course.name - Nom du cours
  * @property {string} course.code - Code du cours
+ * @property {string} course.semester - Semestre
  * @property {Object} professor - Informations sur le professeur
- * @property {number} professor.id - ID du professeur
- * @property {string} professor.name - Nom du professeur
+ * @property {string} professor.id - ID du professeur
+ * @property {string} professor.name - Nom complet du professeur
  */
 
 /**
  * @typedef {Object} WeekDay
  * @property {Date} date - Date du jour
+ * @property {string} name - Nom du jour
  * @property {CourseSessionWithDetails[]} sessions - Sessions de cours pour ce jour
  */
 
 /**
  * @typedef {Object} Course
- * @property {number} id - ID du cours
+ * @property {string} id - ID du cours
  * @property {string} name - Nom du cours
- * @property {string} code - Code du cours
- * @property {number} semester - Semestre du cours
  */
 
 /**
  * @typedef {Object} SessionData
- * @property {number} id - ID de la session
- * @property {string} date - Date et heure de la session
+ * @property {string} id - ID de la session
+ * @property {string} date - Date de la session
  * @property {number} duration - Durée en minutes
- * @property {string|null} room - Salle
- * @property {string} status - Statut de la session
- * @property {number} course_id - ID du cours
- * @property {number} professor_id - ID du professeur
- * @property {Object} courses - Informations sur le cours
- * @property {number} courses.id - ID du cours
- * @property {string} courses.name - Nom du cours
- * @property {string} courses.code - Code du cours
- * @property {Object} professors - Informations sur le professeur
- * @property {number} professors.id - ID du professeur
- * @property {string} professors.profile_id - ID du profil
- * @property {Object} professors.profiles - Profil du professeur
- * @property {string} professors.profiles.full_name - Nom complet du professeur
+ * @property {string} room - Salle
+ * @property {string} status - Statut
+ * @property {string} course_id - ID du cours
+ * @property {string} professor_id - ID du professeur
+ * @property {Object|Array} courses - Informations sur le cours
+ * @property {Object|Array} professors - Informations sur le professeur
  */
 
+// Styles personnalisés
+const SessionCard = styled(Paper)(({ theme, status }) => ({
+  padding: theme.spacing(2),
+  marginBottom: theme.spacing(2),
+  borderLeft: `5px solid ${
+    status === 'completed' 
+      ? theme.palette.success.main 
+      : status === 'cancelled' 
+        ? theme.palette.error.main 
+        : theme.palette.primary.main
+  }`,
+  backgroundColor: status === 'cancelled' ? '#fff5f5' : 'white',
+  opacity: status === 'cancelled' ? 0.8 : 1,
+  transition: 'transform 0.2s',
+  '&:hover': {
+    transform: 'translateY(-2px)',
+    boxShadow: theme.shadows[3],
+  },
+}));
+
+const ViewToggle = styled(ToggleButtonGroup)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+}));
+
+const StatusChip = styled(Chip)(({ theme, status }) => ({
+  backgroundColor: 
+    status === 'completed' 
+      ? theme.palette.success.light 
+      : status === 'cancelled' 
+        ? theme.palette.error.light 
+        : theme.palette.primary.light,
+  color: 
+    status === 'completed' 
+      ? theme.palette.success.contrastText 
+      : status === 'cancelled' 
+        ? theme.palette.error.contrastText 
+        : theme.palette.primary.contrastText,
+}));
+
 /**
- * Page d'affichage de l'emploi du temps
- * @returns {JSX.Element} Composant de la page d'emploi du temps
+ * Page d'emploi du temps
+ * @returns {JSX.Element} Composant SchedulePage
  */
 const SchedulePage = () => {
   const { authState } = useAuth();
+  const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [weekDays, setWeekDays] = useState([]);
-  const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStartDate(new Date()));
+  const [view, setView] = useState('week');
+  const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [tabValue, setTabValue] = useState(0);
-  const [viewMode, setViewMode] = useState('week');
-  const [selectedSemester, setSelectedSemester] = useState('all');
-  const [sessions, setSessions] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState('all');
+
+  // Déterminer le rôle de l'utilisateur
+  const isAdmin = authState.isAdmin;
+  const isProfessor = authState.isProfessor;
+  const isStudent = authState.isStudent;
 
   /**
-   * Obtenir la date de début de la semaine
-   * @param {Date} date - Date de référence
-   * @returns {Date} Date de début de la semaine
+   * Chargement des sessions de cours
    */
-  function getWeekStartDate(date) {
-    const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(date.setDate(diff));
-  }
-
-  /**
-   * Générer les jours de la semaine
-   * @param {Date} startDate - Date de début de la semaine
-   * @returns {WeekDay[]} Tableau des jours de la semaine
-   */
-  function generateWeekDays(startDate) {
-    const days = [];
-    const dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-
-    for (let i = 0; i < 6; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      days.push({
-        date,
-        sessions: [],
-      });
-    }
-
-    return days;
-  }
-
-  // Charger les données de l'emploi du temps
-  useEffect(() => {
-    const fetchSchedule = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        await fetchCourseSessions();
-        
-        // Initialiser les jours de la semaine
-        const days = [];
-        const startDate = getWeekStartDate(currentWeekStart);
-        
-        for (let i = 0; i < 6; i++) {
-          const date = new Date(startDate);
-          date.setDate(date.getDate() + i);
-          
-          days.push({
-            date,
-            sessions: sessions.filter(session => {
-              const sessionDate = new Date(session.date);
-              return sessionDate.getDate() === date.getDate() &&
-                     sessionDate.getMonth() === date.getMonth() &&
-                     sessionDate.getFullYear() === date.getFullYear();
-            })
-          });
-        }
-
-        setWeekDays(days);
-        setTabValue(new Date().getDay() - 1 >= 0 && new Date().getDay() - 1 < 6 ? new Date().getDay() - 1 : 0);
-      } catch (err) {
-        console.error('Erreur lors du chargement de l\'emploi du temps:', err);
-        setError(err instanceof Error ? err.message : 'Une erreur est survenue');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSchedule();
-  }, [authState, currentWeekStart, selectedSemester, sessions]);
-
-  /**
-   * Charger les sessions de cours
-   */
-  const fetchCourseSessions = async () => {
+  const fetchSessions = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      // Récupérer l'ID de l'étudiant si l'utilisateur est un étudiant
-      if (!authState?.user?.id) {
-        throw new Error('Vous devez être connecté pour accéder à votre emploi du temps');
-      }
-
-      const isStudent = authState.role === 'student';
-      const isProfessor = authState.role === 'professor';
-
+      // Requête de base
       let query = supabase
         .from('course_sessions')
         .select(`
@@ -194,7 +155,7 @@ const SchedulePage = () => {
           status,
           course_id,
           professor_id,
-          courses (
+          courses:course_id (
             id,
             name,
             code,
@@ -219,13 +180,10 @@ const SchedulePage = () => {
           throw studentCoursesError;
         }
 
+        // Si l'étudiant a des cours, filtrer les sessions par ces cours
         if (studentCourses && studentCourses.length > 0) {
           const courseIds = studentCourses.map(sc => sc.course_id);
           query = query.in('course_id', courseIds);
-        } else {
-          // Aucun cours pour cet étudiant
-          setSessions([]);
-          return;
         }
       }
 
@@ -234,499 +192,419 @@ const SchedulePage = () => {
         query = query.eq('professor_id', authState.user.id);
       }
 
-      // Filtrer par semestre si nécessaire
-      if (selectedSemester !== 'all') {
-        query = query.eq('courses.semester', parseInt(selectedSemester, 10));
+      // Filtrer par cours sélectionné
+      if (selectedCourse !== 'all') {
+        query = query.eq('course_id', selectedCourse);
       }
 
-      // Filtrer par semaine
-      const weekStart = new Date(currentWeekStart);
-      const weekEnd = new Date(currentWeekStart);
-      weekEnd.setDate(weekEnd.getDate() + 6);
-
-      query = query
-        .gte('date', weekStart.toISOString())
-        .lt('date', weekEnd.toISOString())
-        .order('date', { ascending: true });
-
+      // Exécuter la requête
       const { data: sessionsData, error: sessionsError } = await query;
 
       if (sessionsError) {
         throw sessionsError;
       }
 
-      // Transformer les données pour l'affichage
+      // Transformer les données pour l'affichage en gérant tous les cas possibles
       const formattedSessions = sessionsData.map(session => {
-        // Vérifier si courses est un tableau ou un objet
-        const courseData = Array.isArray(session.courses) 
-          ? (session.courses.length > 0 ? session.courses[0] : null)
-          : session.courses;
-          
-        // Vérifier si professors est un tableau ou un objet
-        const professorData = Array.isArray(session.professors)
-          ? (session.professors.length > 0 ? session.professors[0] : null)
-          : session.professors;
+        // Gestion sécurisée des données de cours
+        let courseData = null;
+        if (session.courses) {
+          if (Array.isArray(session.courses)) {
+            courseData = session.courses.length > 0 ? session.courses[0] : null;
+          } else {
+            courseData = session.courses;
+          }
+        }
         
+        // Gestion sécurisée des données de professeur
+        let professorData = null;
+        if (session.professors) {
+          if (Array.isArray(session.professors)) {
+            professorData = session.professors.length > 0 ? session.professors[0] : null;
+          } else {
+            professorData = session.professors;
+          }
+        }
+        
+        // Construction de l'objet session formaté avec vérifications
         return {
           id: session.id,
           date: session.date,
-          duration: session.duration,
-          room: session.room,
-          status: session.status,
+          duration: session.duration || 60, // Valeur par défaut si null
+          room: session.room || 'Salle non définie',
+          status: session.status || 'scheduled',
           course: {
-            id: courseData?.id || null,
+            id: courseData?.id || session.course_id || null,
             name: courseData?.name || 'Cours inconnu',
             code: courseData?.code || '',
             semester: courseData?.semester || null
           },
           professor: {
-            id: session.professor_id,
+            id: session.professor_id || null,
             name: professorData?.full_name || 'Professeur inconnu'
           }
         };
       });
 
       setSessions(formattedSessions);
+      
+      // Extraire la liste des cours uniques pour le filtre
+      const uniqueCourses = [...new Set(formattedSessions.map(s => JSON.stringify({
+        id: s.course.id,
+        name: s.course.name
+      })))].map(s => JSON.parse(s)).filter(c => c.id);
+      
+      setCourses(uniqueCourses);
     } catch (error) {
       console.error('Erreur lors du chargement des sessions de cours:', error);
-      setError(error.message || 'Une erreur est survenue lors du chargement des sessions de cours');
+      setError('Impossible de charger l\'emploi du temps. Veuillez réessayer plus tard.');
+    } finally {
+      setLoading(false);
     }
   };
 
   /**
-   * Gérer le changement d'onglet
-   * @param {React.SyntheticEvent} _event - Événement de changement d'onglet
+   * Chargement initial des données
+   */
+  useEffect(() => {
+    fetchSessions();
+  }, [authState.user, selectedCourse]);
+
+  /**
+   * Changement de vue (semaine, jour, liste)
+   * @param {Event} event - Événement de clic
+   * @param {string} newView - Nouvelle vue
+   */
+  const handleViewChange = (event, newView) => {
+    if (newView !== null) {
+      setView(newView);
+    }
+  };
+
+  /**
+   * Changement de semaine
+   * @param {number} direction - Direction (1: semaine suivante, -1: semaine précédente)
+   */
+  const handleWeekChange = (direction) => {
+    setCurrentWeek(prevWeek => {
+      const newWeek = new Date(prevWeek);
+      newWeek.setDate(newWeek.getDate() + (7 * direction));
+      return newWeek;
+    });
+  };
+
+  /**
+   * Changement d'onglet (à venir, passés, annulés)
+   * @param {Event} event - Événement de changement
    * @param {number} newValue - Nouvel index d'onglet
    */
-  const handleTabChange = (_event, newValue) => {
+  const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
 
   /**
-   * Naviguer vers la semaine précédente
+   * Changement de cours sélectionné
+   * @param {Event} event - Événement de changement
    */
-  const goToPreviousWeek = () => {
-    const newDate = new Date(currentWeekStart);
-    newDate.setDate(newDate.getDate() - 7);
-    setCurrentWeekStart(newDate);
+  const handleCourseChange = (event) => {
+    setSelectedCourse(event.target.value);
   };
 
   /**
-   * Naviguer vers la semaine suivante
+   * Filtrer les sessions selon l'onglet actif
+   * @returns {CourseSessionWithDetails[]} Sessions filtrées
    */
-  const goToNextWeek = () => {
-    const newDate = new Date(currentWeekStart);
-    newDate.setDate(newDate.getDate() + 7);
-    setCurrentWeekStart(newDate);
-  };
-
-  /**
-   * Naviguer vers la semaine courante
-   */
-  const goToCurrentWeek = () => {
-    setCurrentWeekStart(getWeekStartDate(new Date()));
-  };
-
-  /**
-   * Gérer le changement de mode d'affichage
-   * @param {React.MouseEvent<HTMLElement>} _ - Événement de clic
-   * @param {string} mode - Nouveau mode d'affichage
-   */
-  const handleViewModeChange = (_, mode) => {
-    if (mode !== null) {
-      setViewMode(mode);
+  const getFilteredSessions = () => {
+    const now = new Date();
+    
+    switch (tabValue) {
+      case 0: // À venir
+        return sessions.filter(session => 
+          isAfter(parseISO(session.date), now) && 
+          session.status !== 'cancelled'
+        );
+      case 1: // Passés
+        return sessions.filter(session => 
+          isBefore(parseISO(session.date), now) && 
+          session.status !== 'cancelled'
+        );
+      case 2: // Annulés
+        return sessions.filter(session => 
+          session.status === 'cancelled'
+        );
+      default:
+        return sessions;
     }
   };
 
   /**
-   * Gérer le changement de semestre
-   * @param {Object} event - Événement de changement
+   * Obtenir les jours de la semaine courante
+   * @returns {WeekDay[]} Jours de la semaine
    */
-  const handleSemesterChange = (event) => {
-    setSelectedSemester(event.target.value);
+  const getWeekDays = () => {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(currentWeek, i);
+      days.push({
+        date,
+        name: format(date, 'EEEE', { locale: fr }),
+        sessions: getFilteredSessions().filter(session => 
+          isSameDay(parseISO(session.date), date)
+        )
+      });
+    }
+    return days;
   };
 
   /**
-   * Formater une date
-   * @param {Date} date - Date à formater
+   * Formater la date et l'heure
+   * @param {string} dateString - Date au format ISO
    * @returns {string} Date formatée
    */
-  const formatDate = (date) => {
-    return format(new Date(date), 'EEEE d MMMM yyyy', { locale: fr });
+  const formatDateTime = (dateString) => {
+    const date = parseISO(dateString);
+    return format(date, 'EEEE d MMMM yyyy à HH:mm', { locale: fr });
   };
 
   /**
-   * Formater une heure
-   * @param {Date|string} date - Date ou chaîne de date à formater
+   * Formater l'heure
+   * @param {string} dateString - Date au format ISO
    * @returns {string} Heure formatée
    */
-  const formatTime = (date) => {
-    return format(new Date(date), 'HH:mm', { locale: fr });
+  const formatTime = (dateString) => {
+    const date = parseISO(dateString);
+    return format(date, 'HH:mm', { locale: fr });
   };
 
   /**
-   * Obtenir la couleur du statut
-   * @param {string} status - Statut de la session
-   * @returns {string} Couleur correspondante
+   * Rendu d'une session de cours
+   * @param {CourseSessionWithDetails} session - Session de cours
+   * @returns {JSX.Element} Carte de session
    */
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'scheduled':
-        return 'primary';
-      case 'in_progress':
-        return 'warning';
-      case 'completed':
-        return 'success';
-      case 'cancelled':
-        return 'error';
-      case 'rescheduled':
-        return 'info';
-      default:
-        return 'default';
-    }
+  const renderSessionCard = (session) => (
+    <SessionCard key={session.id} status={session.status} elevation={2}>
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={8}>
+          <Typography variant="h6" component="h3">
+            {session.course.name}
+            {session.course.code && (
+              <Typography variant="caption" sx={{ ml: 1 }}>
+                ({session.course.code})
+              </Typography>
+            )}
+          </Typography>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+            <PersonIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+            <Typography variant="body2">{session.professor.name}</Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+            <RoomIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+            <Typography variant="body2">{session.room}</Typography>
+          </Box>
+        </Grid>
+        
+        <Grid item xs={12} sm={4} sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, mb: 1 }}>
+            <TodayIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+            <Typography variant="body2">
+              {format(parseISO(session.date), 'EEEE d MMMM', { locale: fr })}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, mb: 1 }}>
+            <AccessTimeIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+            <Typography variant="body2">
+              {formatTime(session.date)} - {format(addDays(parseISO(session.date), 0, session.duration * 60 * 1000), 'HH:mm')}
+            </Typography>
+          </Box>
+          
+          <StatusChip 
+            label={
+              session.status === 'completed' ? 'Terminé' : 
+              session.status === 'cancelled' ? 'Annulé' : 
+              'Programmé'
+            }
+            size="small"
+            status={session.status}
+          />
+        </Grid>
+      </Grid>
+    </SessionCard>
+  );
+
+  /**
+   * Rendu de la vue semaine
+   * @returns {JSX.Element} Vue semaine
+   */
+  const renderWeekView = () => {
+    const weekDays = getWeekDays();
+    
+    return (
+      <Box>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Button 
+            variant="outlined" 
+            onClick={() => handleWeekChange(-1)}
+            startIcon={<TodayIcon />}
+          >
+            Semaine précédente
+          </Button>
+          
+          <Typography variant="h6">
+            Semaine du {format(currentWeek, 'd MMMM', { locale: fr })}
+          </Typography>
+          
+          <Button 
+            variant="outlined" 
+            onClick={() => handleWeekChange(1)}
+            endIcon={<TodayIcon />}
+          >
+            Semaine suivante
+          </Button>
+        </Box>
+        
+        <Grid container spacing={2}>
+          {weekDays.map(day => (
+            <Grid item xs={12} md={day.name === 'samedi' || day.name === 'dimanche' ? 6 : 12} key={day.name}>
+              <Paper sx={{ p: 2, mb: 2 }}>
+                <Typography variant="h6" sx={{ mb: 2, textTransform: 'capitalize' }}>
+                  {day.name} {format(day.date, 'd MMMM', { locale: fr })}
+                </Typography>
+                
+                {day.sessions.length > 0 ? (
+                  day.sessions.map(session => renderSessionCard(session))
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                    Aucun cours programmé ce jour
+                  </Typography>
+                )}
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+    );
   };
 
   /**
-   * Obtenir le libellé du statut
-   * @param {string} status - Statut de la session
-   * @returns {string} Libellé correspondant
+   * Rendu de la vue liste
+   * @returns {JSX.Element} Vue liste
    */
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'scheduled':
-        return 'Programmé';
-      case 'in_progress':
-        return 'En cours';
-      case 'completed':
-        return 'Terminé';
-      case 'cancelled':
-        return 'Annulé';
-      case 'rescheduled':
-        return 'Reporté';
-      default:
-        return 'Inconnu';
-    }
+  const renderListView = () => {
+    const filteredSessions = getFilteredSessions();
+    
+    return (
+      <Box>
+        {filteredSessions.length > 0 ? (
+          filteredSessions.map(session => renderSessionCard(session))
+        ) : (
+          <Typography variant="body1" sx={{ textAlign: 'center', py: 4 }}>
+            Aucun cours {tabValue === 0 ? 'à venir' : tabValue === 1 ? 'passé' : 'annulé'} pour le moment
+          </Typography>
+        )}
+      </Box>
+    );
   };
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" component="h1" gutterBottom>
+        <SchoolIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
         Emploi du temps
       </Typography>
-
+      
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
-
-      {/* Filtres et navigation */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={4}>
-            <Typography variant="h6">
-              Semaine du {currentWeekStart.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-              <Button onClick={goToPreviousWeek} sx={{ mr: 1 }}>
-                Semaine précédente
-              </Button>
-              <Button variant="outlined" onClick={goToCurrentWeek} sx={{ mr: 1 }}>
-                Aujourd'hui
-              </Button>
-              <Button onClick={goToNextWeek}>
-                Semaine suivante
-              </Button>
-            </Box>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <FormControl sx={{ minWidth: 120, mr: 2 }}>
-                <InputLabel id="semester-select-label">Semestre</InputLabel>
-                <Select
-                  labelId="semester-select-label"
-                  value={selectedSemester}
-                  label="Semestre"
-                  onChange={handleSemesterChange}
-                  size="small"
-                >
-                  <MenuItem value="all">Tous</MenuItem>
-                  <MenuItem value="1">Semestre 1</MenuItem>
-                  <MenuItem value="2">Semestre 2</MenuItem>
-                </Select>
-              </FormControl>
-
-              <ToggleButtonGroup
-                value={viewMode}
-                exclusive
-                onChange={handleViewModeChange}
-                size="small"
+      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <ViewToggle
+          value={view}
+          exclusive
+          onChange={handleViewChange}
+          aria-label="vue de l'emploi du temps"
+        >
+          <ToggleButton value="week" aria-label="vue semaine">
+            <ViewWeek sx={{ mr: 1 }} /> Semaine
+          </ToggleButton>
+          <ToggleButton value="list" aria-label="vue liste">
+            <ViewList sx={{ mr: 1 }} /> Liste
+          </ToggleButton>
+        </ViewToggle>
+        
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel id="course-select-label">Filtrer par cours</InputLabel>
+          <Select
+            labelId="course-select-label"
+            value={selectedCourse}
+            onChange={handleCourseChange}
+            label="Filtrer par cours"
+            size="small"
+          >
+            <MenuItem value="all">Tous les cours</MenuItem>
+            {courses.map(course => (
+              <MenuItem key={course.id} value={course.id}>
+                {course.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
+      
+      <Paper sx={{ mb: 3 }}>
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="fullWidth"
+        >
+          <Tab 
+            label={
+              <Badge 
+                badgeContent={getFilteredSessions().filter(s => isAfter(parseISO(s.date), new Date()) && s.status !== 'cancelled').length} 
+                color="primary"
+                showZero
               >
-                <ToggleButton value="week" aria-label="vue semaine">
-                  <ViewWeek />
-                </ToggleButton>
-                <ToggleButton value="day" aria-label="vue jour">
-                  <ViewDay />
-                </ToggleButton>
-                <ToggleButton value="list" aria-label="vue liste">
-                  <ViewList />
-                </ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
-          </Grid>
-        </Grid>
+                À venir
+              </Badge>
+            } 
+          />
+          <Tab 
+            label={
+              <Badge 
+                badgeContent={getFilteredSessions().filter(s => isBefore(parseISO(s.date), new Date()) && s.status !== 'cancelled').length} 
+                color="secondary"
+                showZero
+              >
+                Passés
+              </Badge>
+            } 
+          />
+          <Tab 
+            label={
+              <Badge 
+                badgeContent={getFilteredSessions().filter(s => s.status === 'cancelled').length} 
+                color="error"
+                showZero
+              >
+                Annulés
+              </Badge>
+            } 
+          />
+        </Tabs>
       </Paper>
-
+      
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
           <CircularProgress />
         </Box>
       ) : (
-        <>
-          {viewMode === 'week' && (
-            <Paper elevation={3} sx={{ mb: 3 }}>
-              <Tabs
-                value={tabValue}
-                onChange={handleTabChange}
-                variant="fullWidth"
-                sx={{ borderBottom: 1, borderColor: 'divider' }}
-              >
-                {weekDays.map((day, index) => (
-                  <Tab
-                    key={index}
-                    label={
-                      <Box>
-                        <Typography variant="subtitle2">
-                          {day.date.toLocaleDateString('fr-FR', { weekday: 'short' })}
-                        </Typography>
-                        <Typography variant="body2">
-                          {day.date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
-                        </Typography>
-                        <Badge
-                          badgeContent={day.sessions.length}
-                          color="primary"
-                          sx={{ mt: 1 }}
-                        />
-                      </Box>
-                    }
-                  />
-                ))}
-              </Tabs>
-
-              <Box sx={{ p: 3 }}>
-                {weekDays[tabValue]?.sessions.length > 0 ? (
-                  <Grid container spacing={2}>
-                    {weekDays[tabValue].sessions.map((session) => (
-                      <Grid item xs={12} key={`session-${session.id}`}> // Correction clé unique
-                        <Paper
-                          elevation={2}
-                          sx={{
-                            p: 2,
-                            borderLeft: `4px solid ${getStatusColor(session.status)}`,
-                          }}
-                        >
-                          <Grid container spacing={2}>
-                            <Grid item xs={12} sm={6}>
-                              <Typography variant="h6" component="div">
-                                {session.course.name}
-                              </Typography>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                                <SchoolIcon fontSize="small" sx={{ mr: 1 }} />
-                                <Typography variant="body2">{session.course.code}</Typography>
-                              </Box>
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                                <PersonIcon fontSize="small" sx={{ mr: 1 }} />
-                                <Typography variant="body2">{session.professor.name}</Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                                <AccessTimeIcon fontSize="small" sx={{ mr: 1 }} />
-                                <Typography variant="body2">
-                                  {formatTime(session.date)} - {session.duration} min
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                                <RoomIcon fontSize="small" sx={{ mr: 1 }} />
-                                <Typography variant="body2">Salle {session.room}</Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                                <Chip
-                                  label={getStatusLabel(session.status)}
-                                  size="small"
-                                  sx={{
-                                    bgcolor: getStatusColor(session.status),
-                                    color: 'white',
-                                  }}
-                                />
-                              </Box>
-                            </Grid>
-                          </Grid>
-                        </Paper>
-                      </Grid>
-                    ))}
-                  </Grid>
-                ) : (
-                  <Box sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography variant="body1">Aucun cours programmé ce jour</Typography>
-                  </Box>
-                )}
-              </Box>
-            </Paper>
-          )}
-
-          {viewMode === 'day' && (
-            <Paper elevation={3} sx={{ mb: 3 }}>
-              <Box sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  {formatDate(weekDays[tabValue]?.date)}
-                </Typography>
-
-                {weekDays[tabValue]?.sessions.length > 0 ? (
-                  <Box>
-                    {weekDays[tabValue].sessions.map((session) => (
-                      <Paper
-                        key={`session-${session.id}`} // Correction clé unique
-                        elevation={2}
-                        sx={{
-                          p: 2,
-                          mb: 2,
-                          borderLeft: `4px solid ${getStatusColor(session.status)}`,
-                        }}
-                      >
-                        <Grid container spacing={2}>
-                          <Grid item xs={12} sm={6}>
-                            <Typography variant="h6" component="div">
-                              {session.course.name}
-                            </Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                              <TodayIcon fontSize="small" sx={{ mr: 1 }} />
-                              <Typography variant="body2">
-                                {weekDays[tabValue].date.toLocaleDateString('fr-FR', { weekday: 'long' })} {weekDays[tabValue].date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                              <SchoolIcon fontSize="small" sx={{ mr: 1 }} />
-                              <Typography variant="body2">{session.course.code}</Typography>
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                              <PersonIcon fontSize="small" sx={{ mr: 1 }} />
-                              <Typography variant="body2">{session.professor.name}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                              <AccessTimeIcon fontSize="small" sx={{ mr: 1 }} />
-                              <Typography variant="body2">
-                                {formatTime(session.date)} - {session.duration} min
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                              <RoomIcon fontSize="small" sx={{ mr: 1 }} />
-                              <Typography variant="body2">Salle {session.room}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                              <Chip
-                                label={getStatusLabel(session.status)}
-                                size="small"
-                                sx={{
-                                  bgcolor: getStatusColor(session.status),
-                                  color: 'white',
-                                }}
-                              />
-                            </Box>
-                          </Grid>
-                        </Grid>
-                      </Paper>
-                    ))}
-                  </Box>
-                ) : (
-                  <Box sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography variant="body1">Aucun cours programmé ce jour</Typography>
-                  </Box>
-                )}
-              </Box>
-            </Paper>
-          )}
-
-          {viewMode === 'list' && (
-            <Paper elevation={3} sx={{ mb: 3, p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Liste des cours de la semaine
-              </Typography>
-
-              {weekDays.flatMap((day) => day.sessions).length > 0 ? (
-                <Grid container spacing={2}>
-                  {weekDays.map((day) =>
-                    day.sessions.map((session) => (
-                      <Grid item xs={12} key={`session-${session.id}`}> // Correction clé unique
-                        <Paper
-                          elevation={2}
-                          sx={{
-                            p: 2,
-                            borderLeft: `4px solid ${getStatusColor(session.status)}`,
-                          }}
-                        >
-                          <Grid container spacing={2}>
-                            <Grid item xs={12} sm={6}>
-                              <Typography variant="h6" component="div">
-                                {session.course.name}
-                              </Typography>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                                <TodayIcon fontSize="small" sx={{ mr: 1 }} />
-                                <Typography variant="body2">
-                                  {day.date.toLocaleDateString('fr-FR', { weekday: 'long' })} {day.date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                                <SchoolIcon fontSize="small" sx={{ mr: 1 }} />
-                                <Typography variant="body2">{session.course.code}</Typography>
-                              </Box>
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                                <PersonIcon fontSize="small" sx={{ mr: 1 }} />
-                                <Typography variant="body2">{session.professor.name}</Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                                <AccessTimeIcon fontSize="small" sx={{ mr: 1 }} />
-                                <Typography variant="body2">
-                                  {formatTime(session.date)} - {session.duration} min
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                                <RoomIcon fontSize="small" sx={{ mr: 1 }} />
-                                <Typography variant="body2">Salle {session.room}</Typography>
-                              </Box>
-                              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                                <Chip
-                                  label={getStatusLabel(session.status)}
-                                  size="small"
-                                  sx={{
-                                    bgcolor: getStatusColor(session.status),
-                                    color: 'white',
-                                  }}
-                                />
-                              </Box>
-                            </Grid>
-                          </Grid>
-                        </Paper>
-                      </Grid>
-                    ))
-                  )}
-                </Grid>
-              ) : (
-                <Box sx={{ p: 3, textAlign: 'center' }}>
-                  <Typography variant="body1">Aucun cours programmé cette semaine</Typography>
-                </Box>
-              )}
-            </Paper>
-          )}
-        </>
+        view === 'week' ? renderWeekView() : renderListView()
       )}
     </Box>
   );
