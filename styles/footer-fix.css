@@ -1,0 +1,5 @@
+
+/* Correction pour éviter la duplication des footers */
+footer:not(#main-footer) {
+  display: none !important;
+}
