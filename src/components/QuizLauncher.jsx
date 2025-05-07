@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../supabase';
 import Quiz from './Quiz';
-import { virtualizationQuizData, getRandomizedQuestions } from '../data/virtualizationQuizData';
+import { virtualizationQuizData } from '../data/virtualizationQuizData';
+import { getRandomizedQuestions } from '../data/questions';
 
 import {
   Box,
@@ -51,7 +52,7 @@ const QuizLauncher = () => {
           console.log('Chargement du quiz Virtualization Cloud et Datacenter advanced');
           
           // Randomiser les questions pour éviter la communication des réponses entre étudiants
-          const randomizedQuestions = getRandomizedQuestions(virtualizationQuizData.questions);
+          const randomizedQuestions = getRandomizedQuestions();
           console.log(`Questions randomisées: ${randomizedQuestions.length}`);
           
           const randomizedQuiz = {
@@ -117,7 +118,7 @@ const QuizLauncher = () => {
           console.log('Utilisation des données de secours pour le quiz Virtualization');
           
           // Randomiser les questions pour éviter la communication des réponses entre étudiants
-          const randomizedQuestions = getRandomizedQuestions(virtualizationQuizData.questions);
+          const randomizedQuestions = getRandomizedQuestions();
           console.log(`Questions randomisées: ${randomizedQuestions.length}`);
           
           const randomizedQuiz = {
