@@ -8,19 +8,39 @@
     <!-- Configuration des variables d'environnement pour Supabase -->
     <!-- Aider les navigateurs à trouver les ressources -->
     <link rel="preconnect" href="https://flori92.github.io" />
-    <!-- Script pour gérer les routes SPA -->
+    <!-- Script pour gérer les routes SPA sur GitHub Pages -->
     <script type="text/javascript">
       // Vérifier si nous sommes sur GitHub Pages
-      if (window.location.hostname.includes('github.io')) {
-        // Définir dynamiquement la base URL
-        const baseUrl = '/esgis_intranet_platform/';
-        document.write('<base href="' + baseUrl + '" />');
-      } else {
-        // Pour le développement local
-        document.write('<base href="/" />');
+      const isGitHubPages = window.location.hostname.includes('github.io');
+      const baseUrl = isGitHubPages ? '/esgis_intranet_platform/' : '/';
+      
+      // Définir la base URL dynamiquement
+      document.write('<base href="' + baseUrl + '" />');
+      
+      // Gérer le routage SPA sur GitHub Pages
+      if (isGitHubPages) {
+        // Intercepter les informations de route dans l'URL
+        const query = window.location.search.substr(1);
+        if (query && !query.startsWith('?') && !query.startsWith('/')) {
+          // Reconstruire l'URL avec le routage correct
+          const path = query.split('?')[0];
+          const search = query.indexOf('?') !== -1 ? query.substr(query.indexOf('?')) : '';
+          const hash = window.location.hash;
+          
+          // Définir le chemin dans l'historique de navigation
+          if (path) {
+            window.history.replaceState(null, document.title, baseUrl + path + search + hash);
+          }
+        }
       }
     </script>
-    <link rel="stylesheet" href="/esgis_intranet_platform/styles/footer-fix.css">
+    <!-- Configurez Supabase pour qu'il fonctionne sur GitHub Pages -->
+    <script>
+      window.SUPABASE_URL = "https://yipwzsjbvqwqxwipgktp.supabase.co";
+      // Notez que nous n'exposons pas la clé anon car elle est déjà dans le bundle JS
+    </script>
+    <!-- Script pour le routage SPA GitHub Pages -->
+    <script src="./spa-redirect.js"></script>
   <script type="module" crossorigin src="/esgis_intranet_platform/index.js"></script>
   <link rel="stylesheet" crossorigin href="/esgis_intranet_platform/index.css">
 </head>
