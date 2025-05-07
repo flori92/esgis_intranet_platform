@@ -1,67 +1,61 @@
 import fs from 'fs';
 import path from 'path';
-import fetch from 'node-fetch';
-import * as dotenv from 'dotenv';
-dotenv.config();
 
 /**
- * Script pour mettre à jour le logo ESGIS avec la bonne version
- * Ce script télécharge le logo depuis une URL et le place dans les dossiers appropriés
+ * Script pour mettre à jour le logo ESGIS dans le projet
+ * Ce script va créer les fichiers SVG pour le logo ESGIS basé sur les images fournies
  */
 
-// URL du logo ESGIS correct (à remplacer par l'URL réelle du logo)
-const LOGO_URL = 'https://esgis.org/wp-content/uploads/2023/01/logo-esgis.png';
+// Chemins des fichiers logo
+const logoWhiteSvgPath = path.join(process.cwd(), 'public', 'images', 'logo-esgis-white.svg');
+const logoPngPath = path.join(process.cwd(), 'public', 'images', 'esgis-logo.png');
+const logoOfficialPath = path.join(process.cwd(), 'public', 'images', 'logo-esgis-officiel.jpg');
 
-// Chemins où le logo doit être placé
-const LOGO_PATHS = [
-  './public/images/logo-esgis-white.svg',
-  './public/logo-esgis-white.svg',
-  './images/logo-esgis-white.svg'
-];
+// Contenu du logo ESGIS en SVG (version blanche pour le thème sombre)
+const logoWhiteSvgContent = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="60" viewBox="0 0 240 60" fill="none">
+  <g fill="#FFFFFF">
+    <!-- Texte ESGIS stylisé -->
+    <path d="M10 10H40V15H15V20H35V25H15V30H40V35H10V10Z" />
+    <path d="M45 10H55C60 10 65 15 65 22.5C65 30 60 35 55 35H45V10ZM55 30C57.5 30 60 27.5 60 22.5C60 17.5 57.5 15 55 15H50V30H55Z" />
+    <path d="M70 10H100V15H85V20H95V25H85V30H100V35H70V10Z" />
+    <path d="M105 10H115V30H130V35H105V10Z" />
+    <path d="M135 10H165V15H150V20H160V25H150V30H165V35H135V10Z" />
+    
+    <!-- Chapeau de diplômé stylisé (inspiré du logo fourni) -->
+    <path d="M175 15L190 10L205 15L190 20L175 15Z" />
+    <path d="M190 25V20L205 15V20L190 25Z" />
+    <path d="M185 30L190 25L195 30L190 35L185 30Z" />
+    
+    <!-- Slogan -->
+    <text x="120" y="50" font-family="Arial, sans-serif" font-size="6" text-anchor="middle">ÉCOLE SUPÉRIEURE DE GESTION D'INFORMATIQUE ET DES SCIENCES</text>
+  </g>
+</svg>`;
 
 /**
- * Télécharge le logo depuis l'URL et le sauvegarde dans les chemins spécifiés
+ * Fonction pour mettre à jour le logo ESGIS
  */
-async function updateLogo() {
-  console.log("=== MISE À JOUR DU LOGO ESGIS ===");
+function updateLogo() {
+  console.log('=== MISE À JOUR DU LOGO ESGIS ===');
   
   try {
-    console.log(`Téléchargement du logo depuis ${LOGO_URL}...`);
-    
-    // Télécharger le logo
-    const response = await fetch(LOGO_URL);
-    
-    if (!response.ok) {
-      throw new Error(`Erreur HTTP: ${response.status}`);
+    // Créer les répertoires nécessaires s'ils n'existent pas
+    const imagesDir = path.join(process.cwd(), 'public', 'images');
+    if (!fs.existsSync(imagesDir)) {
+      fs.mkdirSync(imagesDir, { recursive: true });
     }
     
-    const logoBuffer = await response.buffer();
+    // Écrire le logo SVG blanc
+    fs.writeFileSync(logoWhiteSvgPath, logoWhiteSvgContent);
+    console.log(`\n✅ Logo SVG blanc créé: ${logoWhiteSvgPath}`);
     
-    // Créer les dossiers nécessaires s'ils n'existent pas
-    for (const logoPath of LOGO_PATHS) {
-      const directory = path.dirname(logoPath);
-      
-      if (!fs.existsSync(directory)) {
-        console.log(`Création du dossier ${directory}...`);
-        fs.mkdirSync(directory, { recursive: true });
-      }
-      
-      // Sauvegarder le logo
-      console.log(`Sauvegarde du logo dans ${logoPath}...`);
-      fs.writeFileSync(logoPath, logoBuffer);
-    }
+    console.log('\n⚠️ Pour les logos PNG et JPG, veuillez les télécharger manuellement depuis les images fournies.');
+    console.log('⚠️ Placez-les dans le répertoire public/images/ avec les noms suivants:');
+    console.log('   - esgis-logo.png');
+    console.log('   - logo-esgis-officiel.jpg');
     
-    console.log("Logo ESGIS mis à jour avec succès!");
-    
-    // Mettre à jour le fichier assetUtils.js pour utiliser le bon chemin
-    const assetUtilsPath = './src/utils/assetUtils.js';
-    console.log(`Mise à jour du fichier ${assetUtilsPath}...`);
-    
-    if (fs.existsSync(assetUtilsPath)) {
-      let assetUtilsContent = fs.readFileSync(assetUtilsPath, 'utf8');
-      
-      // Mettre à jour le chemin du logo si nécessaire
-      if (assetUtilsContent.includes('logo-esgis-white.svg')) {
+    console.log('\n✨ Logo SVG ESGIS mis à jour avec succès!');
+    console.log('📝 N\'oubliez pas de committer et pousser ces modifications vers GitHub.');
         console.log("Le fichier utilise déjà le bon nom de fichier.");
       } else {
         assetUtilsContent = assetUtilsContent.replace(
