@@ -172,11 +172,12 @@ const MainLayout = () => {
       }}>
         <Box
           component="img"
-          src="/esgis_intranet_platform/images/logo-esgis-officiel.jpg"
+          src="/images/logo-esgis-white.svg"
           alt="Logo ESGIS"
           sx={{
             height: 60,
             mb: 1,
+            filter: 'brightness(0) invert(1)', // Assure que le logo est blanc sur fond bleu
           }}
         />
         <Typography 

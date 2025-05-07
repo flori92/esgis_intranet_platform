@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "start": "vite --config vite.dev.config.js",
     "dev": "vite",
     "build": "vite build",
     "build:skipjs": "NODE_ENV=production CI=false vite build",

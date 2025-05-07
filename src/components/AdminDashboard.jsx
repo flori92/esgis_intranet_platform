@@ -4,7 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 // Remplacer l'import de lucide-react par une icône de Material-UI
 import { AccessTime as Clock } from "@mui/icons-material";
 // Import du client Supabase depuis le bon chemin
-import { supabase } from '../supabase';
+import { supabase } from '@/supabase';
 
 /**
  * @typedef {Object} ActiveStudent
@@ -392,8 +392,8 @@ const AdminDashboard = () => {
             <h1 className="text-2xl font-bold text-gray-800">Tableau de bord de l'examen</h1>
             {timer && (
               <div className="flex items-center bg-blue-100 text-blue-800 px-4 py-2 rounded-full">
-                <Clock className="w-5 h-5 mr-2" />
-                <span className="font-semibold">{formatTimer(timer.seconds)}</span>
+                <Clock sx={{ width: 20, height: 20, mr: 1 }} />
+                <span className="font-semibold">{formatTimer(timer?.seconds || 0)}</span>
               </div>
             )}
           </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../supabase';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/supabase';
 import Quiz from './Quiz';
 import { virtualizationQuizData } from '../data/virtualizationQuizData';
 

@@ -36,7 +36,7 @@ import {
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import SchoolIcon from '@mui/icons-material/School';
 
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 // Correction du chemin d'importation de Supabase
 import { supabase } from '@/supabase';
 
@@ -98,12 +98,12 @@ function adaptExamResult(rawResult) {
     course_name: rawResult.exams?.courses?.name || 'Cours inconnu',
     course_code: rawResult.exams?.courses?.code || 'CODE',
     student_id: rawResult.student_id,
-    student_name: rawResult.users?.full_name || 'Étudiant inconnu',
+    student_name: rawResult.student?.full_name || rawResult.users?.full_name || 'Étudiant inconnu',
     grade: rawResult.grade,
-    max_grade: rawResult.exams?.total_points || 20,
-    exam_weight: rawResult.exams?.weight || 1,
-    date: rawResult.exams?.date || new Date().toISOString(),
-    type: rawResult.exams?.type || 'unknown',
+    max_grade: rawResult.exam?.total_points || rawResult.exams?.total_points || 20,
+    exam_weight: rawResult.exam?.weight || rawResult.exams?.weight || 1,
+    date: rawResult.exam?.date || rawResult.exams?.date || new Date().toISOString(),
+    type: rawResult.exam?.type || rawResult.exams?.type || 'unknown',
     status: rawResult.status || 'pending',
     semester: rawResult.exams?.courses?.semester || 1,
     academic_year: rawResult.exams?.exam_sessions?.academic_year || '2024-2025'
@@ -262,38 +262,24 @@ export default function GradesPage() {
         // Récupérer les résultats d'examens de l'étudiant
         const { data, error: fetchError } = await supabase
           .from('exam_results')
-          .select(`
-            id,
-            exam_id,
-            student_id,
-            grade,
-            status,
-            exams (
-              id,
-              title,
-              course_id,
-              total_points,
-              weight,
-              date,
-              type,
-              exam_session_id,
-              courses (
-                id,
-                name,
-                code,
-                semester
-              ),
-              exam_sessions (
-                id,
-                name,
-                academic_year
-              )
-            ),
-            users (
-              id,
-              full_name
-            )
-          `)
+      .select(`
+        *,
+        exam:exam_id (
+          id, 
+          title, 
+          date, 
+          type, 
+          total_points, 
+          passing_grade,
+          course_id,
+          weight
+        ),
+        student:student_id (
+          id, 
+          email, 
+          full_name
+        )
+      `)
           .eq('student_id', authState.user.id);
         
         if (fetchError) {
@@ -499,9 +485,9 @@ export default function GradesPage() {
                           <Typography variant="body2" color="text.secondary">
                             {result.course_code}
                           </Typography>
-                          {result.course_name}
+                          {result.course_name || 'Cours inconnu'}
                         </TableCell>
-                        <TableCell>{result.exam_title}</TableCell>
+                        <TableCell>{result.exam_title || 'Examen inconnu'}</TableCell>
                         <TableCell>
                           <Chip 
                             label={result.type === 'midterm' ? 'Partiel' : 

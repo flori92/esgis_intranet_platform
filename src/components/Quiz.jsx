@@ -68,11 +68,17 @@ const Quiz = ({ quizData }) => {
     }
     
     // Configurer la détection de triche
-    setupCheatingDetection();
+    // La détection de triche est gérée dans l'effet
+    if (typeof setupCheatingDetection === 'function') {
+      setupCheatingDetection();
+    }
     
     // Nettoyer lors du démontage
     return () => {
-      cleanupCheatingDetection();
+      // Le nettoyage est géré dans la fonction de retour
+      if (typeof cleanupCheatingDetection === 'function') {
+        cleanupCheatingDetection();
+      }
     };
   }, [questions]);
 

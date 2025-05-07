@@ -200,12 +200,10 @@ const SchedulePage = () => {
             code,
             semester
           ),
-          professors:users!course_sessions_professor_id_fkey (
+          professors:professor_id (
             id,
             profile_id,
-            profiles (
-              full_name
-            )
+            full_name
           )
         `);
 
@@ -258,23 +256,35 @@ const SchedulePage = () => {
       }
 
       // Transformer les données pour l'affichage
-      const formattedSessions = sessionsData.map(session => ({
-        id: session.id,
-        date: session.date,
-        duration: session.duration,
-        room: session.room,
-        status: session.status,
-        course: {
-          id: session.courses.id,
-          name: session.courses.name,
-          code: session.courses.code,
-          semester: session.courses.semester
-        },
-        professor: {
-          id: session.professor_id,
-          name: session.professors?.profiles?.full_name || 'Professeur inconnu'
-        }
-      }));
+      const formattedSessions = sessionsData.map(session => {
+        // Vérifier si courses est un tableau ou un objet
+        const courseData = Array.isArray(session.courses) 
+          ? (session.courses.length > 0 ? session.courses[0] : null)
+          : session.courses;
+          
+        // Vérifier si professors est un tableau ou un objet
+        const professorData = Array.isArray(session.professors)
+          ? (session.professors.length > 0 ? session.professors[0] : null)
+          : session.professors;
+        
+        return {
+          id: session.id,
+          date: session.date,
+          duration: session.duration,
+          room: session.room,
+          status: session.status,
+          course: {
+            id: courseData?.id || null,
+            name: courseData?.name || 'Cours inconnu',
+            code: courseData?.code || '',
+            semester: courseData?.semester || null
+          },
+          professor: {
+            id: session.professor_id,
+            name: professorData?.full_name || 'Professeur inconnu'
+          }
+        };
+      });
 
       setSessions(formattedSessions);
     } catch (error) {

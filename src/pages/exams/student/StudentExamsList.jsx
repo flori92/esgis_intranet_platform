@@ -31,7 +31,7 @@ import {
   Description as DescriptionIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/supabase';
 import { format, parseISO, isBefore, isAfter } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -239,13 +239,13 @@ const StudentExamsList = () => {
           attempt_status: item.attempt_status,
           created_at: item.created_at,
           updated_at: item.updated_at,
-          title: exam.title || '',
+          title: exam?.title || 'Examen sans titre' || '',
           course_id: exam.course_id || '',
           course_name: exam.courses?.name || '',
           course_code: exam.courses?.code || '',
           professor_id: exam.professor_id || '',
           professor_name: exam.professors?.profiles?.full_name || 'Professeur inconnu',
-          date: exam.date || new Date().toISOString(),
+          date: exam?.date || new Date().toISOString() || new Date().toISOString(),
           duration: exam.duration || 0,
           type: exam.type || '',
           room: exam.room || '',
@@ -314,7 +314,7 @@ const StudentExamsList = () => {
 
   // Rendu d'un examen
   const renderExam = (exam) => {
-    const isPast = new Date(exam.date) < new Date();
+    const isPast = new Date(exam?.date || new Date().toISOString()) < new Date();
     const statusColor = isPast ? 'error' : 'success';
     const statusText = isPast ? 'Passé' : 'À venir';
 
@@ -324,15 +324,15 @@ const StudentExamsList = () => {
           <Grid container spacing={2}>
             <Grid item xs={12} sm={8}>
               <Typography variant="h6" component="div">
-                {exam.title}
+                {exam?.title || 'Examen sans titre'}
               </Typography>
               <Typography color="text.secondary" gutterBottom>
                 <SchoolIcon fontSize="small" sx={{ verticalAlign: 'middle', mr: 1 }} />
-                {exam.course_name} ({exam.course_code})
+                {exam?.course_name || 'Cours inconnu'} ({exam.course_code})
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 <EventIcon fontSize="small" sx={{ verticalAlign: 'middle', mr: 1 }} />
-                {formatDate(exam.date)}
+                {formatDate(exam?.date || new Date().toISOString())}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 <AccessTimeIcon fontSize="small" sx={{ verticalAlign: 'middle', mr: 1 }} />

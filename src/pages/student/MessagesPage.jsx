@@ -120,7 +120,9 @@ const StudentMessagesPage = () => {
         
         const { data, error } = await query;
         
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
         
         if (data) {
           setMessages(data);

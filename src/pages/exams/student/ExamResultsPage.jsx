@@ -35,8 +35,8 @@ import {
   Check as CheckIcon
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../../../hooks/useAuth';
-import { supabase } from '@/services/supabase';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/supabase';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Question } from '../../professor/exams/components/ExamQuestions';
