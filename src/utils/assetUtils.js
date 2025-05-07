@@ -19,23 +19,6 @@ export const getAssetPath = (path) => {
   return `${basePath}/${path}`;
 };
 
-/**
- * Composant pour afficher une image avec le chemin d'accès correct
- * @param {Object} props - Propriétés du composant
- * @param {string} props.src - Chemin relatif de l'image
- * @param {string} props.alt - Texte alternatif de l'image
- * @param {Object} props.style - Style CSS de l'image
- * @returns {JSX.Element} Élément image avec le chemin d'accès correct
- */
-export const Image = ({ src, alt, ...props }) => {
-  return <img src={getAssetPath(src)} alt={alt} {...props} />;
-};
+// Exportation d'un chemin spécifique pour le logo ESGIS
+export const LOGO_ESGIS_PATH = () => getAssetPath('images/logo-esgis-white.svg');
 
-/**
- * Composant pour afficher le logo ESGIS
- * @param {Object} props - Propriétés du composant
- * @returns {JSX.Element} Élément image du logo ESGIS
- */
-export const ESGISLogo = (props) => {
-  return <img src={getAssetPath('images/logo-esgis-white.svg')} alt="Logo ESGIS" {...props} />;
-};
