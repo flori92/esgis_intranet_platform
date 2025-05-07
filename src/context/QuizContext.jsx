@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 
 // Import des services API
 import * as quizService from '../api/quiz';
-import { getRandomizedQuestions } from '../data/virtualizationQuizData';
+import { getRandomizedQuestions } from '../data/questions';
 
 /**
  * Création du contexte Quiz avec des valeurs par défaut
