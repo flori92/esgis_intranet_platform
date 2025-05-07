@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="80" viewBox="0 0 300 80" fill="none">
+  <g fill="#FFFFFF">
+    <!-- Texte ESGIS stylisé basé sur le logo fourni (version 2) -->
+    <path d="M20 20H60V28H30V35H55V43H30V50H60V58H20V20Z" />
+    <path d="M65 20H85C92 20 98 25 98 39C98 53 92 58 85 58H65V20ZM85 50C88 50 90 47 90 39C90 31 88 28 85 28H73V50H85Z" />
+    <path d="M103 20H143V28H123V35H138V43H123V50H143V58H103V20Z" />
+    <path d="M148 20H156V50H178V58H148V20Z" />
+    <path d="M183 20H223V28H203V35H218V43H203V50H223V58H183V20Z" />
+    
+    <!-- Chapeau de diplômé et diplôme stylisés (inspiré du logo fourni) -->
+    <path d="M235 15L250 10L265 15L250 20L235 15Z" fill="#FFFFFF" />
+    <path d="M250 25V20L265 15V20L250 25Z" fill="#FFFFFF" />
+    <path d="M245 30L250 25L255 30L250 35L245 30Z" fill="#FFFFFF" />
+    <path d="M260 25L265 20L270 25L265 30L260 25Z" fill="#FFFFFF" />
+    <path d="M265 30V40L270 45L275 40L270 35L265 30Z" fill="#FFFFFF" />
+    
+    <!-- Slogan -->
+    <text x="150" y="70" font-family="Arial, sans-serif" font-size="7" text-anchor="middle">ÉCOLE SUPÉRIEURE DE GESTION D'INFORMATIQUE ET DES SCIENCES</text>
+  </g>
+</svg>
