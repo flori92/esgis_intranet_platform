@@ -2,7 +2,7 @@
  * Service de gestion des quiz et questions
  * Centralise toutes les opérations liées aux quiz
  */
-import { supabase } from '../config/supabase';
+import { supabase } from '../supabase';
 
 /**
  * Types pour le module quiz - remplacés par des commentaires JSDoc
