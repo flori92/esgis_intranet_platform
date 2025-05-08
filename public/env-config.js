@@ -1,25 +1,23 @@
-// Configuration d'environnement de secours
-// Ce fichier est chargé dans index.html et fournit une solution de fallback
-// si les variables d'environnement ne sont pas correctement chargées
+// Configuration d'environnement sécurisée pour GitHub Pages
+// Ce fichier est chargé dans index.html et configure l'application
 
 window.ENV = {
-  // Configuration Supabase
+  // Configuration Supabase - URL uniquement
+  // La clé anon est déjà dans le bundle de l'application
   SUPABASE_URL: 'https://epnhnjkbxgciojevrwfq.supabase.co',
-  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyMDY5MDYsImV4cCI6MjA2MTc4MjkwNn0.VeqmGA56qySH_f4rwk6bnsvPS6173BtoRA0iCjXnogM',
-  SUPABASE_SERVICE_ROLE: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjIwNjkwNiwiZXhwIjoyMDYxNzgyOTA2fQ.kbEs9bN0vpsf9cE8TZuj0-sBz6LCQ3o3LU0sptEx-mY',
   
   // Configuration de l'application
   APP_NAME: 'Intranet ESGIS',
   
-  // Connexion PostgreSQL directe (pour les outils d'administration)
-  PG_CONNECTION: {
-    host: 'db.epnhnjkbxgciojevrwfq.supabase.co',
-    port: 5432,
-    user: 'postgres',
-    password: 'Apollonf@vi92',
-    database: 'postgres',
-    ssl: true
-  }
+  // Configuration GitHub Pages
+  IS_GITHUB_PAGES: true,
+  BASE_URL: '/esgis_intranet_platform/',
+  
+  // Configuration pour résoudre les problèmes de routage SPA
+  ENABLE_SPA_ROUTING: true,
+  
+  // Configuré pour accepter les requêtes depuis GitHub Pages
+  ALLOWED_ORIGINS: ['https://flori92.github.io']
 };
 
 // Fonction de vérification de connexion
