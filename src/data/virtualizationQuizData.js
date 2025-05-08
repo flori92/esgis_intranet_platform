@@ -7,7 +7,7 @@ import { questions, getRandomizedQuestions } from './questions';
 export const virtualizationQuizData = {
   title: "Quiz - Virtualization Cloud et Datacenter advanced",
   description: "Quiz sur les concepts avancés de virtualisation, cloud computing et datacenter",
-  duration: 45, // minutes
+  duration: 120, // minutes (2 heures)
   questions: getRandomizedQuestions()
 };
 

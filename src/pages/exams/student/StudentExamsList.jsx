@@ -159,7 +159,7 @@ const StudentExamsList = () => {
             id: 999,
             title: virtualizationQuizData.title,
             course_id: 101, // ID de cours fictif pour le module de virtualisation
-            date: new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString(), // Demain
+            date: new Date(new Date().getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(), // Il y a 2 jours (pour qu'il soit dans PASSÉS)
             duration: virtualizationQuizData.duration,
             type: 'quiz',
             room: 'En ligne',
@@ -179,6 +179,99 @@ const StudentExamsList = () => {
           studentExams.push(virtualizationQuiz);
           console.log('Quiz de virtualisation ajouté à la liste');
         }
+        
+        // Ajouter d'autres quiz prédéfinis
+        const additionalQuizzes = [
+          {
+            id: 'quiz-java-1',
+            exam_id: 991,
+            student_id: studentId,
+            seat_number: null,
+            attendance_status: 'present',
+            attempt_status: 'completed',
+            created_at: new Date(new Date().getTime() - 15 * 24 * 60 * 60 * 1000).toISOString(), // Il y a 15 jours
+            updated_at: new Date(new Date().getTime() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+            exams: {
+              id: 991,
+              title: 'Quiz - Java et Programmation Orientée Objet',
+              course_id: 102,
+              date: new Date(new Date().getTime() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+              duration: 90, // minutes
+              type: 'quiz',
+              room: 'Salle 104',
+              total_points: 20,
+              passing_grade: 10,
+              status: 'completed',
+              description: 'Quiz sur les principes fondamentaux de Java et de la POO',
+              courses: {
+                name: 'Programmation Java',
+                code: 'JAVA-201'
+              }
+            }
+          },
+          {
+            id: 'quiz-web-1',
+            exam_id: 992,
+            student_id: studentId,
+            seat_number: 'L12',
+            attendance_status: 'present',
+            attempt_status: 'completed',
+            created_at: new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(), // Il y a 30 jours
+            updated_at: new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+            exams: {
+              id: 992,
+              title: 'Quiz - Développement Web Avancé',
+              course_id: 103,
+              date: new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+              duration: 60, // minutes
+              type: 'quiz',
+              room: 'Amphi A',
+              total_points: 25,
+              passing_grade: 15,
+              status: 'completed',
+              description: 'Quiz sur les technologies web modernes: JavaScript, React, API REST',
+              courses: {
+                name: 'Technologies Web',
+                code: 'WEB-305'
+              }
+            }
+          },
+          {
+            id: 'quiz-db-1',
+            exam_id: 993,
+            student_id: studentId,
+            seat_number: null,
+            attendance_status: null,
+            attempt_status: null,
+            created_at: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Dans 7 jours
+            updated_at: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            exams: {
+              id: 993,
+              title: 'Quiz - Bases de Données et SQL',
+              course_id: 104,
+              date: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              duration: 75, // minutes
+              type: 'quiz',
+              room: 'En ligne',
+              total_points: 30,
+              passing_grade: 18,
+              status: 'active',
+              description: 'Quiz sur les principes des bases de données relationnelles et le langage SQL',
+              courses: {
+                name: 'Bases de Données',
+                code: 'DB-202'
+              }
+            }
+          }
+        ];
+        
+        // Ajouter les quiz additionnels à la liste
+        additionalQuizzes.forEach(quiz => {
+          if (!studentExams.some(exam => exam.exam_id === quiz.exam_id)) {
+            studentExams.push(quiz);
+            console.log(`Quiz ${quiz.exams.title} ajouté à la liste`);
+          }
+        });
       } catch (supabaseError) {
         console.log('Erreur lors de la récupération des examens depuis Supabase:', supabaseError);
         // Continuer avec la solution de secours
