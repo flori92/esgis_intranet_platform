@@ -36,6 +36,7 @@ import { supabase } from '@/supabase';
 import { format, parseISO, isBefore, isAfter } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getExamsFromUserMetadata, filterExamsByStatus, searchExams } from '@/utils/examUtils';
+import { virtualizationQuizData } from '@/data/virtualizationQuizData';
 
 /**
  * @typedef {Object} StudentExam
@@ -141,6 +142,42 @@ const StudentExamsList = () => {
         if (!fetchError && data && data.length > 0) {
           studentExams = data;
           console.log('Examens récupérés depuis Supabase:', data.length);
+        }
+        
+        // Ajouter manuellement le quiz de virtualisation à la liste des examens
+        // Ce quiz spécial n'est pas stocké dans la base de données mais dans un fichier local
+        const virtualizationQuiz = {
+          id: 'quiz-virt-1', // ID unique pour ce quiz spécial
+          exam_id: 999, // ID spécial pour le quiz de virtualisation, correspond à celui dans examUtils.js
+          student_id: studentId,
+          seat_number: null,
+          attendance_status: null,
+          attempt_status: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          exams: {
+            id: 999,
+            title: virtualizationQuizData.title,
+            course_id: 101, // ID de cours fictif pour le module de virtualisation
+            date: new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString(), // Demain
+            duration: virtualizationQuizData.duration,
+            type: 'quiz',
+            room: 'En ligne',
+            total_points: 20,
+            passing_grade: 10,
+            status: 'active',
+            description: virtualizationQuizData.description,
+            courses: {
+              name: 'Virtualisation Cloud et Datacenter',
+              code: 'VCD-420'
+            }
+          }
+        };
+        
+        // Vérifier si le quiz n'est pas déjà dans la liste (pour éviter les doublons)
+        if (!studentExams.some(exam => exam.exam_id === 999)) {
+          studentExams.push(virtualizationQuiz);
+          console.log('Quiz de virtualisation ajouté à la liste');
         }
       } catch (supabaseError) {
         console.log('Erreur lors de la récupération des examens depuis Supabase:', supabaseError);
