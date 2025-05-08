@@ -262,24 +262,36 @@ export default function GradesPage() {
         // Récupérer les résultats d'examens de l'étudiant
         const { data, error: fetchError } = await supabase
           .from('exam_results')
-      .select(`
-        *,
-        exam:exam_id (
-          id, 
-          title, 
-          date, 
-          type, 
-          total_points, 
-          passing_grade,
-          course_id,
-          weight
-        ),
-        student:student_id (
-          id, 
-          email, 
-          full_name
-        )
-      `)
+          .select(`
+            id,
+            exam_id,
+            student_id,
+            grade,
+            status,
+            created_at,
+            updated_at,
+            exams:exams(
+              id, 
+              title, 
+              date, 
+              type, 
+              total_points, 
+              passing_grade,
+              course_id,
+              weight,
+              courses(
+                id,
+                name,
+                code,
+                semester
+              )
+            ),
+            profiles:student_id(
+              id, 
+              email, 
+              full_name
+            )
+          `)
           .eq('student_id', authState.user.id);
         
         if (fetchError) {

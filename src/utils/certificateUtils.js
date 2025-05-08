@@ -195,38 +195,57 @@ export const generateCertificate = async (studentData) => {
  */
 export const getStudentData = async (userId) => {
   try {
-    const { data: userData, error: userError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    // Récupération des données utilisateur depuis Supabase Auth (plus fiable)
+    const { data: authData, error: authError } = await supabase.auth.getUser();
     
-    if (userError) {
-      throw userError;
+    if (authError) {
+      console.error("Erreur lors de la récupération des données d'authentification:", authError);
+      throw authError;
     }
+
+    // Extraction des métadonnées utilisateur
+    const userMetadata = authData.user?.user_metadata || {};
+    const profileBackup = userMetadata.profile_backup || {};
     
-    // Si les données sont incomplètes, on récupère les métadonnées de l'utilisateur
-    if (!userData.program || !userData.level) {
-      const { data: authUser, error: authError } = await supabase.auth.getUser();
+    // Essayer d'abord de récupérer depuis la table profiles
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
       
-      if (authError) {
-        throw authError;
+      if (!profileError && profileData) {
+        // Si les données profiles sont complètes, les utiliser
+        return {
+          id: profileData.id || userId,
+          firstName: profileData.first_name || userMetadata.firstName || profileBackup.first_name || 'Étudiant',
+          lastName: profileData.last_name || userMetadata.lastName || profileBackup.last_name || 'ESGIS',
+          email: profileData.email || authData.user?.email || profileBackup.email || '',
+          studentId: profileData.student_id || userMetadata.studentId || profileBackup.student_id || userId.substring(0, 8).toUpperCase(),
+          metadata: {
+            program: profileData.program || userMetadata.program || profileBackup.program || 'Informatique',
+            level: profileData.level || userMetadata.level || profileBackup.level || 'Licence',
+            academicYear: profileData.academic_year || userMetadata.academicYear || profileBackup.academic_year || `${new Date().getFullYear()-1}-${new Date().getFullYear()}`
+          }
+        };
       }
-      
-      // Fusion des données et retour
-      return {
-        ...userData,
-        metadata: authUser.user?.user_metadata || {}
-      };
+    } catch (profileError) {
+      console.warn("Erreur de récupération profile, utilisation des métadonnées utilisateur:", profileError);
+      // Continuer avec la méthode de secours
     }
     
-    // Retour direct des données avec la structure metadata
+    // Méthode de secours : utiliser uniquement les métadonnées utilisateur
     return {
-      ...userData,
+      id: userId,
+      firstName: userMetadata.firstName || profileBackup.first_name || 'Étudiant',
+      lastName: userMetadata.lastName || profileBackup.last_name || 'ESGIS',
+      email: authData.user?.email || profileBackup.email || '',
+      studentId: userMetadata.studentId || profileBackup.student_id || userId.substring(0, 8).toUpperCase(),
       metadata: {
-        program: userData.program,
-        level: userData.level,
-        academicYear: userData.academicYear
+        program: userMetadata.program || profileBackup.program || 'Informatique',
+        level: userMetadata.level || profileBackup.level || 'Licence',
+        academicYear: userMetadata.academicYear || profileBackup.academic_year || `${new Date().getFullYear()-1}-${new Date().getFullYear()}`
       }
     };
   } catch (error) {

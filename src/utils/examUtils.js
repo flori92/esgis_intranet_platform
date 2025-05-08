@@ -30,11 +30,21 @@ export const filterExamsByStatus = (exams, status) => {
   
   const now = new Date();
   
-  // Toujours inclure le quiz de virtualisation
+  // Toujours inclure le quiz de virtualisation Cloud Datacenter
   const isVirtualizationQuiz = (exam) => {
-    return exam.exam_id === 'quiz1' || 
-           (exam.exams?.title && exam.exams.title.includes('Virtualization')) ||
-           (exam.title && exam.title.includes('Virtualization'));
+    return exam.exam_id === 999 || // ID fixe pour le quiz de virtualisation
+           (exam.exams?.title && (
+             exam.exams.title.toLowerCase().includes('virtualization') ||
+             exam.exams.title.toLowerCase().includes('virtualisation') ||
+             exam.exams.title.toLowerCase().includes('cloud datacenter') ||
+             exam.exams.title.toLowerCase().includes('cloud datacenter advanced')
+           )) ||
+           (exam.title && (
+             exam.title.toLowerCase().includes('virtualization') ||
+             exam.title.toLowerCase().includes('virtualisation') ||
+             exam.title.toLowerCase().includes('cloud datacenter') ||
+             exam.title.toLowerCase().includes('cloud datacenter advanced')
+           ));
   };
   
   switch (status) {
