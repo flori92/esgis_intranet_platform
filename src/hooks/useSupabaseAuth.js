@@ -134,12 +134,12 @@ export const useSupabaseAuth = () => {
    * @returns {Promise<Object>} Profil de l'utilisateur
    */
   const fetchUserProfile = async (userId) => {
+    // Créer un profil de secours basé sur les métadonnées
+    let fallbackProfile = null;
+    
     try {
       // Tenter d'abord de récupérer les métadonnées utilisateur directement
       const { data: userData, error: userError } = await supabase.auth.getUser();
-      
-      // Créer un profil de secours basé sur les métadonnées
-      let fallbackProfile = null;
       
       if (!userError && userData && userData.user) {
         const userMetadata = userData.user.user_metadata || {};
@@ -194,34 +194,68 @@ export const useSupabaseAuth = () => {
         }
       }
       
-      // Tentative de récupération du profil complet
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      // Vérifier si l'URL actuelle contient 'quiz' pour détecter la page de quiz
+      // Si c'est le cas, priorisons l'utilisation du profil de secours pour éviter la récursion infinie
+      const isQuizPage = window.location.href.includes('/quiz/');
+      
+      // Si nous sommes sur la page de quiz et avons un profil de secours disponible,
+      // utilisons-le directement pour éviter les erreurs de récursion infinie
+      if (isQuizPage && fallbackProfile) {
+        console.log('Page quiz détectée - Utilisation directe du profil de secours');
+        return fallbackProfile;
+      }
+      
+      try {
+        // Tentative de récupération du profil complet
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
 
-      if (error) {
-        console.error('Erreur lors de la récupération du profil:', error);
+        if (error) {
+          // Détecter spécifiquement l'erreur de récursion infinie
+          if (error.message && error.message.includes('infinite recursion')) {
+            console.warn('Erreur de récursion infinie détectée dans la politique pour relation "profiles"');
+            if (fallbackProfile) {
+              console.log('Utilisation d\'un profil de secours suite à la récursion infinie');
+              return fallbackProfile;
+            }
+          }
+          
+          console.error('Erreur lors de la récupération du profil:', error);
+          
+          // Si nous avons un profil de secours, utilisons-le
+          if (fallbackProfile) {
+            console.log('Utilisation d\'un profil de secours basé sur les métadonnées:', fallbackProfile);
+            return fallbackProfile;
+          }
+          
+          throw error;
+        }
         
-        // Si nous avons un profil de secours, utilisons-le
+        return data;
+      } catch (dbError) {
+        console.error('Erreur lors de la requête à la base de données:', dbError);
+        
+        // En cas d'erreur, utiliser le profil de secours si disponible
         if (fallbackProfile) {
-          console.log('Utilisation d\'un profil de secours basé sur les métadonnées:', fallbackProfile);
+          console.log('Utilisation du profil de secours suite à une erreur de base de données');
           return fallbackProfile;
         }
         
-        throw error;
+        throw dbError;
       }
 
-      // Si aucun profil n'est trouvé mais que nous avons un fallback, utilisons-le
-      if (!data && fallbackProfile) {
-        console.log('Aucun profil trouvé, utilisation du profil de secours');
-        return fallbackProfile;
-      }
-
-      return data;
     } catch (error) {
       console.error('Erreur lors de la récupération du profil:', error);
+      
+      // Si nous avons un profil de secours, utilisons-le
+      if (fallbackProfile) {
+        console.log('Utilisation du profil de secours suite à une erreur générale');
+        return fallbackProfile;
+      }
+      
       throw error;
     }
   };
