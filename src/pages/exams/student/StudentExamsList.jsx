@@ -90,6 +90,7 @@ const StudentExamsList = () => {
       
       // Essayer d'abord de récupérer les examens depuis Supabase
       try {
+        // Utiliser une requête simplifiée pour éviter les problèmes de jointure complexes
         const { data, error: fetchError } = await supabase
           .from('student_exams')
           .select(`
@@ -101,25 +102,41 @@ const StudentExamsList = () => {
             attempt_status,
             created_at,
             updated_at,
-            exams:exam_id (
-              id,
-              title,
-              course_id,
-              courses:course_id (name, code),
-              professor_id,
-              professors:professor_id (profiles:profile_id(full_name)),
-              date,
-              duration,
-              type,
-              room,
-              total_points,
-              passing_grade,
-              status,
-              description
-            )
+            exams:exam_id(id, title, course_id, date, duration, type, room, total_points, passing_grade, status, description)
           `)
           .eq('student_id', studentId)
-          .order('exams(date)', { ascending: true });
+          .order('created_at', { ascending: false });
+        
+        // Si nous avons récupéré des données, enrichissons-les avec les informations des cours
+        if (!fetchError && data && data.length > 0) {
+          // Récupérer les IDs de cours uniques
+          const courseIds = [...new Set(data
+            .filter(item => item.exams && item.exams.course_id)
+            .map(item => item.exams.course_id))];
+          
+          // Récupérer les informations des cours si nécessaire
+          if (courseIds.length > 0) {
+            const { data: coursesData } = await supabase
+              .from('courses')
+              .select('id, name, code')
+              .in('id', courseIds);
+            
+            // Associer les cours aux examens
+            if (coursesData && coursesData.length > 0) {
+              const coursesMap = {};
+              coursesData.forEach(course => {
+                coursesMap[course.id] = course;
+              });
+              
+              // Enrichir les données d'examens avec les informations de cours
+              data.forEach(item => {
+                if (item.exams && item.exams.course_id && coursesMap[item.exams.course_id]) {
+                  item.exams.courses = coursesMap[item.exams.course_id];
+                }
+              });
+            }
+          }
+        }
         
         if (!fetchError && data && data.length > 0) {
           studentExams = data;

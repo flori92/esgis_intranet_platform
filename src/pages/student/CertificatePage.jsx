@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { generateCertificate, getStudentData } from '../../utils/certificateUtils';
+import { getAssetPath } from '../../utils/assetUtils';
 import { 
   Box, 
   Typography, 
@@ -51,7 +52,7 @@ const DocumentPreview = styled(Box)(({ theme }) => ({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundImage: 'url(/images/logo-esgis-white.svg)',
+    backgroundImage: `url(${getAssetPath('images/logo-esgis-white.svg')})`,
     backgroundRepeat: 'no-repeat',
     backgroundPosition: 'center',
     backgroundSize: '50%',

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getAssetPath } from '@/utils/assetUtils';
 import Badge from '@mui/material/Badge';
 import { Outlet, useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
@@ -173,7 +174,7 @@ const MainLayout = () => {
       }}>
         <Box
           component="img"
-          src="/images/logo-esgis-white.svg"
+          src={getAssetPath('images/logo-esgis-white.svg')}
           alt="Logo ESGIS"
           sx={{
             height: 60,
