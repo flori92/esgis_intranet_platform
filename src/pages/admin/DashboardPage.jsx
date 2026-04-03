@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -27,7 +27,7 @@ import {
   Description as DescriptionIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
+import { getAdminDashboardData } from '@/api/admin';
 
 const AdminDashboardPage = () => {
   const { authState } = useAuth();
@@ -46,93 +46,40 @@ const AdminDashboardPage = () => {
     }
   }, [authState.isAdmin]);
 
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const adminProfileId = authState.profile?.id || authState.user?.id;
+      const { data, error: requestError } = await getAdminDashboardData(adminProfileId);
+
+      if (requestError) {
+        throw requestError;
+      }
+
+      setStats(data?.stats || {
+        totalStudents: 0,
+        totalProfessors: 0,
+        totalCourses: 0,
+        totalDepartments: 0,
+        activeUsers: 0,
+        pendingRequests: 0,
+      });
+      setNotifications((data?.notifications || []).slice(0, 5));
+      setEvents((data?.events || []).slice(0, 5));
+    } catch (err) {
+      console.error('Erreur lors de la récupération des données du tableau de bord:', err);
+      setError('Erreur lors du chargement des données');
+    } finally {
+      setLoading(false);
+    }
+  }, [authState.profile?.id, authState.user?.id]);
+
   // Charger les données du tableau de bord
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      setLoading(true);
-      try {
-        // Récupérer les statistiques
-        const statsPromises = [
-          supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'student'),
-          supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'professor'),
-          supabase.from('courses').select('*', { count: 'exact', head: true }),
-          supabase.from('departments').select('*', { count: 'exact', head: true }),
-          supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_active', true),
-          supabase.from('requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-        ];
-
-        const [
-          { count: totalStudents },
-          { count: totalProfessors },
-          { count: totalCourses },
-          { count: totalDepartments },
-          { count: activeUsers },
-          { count: pendingRequests },
-        ] = await Promise.all(statsPromises);
-
-        setStats({
-          totalStudents: totalStudents || 0,
-          totalProfessors: totalProfessors || 0,
-          totalCourses: totalCourses || 0,
-          totalDepartments: totalDepartments || 0,
-          activeUsers: activeUsers || 0,
-          pendingRequests: pendingRequests || 0,
-        });
-
-        // Récupérer les notifications
-        const fetchNotifications = async () => {
-          try {
-            const { data, error } = await supabase
-              .from('notifications')
-              .select('*')
-              .eq('recipient_id', authState.user?.id || '')
-              .order('created_at', { ascending: false })
-              .limit(5);
-            
-            if (error) {
-              throw error;
-            }
-            
-            setNotifications(data || []);
-          } catch (err) {
-            console.error('Erreur lors de la récupération des notifications:', err);
-            setError('Erreur lors de la récupération des notifications');
-          }
-        };
-
-        // Récupérer les événements à venir
-        const fetchEvents = async () => {
-          try {
-            const { data, error } = await supabase
-              .from('events')
-              .select('*')
-              .gte('start_date', new Date().toISOString())
-              .order('start_date', { ascending: true })
-              .limit(5);
-            
-            if (error) {
-              throw error;
-            }
-            
-            setEvents(data || []);
-          } catch (err) {
-            console.error('Erreur lors de la récupération des événements:', err);
-            setError('Erreur lors de la récupération des événements');
-          }
-        };
-
-        // Exécuter les requêtes en parallèle
-        await Promise.all([fetchNotifications(), fetchEvents()]);
-      } catch (err) {
-        console.error('Erreur lors de la récupération des données du tableau de bord:', err);
-        setError('Erreur lors du chargement des données');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDashboardData();
-  }, [authState.user?.id]);
+  }, [fetchDashboardData]);
 
   // Gérer le changement d'onglet
   const handleTabChange = (event, newValue) => {
@@ -263,9 +210,9 @@ const AdminDashboardPage = () => {
                           <ListItemIcon>
                             <NotificationsIcon
                               color={
-                                notification.type === 'high'
+                                notification.priority === 'high'
                                   ? 'error'
-                                  : notification.type === 'medium'
+                                  : notification.priority === 'medium'
                                   ? 'warning'
                                   : 'info'
                               }
@@ -345,9 +292,9 @@ const AdminDashboardPage = () => {
                     <ListItemIcon>
                       <NotificationsIcon
                         color={
-                          notification.type === 'high'
+                          notification.priority === 'high'
                             ? 'error'
-                            : notification.type === 'medium'
+                            : notification.priority === 'medium'
                             ? 'warning'
                             : 'info'
                         }

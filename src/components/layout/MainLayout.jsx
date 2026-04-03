@@ -142,6 +142,8 @@ const MainLayout = () => {
     } else if (isProfessor) {
       return [
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/professor' },
+        { text: 'Mes Cours', icon: <BookIcon />, path: '/professor/courses' },
+        { text: 'Mes Promotions', icon: <PeopleIcon />, path: '/professor/students' },
         { text: 'Emploi du temps', icon: <EventIcon />, path: '/schedule' },
         { text: 'Gestion des Notes', icon: <GradingIcon />, path: '/professor/grades' },
         { text: 'Corrections de Notes', icon: <BarChartIcon />, path: '/professor/grades/corrections' },

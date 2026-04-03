@@ -4,8 +4,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Select, MenuItem, FormControl, InputLabel, Chip, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions, Tooltip, Divider,
-  Snackbar, Tabs, Tab, Card, CardContent, Radio, RadioGroup, FormControlLabel,
-  Checkbox, FormGroup, Pagination
+  Snackbar, Tabs, Tab, Card, CardContent, Checkbox, FormControlLabel, Pagination
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -13,16 +12,10 @@ import {
   Delete as DeleteIcon,
   ContentCopy as CopyIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
   QuestionAnswer as QuestionIcon,
   Save as SaveIcon,
-  Upload as UploadIcon,
-  Download as DownloadIcon,
-  School as SchoolIcon,
-  Star as StarIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import { getProfessorQuestions, getSharedQuestions, createQuestion, updateQuestion, deleteQuestion, duplicateQuestion } from '@/api/questionBank';
 
 const QUESTION_TYPES = [
@@ -44,14 +37,78 @@ const DIFFICULTY_LEVELS = [
   { value: 'hard', label: 'Difficile', color: 'error' },
 ];
 
-const MOCK_QUESTIONS = [
-  { id: 'q1', text: 'Quel est le protocole utilisé pour le transfert de fichiers sur Internet ?', type: 'qcm_single', difficulty: 'easy', matiere: 'Réseaux', theme: 'Protocoles', options: ['HTTP', 'FTP', 'SMTP', 'DNS'], correct_answer: '1', points: 2, used_count: 5, created_at: '2026-01-15' },
-  { id: 'q2', text: 'Parmi les éléments suivants, lesquels sont des langages de programmation orientés objet ?', type: 'qcm_multiple', difficulty: 'medium', matiere: 'Programmation', theme: 'POO', options: ['Java', 'C', 'Python', 'HTML'], correct_answer: ['0', '2'], points: 3, used_count: 3, created_at: '2026-02-10' },
-  { id: 'q3', text: 'Le HTML est un langage de programmation.', type: 'true_false', difficulty: 'easy', matiere: 'Développement Web', theme: 'Bases', correct_answer: 'false', points: 1, used_count: 8, created_at: '2026-01-20' },
-  { id: 'q4', text: 'Expliquez le principe SOLID en programmation orientée objet.', type: 'long_answer', difficulty: 'hard', matiere: 'Programmation', theme: 'Design Patterns', points: 10, used_count: 2, created_at: '2026-03-05' },
-  { id: 'q5', text: 'Quelle est la complexité temporelle du tri rapide (quicksort) dans le pire cas ?', type: 'short_answer', difficulty: 'medium', matiere: 'Algorithmique', theme: 'Tri', correct_answer: 'O(n²)', points: 2, used_count: 4, created_at: '2026-02-28' },
-  { id: 'q6', text: 'Calculez le résultat de 2^10.', type: 'numeric', difficulty: 'easy', matiere: 'Mathématiques', theme: 'Puissances', correct_answer: '1024', tolerance: 0, points: 1, used_count: 6, created_at: '2026-01-10' },
-];
+const getCorrectAnswerFormValue = (question) => {
+  const sourceValue = question.correct_answer;
+
+  if (Array.isArray(sourceValue)) {
+    return sourceValue.join(', ');
+  }
+
+  if (sourceValue === null || sourceValue === undefined) {
+    return '';
+  }
+
+  if (typeof sourceValue === 'boolean') {
+    return sourceValue ? 'true' : 'false';
+  }
+
+  return String(sourceValue);
+};
+
+const normalizeOptionValue = (value, options = []) => {
+  const raw = String(value ?? '').trim();
+
+  if (!raw) {
+    return '';
+  }
+
+  const numericIndex = Number(raw);
+  if (Number.isInteger(numericIndex) && options[numericIndex]) {
+    return options[numericIndex];
+  }
+
+  return raw;
+};
+
+const buildCorrectAnswerPayload = (form) => {
+  const validOptions = (form.options || []).map((option) => option.trim()).filter(Boolean);
+  const rawValue = String(form.correct_answer || '').trim();
+
+  switch (form.type) {
+    case 'qcm_multiple': {
+      const values = rawValue
+        .split(',')
+        .map((entry) => normalizeOptionValue(entry, validOptions))
+        .filter(Boolean);
+
+      return {
+        correct_answer: null,
+        correct_answers: values
+      };
+    }
+    case 'qcm_single':
+    case 'image_question':
+      return {
+        correct_answer: normalizeOptionValue(rawValue, validOptions) || null,
+        correct_answers: null
+      };
+    case 'true_false':
+      return {
+        correct_answer: rawValue.toLowerCase() === 'true',
+        correct_answers: null
+      };
+    case 'numeric':
+      return {
+        correct_answer: rawValue === '' ? null : Number(rawValue),
+        correct_answers: null
+      };
+    default:
+      return {
+        correct_answer: rawValue || null,
+        correct_answers: null
+      };
+  }
+};
 
 /**
  * Page Banque de Questions — ESGIS Campus §4.7
@@ -78,7 +135,7 @@ const QuestionBankPage = () => {
   const [questionForm, setQuestionForm] = useState({
     text: '', type: 'qcm_single', difficulty: 'medium', matiere: '',
     theme: '', options: ['', '', '', ''], correct_answer: '', points: 2,
-    explanation: '', tolerance: 0, max_words: 500
+    explanation: '', tolerance: 0, max_words: 500, is_shared: false
   });
   const [saving, setSaving] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(null);
@@ -90,23 +147,23 @@ const QuestionBankPage = () => {
     setLoading(true);
     try {
       const apiCall = tabValue === 0
-        ? getProfessorQuestions(authState.user?.id)
+        ? getProfessorQuestions(authState.profile?.id)
         : getSharedQuestions();
       const { data, error } = await apiCall;
-      if (!error && data && data.length > 0) {
-        setQuestions(data.map(q => ({
-          ...q,
-          text: q.question_text || q.text,
-        })));
-      } else {
-        setQuestions(MOCK_QUESTIONS);
+      if (error) {
+        throw error;
       }
-    } catch {
-      setQuestions(MOCK_QUESTIONS);
+
+      setError(null);
+      setQuestions(data || []);
+    } catch (loadError) {
+      console.error('Erreur chargement banque de questions:', loadError);
+      setError(loadError.message || 'Impossible de charger la banque de questions.');
+      setQuestions([]);
     } finally {
       setLoading(false);
     }
-  }, [authState.user?.id, tabValue]);
+  }, [authState.profile?.id, tabValue]);
 
   useEffect(() => { loadQuestions(); }, [loadQuestions]);
 
@@ -136,16 +193,17 @@ const QuestionBankPage = () => {
         difficulty: question.difficulty || 'medium', matiere: question.matiere || '',
         theme: question.theme || '',
         options: question.options || ['', '', '', ''],
-        correct_answer: Array.isArray(question.correct_answer) ? question.correct_answer.join(',') : (question.correct_answer || ''),
+        correct_answer: getCorrectAnswerFormValue(question),
         points: question.points || 2, explanation: question.explanation || '',
-        tolerance: question.tolerance || 0, max_words: question.max_words || 500
+        tolerance: question.tolerance || 0, max_words: question.max_words || 500,
+        is_shared: Boolean(question.is_shared)
       });
     } else {
       setEditingQuestion(null);
       setQuestionForm({
         text: '', type: 'qcm_single', difficulty: 'medium', matiere: '',
         theme: '', options: ['', '', '', ''], correct_answer: '', points: 2,
-        explanation: '', tolerance: 0, max_words: 500
+        explanation: '', tolerance: 0, max_words: 500, is_shared: false
       });
     }
     setEditDialog(true);
@@ -155,19 +213,38 @@ const QuestionBankPage = () => {
     if (!questionForm.text) { setError('Le texte de la question est obligatoire.'); return; }
     setSaving(true);
     try {
-      const qData = {
+      const validOptions = (questionForm.options || []).map((opt) => opt.trim()).filter(Boolean);
+      const answerPayload = buildCorrectAnswerPayload({
         ...questionForm,
-        professeur_id: authState.user?.id,
-        updated_at: new Date().toISOString(),
+        options: validOptions
+      });
+      const qData = {
+        professeur_id: authState.profile?.id,
+        text: questionForm.text,
+        type: questionForm.type,
+        difficulty: questionForm.difficulty,
+        matiere: questionForm.matiere,
+        theme: questionForm.theme,
+        options: ['qcm_single', 'qcm_multiple', 'image_question'].includes(questionForm.type) ? validOptions : null,
+        points: questionForm.points || 1,
+        explanation: questionForm.explanation,
+        tolerance: questionForm.type === 'numeric' ? Number(questionForm.tolerance || 0) : 0,
+        max_words: questionForm.type === 'long_answer' ? Number(questionForm.max_words || 500) : null,
+        is_shared: tabValue === 0 ? Boolean(questionForm.is_shared) : false,
+        ...answerPayload
       };
+
       if (editingQuestion) {
-        setQuestions(prev => prev.map(q => q.id === editingQuestion.id ? { ...q, ...qData } : q));
+        const { error: updateError } = await updateQuestion(editingQuestion.id, qData);
+        if (updateError) throw updateError;
         setSuccessMessage('Question mise à jour.');
       } else {
-        const newQ = { id: `q${Date.now()}`, ...qData, used_count: 0, created_at: new Date().toISOString() };
-        setQuestions(prev => [newQ, ...prev]);
+        const { error: createError } = await createQuestion(qData);
+        if (createError) throw createError;
         setSuccessMessage('Question créée.');
       }
+
+      await loadQuestions();
       setEditDialog(false);
     } catch (err) {
       setError('Erreur: ' + err.message);
@@ -176,16 +253,27 @@ const QuestionBankPage = () => {
     }
   };
 
-  const handleDuplicate = (question) => {
-    const copy = { ...question, id: `q${Date.now()}`, text: `[Copie] ${question.text}`, used_count: 0, created_at: new Date().toISOString() };
-    setQuestions(prev => [copy, ...prev]);
-    setSuccessMessage('Question dupliquée.');
+  const handleDuplicate = async (question) => {
+    try {
+      const { error: duplicateError } = await duplicateQuestion(question.id, authState.profile?.id);
+      if (duplicateError) throw duplicateError;
+      await loadQuestions();
+      setSuccessMessage('Question dupliquee.');
+    } catch (duplicateError) {
+      setError(duplicateError.message || 'Impossible de dupliquer la question.');
+    }
   };
 
-  const handleDelete = (question) => {
-    setQuestions(prev => prev.filter(q => q.id !== question.id));
-    setDeleteDialog(null);
-    setSuccessMessage('Question supprimée.');
+  const handleDelete = async (question) => {
+    try {
+      const { error: deleteError } = await deleteQuestion(question.id);
+      if (deleteError) throw deleteError;
+      await loadQuestions();
+      setDeleteDialog(null);
+      setSuccessMessage('Question supprimee.');
+    } catch (deleteError) {
+      setError(deleteError.message || 'Impossible de supprimer la question.');
+    }
   };
 
   const handleOptionChange = (idx, value) => {
@@ -223,8 +311,17 @@ const QuestionBankPage = () => {
           <QuestionIcon sx={{ mr: 1, color: 'primary.main', fontSize: 32 }} />
           <Typography variant="h5" fontWeight="bold">Banque de Questions</Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenEdit()}>
-          Nouvelle question
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => {
+            if (tabValue !== 0) {
+              setTabValue(0);
+            }
+            handleOpenEdit();
+          }}
+        >
+          Nouvelle question personnelle
         </Button>
       </Box>
 
@@ -310,6 +407,7 @@ const QuestionBankPage = () => {
             {paginatedQuestions.map((q) => {
               const typeLabel = QUESTION_TYPES.find(t => t.value === q.type)?.label || q.type;
               const diffLevel = DIFFICULTY_LEVELS.find(d => d.value === q.difficulty);
+              const isPersonalTab = tabValue === 0;
               return (
                 <TableRow key={q.id} hover>
                   <TableCell sx={{ maxWidth: 350 }}>
@@ -324,9 +422,25 @@ const QuestionBankPage = () => {
                   <TableCell align="center"><Typography variant="body2" fontWeight="bold">{q.points}</Typography></TableCell>
                   <TableCell align="center"><Chip label={`${q.used_count || 0}×`} size="small" variant="outlined" /></TableCell>
                   <TableCell align="center">
-                    <Tooltip title="Modifier"><IconButton size="small" onClick={() => handleOpenEdit(q)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                    <Tooltip title="Dupliquer"><IconButton size="small" onClick={() => handleDuplicate(q)}><CopyIcon fontSize="small" /></IconButton></Tooltip>
-                    <Tooltip title="Supprimer"><IconButton size="small" color="error" onClick={() => setDeleteDialog(q)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                    {isPersonalTab && (
+                      <Tooltip title="Modifier">
+                        <IconButton size="small" onClick={() => handleOpenEdit(q)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    <Tooltip title="Dupliquer dans ma banque">
+                      <IconButton size="small" onClick={() => handleDuplicate(q)}>
+                        <CopyIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    {isPersonalTab && (
+                      <Tooltip title="Supprimer">
+                        <IconButton size="small" color="error" onClick={() => setDeleteDialog(q)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </TableCell>
                 </TableRow>
               );
@@ -409,9 +523,9 @@ const QuestionBankPage = () => {
             <Grid item xs={12}>
               <TextField label="Réponse correcte" fullWidth size="small" value={questionForm.correct_answer}
                 onChange={(e) => setQuestionForm(p => ({ ...p, correct_answer: e.target.value }))}
-                helperText={questionForm.type === 'qcm_single' ? 'Index de la bonne réponse (0, 1, 2...)' :
-                  questionForm.type === 'qcm_multiple' ? 'Index séparés par des virgules (0,2)' :
-                  questionForm.type === 'true_false' ? 'true ou false' : 'Texte de la réponse attendue'} />
+                helperText={questionForm.type === 'qcm_single' ? 'Texte exact ou index de la bonne reponse (0, 1, 2...)' :
+                  questionForm.type === 'qcm_multiple' ? 'Textes ou index separes par des virgules (0,2)' :
+                  questionForm.type === 'true_false' ? 'true ou false' : 'Texte de la reponse attendue'} />
             </Grid>
 
             <Grid item xs={12}>
@@ -419,6 +533,20 @@ const QuestionBankPage = () => {
                 size="small" value={questionForm.explanation}
                 onChange={(e) => setQuestionForm(p => ({ ...p, explanation: e.target.value }))} />
             </Grid>
+
+            {tabValue === 0 && (
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={Boolean(questionForm.is_shared)}
+                      onChange={(event) => setQuestionForm((prev) => ({ ...prev, is_shared: event.target.checked }))}
+                    />
+                  }
+                  label="Partager cette question dans la banque commune"
+                />
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>

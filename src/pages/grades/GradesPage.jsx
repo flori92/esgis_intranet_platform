@@ -38,7 +38,6 @@ import SchoolIcon from '@mui/icons-material/School';
 
 import { useAuth } from '@/hooks/useAuth';
 // Correction du chemin d'importation de Supabase
-import { supabase } from '@/supabase';
 
 /**
  * @typedef {Object} ExamResultWithUI
@@ -98,13 +97,17 @@ function adaptExamResult(rawResult) {
     course_name: rawResult.exams?.courses?.name || 'Cours inconnu',
     course_code: rawResult.exams?.courses?.code || 'CODE',
     student_id: rawResult.student_id,
-    student_name: rawResult.student?.full_name || rawResult.users?.full_name || 'Étudiant inconnu',
+    student_name:
+      rawResult.students?.profiles?.full_name ||
+      rawResult.student?.full_name ||
+      rawResult.users?.full_name ||
+      'Étudiant inconnu',
     grade: rawResult.grade,
     max_grade: rawResult.exam?.total_points || rawResult.exams?.total_points || 20,
     exam_weight: rawResult.exam?.weight || rawResult.exams?.weight || 1,
     date: rawResult.exam?.date || rawResult.exams?.date || new Date().toISOString(),
     type: rawResult.exam?.type || rawResult.exams?.type || 'unknown',
-    status: rawResult.status || 'pending',
+    status: rawResult.status || (rawResult.grade !== null ? 'graded' : 'pending'),
     semester: rawResult.exams?.courses?.semester || 1,
     academic_year: rawResult.exams?.exam_sessions?.academic_year || '2024-2025'
   };
@@ -255,7 +258,7 @@ export default function GradesPage() {
       setError(null);
       
       try {
-        if (!authState?.user?.id) {
+        if (!authState?.user?.id || !authState?.student?.id) {
           throw new Error("Vous devez être connecté pour accéder à vos notes");
         }
         
@@ -267,7 +270,6 @@ export default function GradesPage() {
             exam_id,
             student_id,
             grade,
-            status,
             created_at,
             updated_at,
             exams:exams(
@@ -286,13 +288,17 @@ export default function GradesPage() {
                 semester
               )
             ),
-            profiles:student_id(
-              id, 
-              email, 
-              full_name
+            students:student_id(
+              id,
+              profile_id,
+              profiles:profile_id(
+                id,
+                email,
+                full_name
+              )
             )
           `)
-          .eq('student_id', authState.user.id);
+          .eq('student_id', authState.student.id);
         
         if (fetchError) {
           throw fetchError;
@@ -314,7 +320,7 @@ export default function GradesPage() {
     };
     
     fetchExamResults();
-  }, [authState?.user?.id]);
+  }, [authState?.student?.id, authState?.user?.id]);
 
   /**
    * Fonction pour gérer le changement d'onglet

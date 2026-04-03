@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
 
@@ -8,16 +9,17 @@ import { useAuth } from "../hooks/useAuth";
  * @returns {JSX.Element} Composant des résultats du quiz
  */
 const QuizResults = () => {
-  const { questions, userAnswers, calculateScore, cheatingAttempts } = useQuiz();
-  const { appState, logout } = useAuth();
-  
-  const score = calculateScore();
-  const totalPossibleScore = questions.length * 0.5;
-  const percentage = (score / totalPossibleScore) * 100;
-  
-  const correctAnswers = questions.filter(
-    question => userAnswers[question.id] === question.correctAnswer
-  ).length;
+  const navigate = useNavigate();
+  const { questions, userAnswers, calculateScore, cheatingAttempts, scoreSummary } = useQuiz();
+  const { appState } = useAuth();
+
+  const score = scoreSummary?.score ?? calculateScore();
+  const totalPossibleScore = scoreSummary?.maxScore ?? questions.reduce((total, question) => total + Number(question.points || 0), 0);
+  const percentage = totalPossibleScore > 0 ? ((score / totalPossibleScore) * 100) : 0;
+
+  const correctAnswers = questions.filter((question) => {
+    return String(userAnswers[question.id] ?? '').trim().toLowerCase() === String(question.correctAnswer ?? '').trim().toLowerCase();
+  }).length;
   
   /**
    * Détermine la couleur du score en fonction du pourcentage obtenu
@@ -44,7 +46,7 @@ const QuizResults = () => {
             <div className="flex justify-between items-center mb-4">
               <p className="text-gray-700">Note finale:</p>
               <p className={`text-2xl font-bold ${getScoreColor()}`}>
-                {score.toFixed(1)}/20
+                {score.toFixed(1)}/{totalPossibleScore || 0}
               </p>
             </div>
             
@@ -57,6 +59,12 @@ const QuizResults = () => {
               <div className="flex justify-between items-center mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
                 <p className="text-red-700">Tentatives de triche détectées:</p>
                 <p className="font-medium text-red-700">{cheatingAttempts}</p>
+              </div>
+            )}
+
+            {scoreSummary?.hasManualQuestions && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-blue-800">
+                Une partie de cet examen comporte des questions a correction manuelle. Le score final pourra etre ajuste apres notation du professeur.
               </div>
             )}
           </div>
@@ -76,10 +84,10 @@ const QuizResults = () => {
           
           <div className="text-center mt-8">
             <button
-              onClick={logout}
+              onClick={() => navigate('/student/exams')}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
             >
-              Terminer
+              Retour aux examens
             </button>
           </div>
         </div>

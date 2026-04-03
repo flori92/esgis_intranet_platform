@@ -29,7 +29,7 @@ import {
   School as SchoolIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../supabase';
+import { getScheduleSessions, getStudentCourseIds } from '../../api/schedule';
 import { format, parseISO, isBefore, isAfter, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { styled } from '@mui/material/styles';
@@ -152,45 +152,22 @@ const SchedulePage = () => {
     setLoading(true);
     setError(null);
     try {
-      let query = supabase
-        .from('course_sessions')
-        .select(`
-          id, date, duration, room, status, course_id, professor_id, 
-          courses:course_id (id, name, code, semester), 
-          professors:professor_id (id, profile_id, full_name)
-        `);
+      // Construire les filtres selon le rôle
+      const filters = { courseId: selectedCourse };
 
-      // Filtrer par étudiant
       if (isStudent) {
-        // Récupérer les cours de l'étudiant
-        const { data: studentCourses, error: studentCoursesError } = await supabase
-          .from('student_courses')
-          .select('course_id')
-          .eq('student_id', authState.user.id);
-
-        if (studentCoursesError) {
-          throw studentCoursesError;
+        const { courseIds, error: courseIdsError } = await getStudentCourseIds(authState.user.id);
+        if (courseIdsError) {
+          throw courseIdsError;
         }
-
-        // Si l'étudiant a des cours, filtrer les sessions par ces cours
-        if (studentCourses && studentCourses.length > 0) {
-          const courseIds = studentCourses.map(sc => sc.course_id);
-          query = query.in('course_id', courseIds);
-        }
+        filters.courseIds = courseIds;
       }
 
-      // Filtrer par professeur
       if (isProfessor) {
-        query = query.eq('professor_id', authState.user.id);
+        filters.professorId = authState.user.id;
       }
 
-      // Filtrer par cours sélectionné
-      if (selectedCourse !== 'all') {
-        query = query.eq('course_id', selectedCourse);
-      }
-
-      // Exécuter la requête
-      const { data: sessionsData, error: sessionsError } = await query;
+      const { sessions: sessionsData, error: sessionsError } = await getScheduleSessions(filters);
 
       if (sessionsError) {
         throw sessionsError;
@@ -233,7 +210,11 @@ const SchedulePage = () => {
           },
           professor: {
             id: professorData?.id,
-            name: professorData?.full_name || professorData?.name || 'Professeur inconnu'
+            name:
+              professorData?.profiles?.full_name ||
+              professorData?.full_name ||
+              professorData?.name ||
+              'Professeur inconnu'
           }
         };
       });

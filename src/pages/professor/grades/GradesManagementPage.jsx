@@ -22,13 +22,13 @@ import {
   Info as InfoIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import {
   getProfessorCourses,
   getStudentsByCourse,
   getGradesByCourse,
   batchUpsertGrades,
-  getCourseGradeStats
+  getCourseGradeStats,
+  publishGrades
 } from '@/api/grades';
 
 /**
@@ -79,6 +79,7 @@ const GradesManagementPage = () => {
   // États UI
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [tabValue, setTabValue] = useState(0);
@@ -346,7 +347,7 @@ const GradesManagementPage = () => {
       if (gradesToSave.length === 0) {
         setError('Aucune note à sauvegarder.');
         setSaving(false);
-        return;
+        return false;
       }
 
       const { error: saveError } = await batchUpsertGrades(gradesToSave);
@@ -357,11 +358,40 @@ const GradesManagementPage = () => {
 
       // Recharger les données
       await loadCourseData(selectedCourse);
+      return true;
     } catch (err) {
       console.error('Erreur sauvegarde:', err);
       setError('Erreur lors de la sauvegarde des notes: ' + (err.message || 'Erreur inconnue'));
+      return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  /**
+   * Publier les notes déjà sauvegardées.
+   */
+  const handlePublish = async () => {
+    setPublishing(true);
+    setError(null);
+
+    try {
+      const evaluationKeys = evaluationColumns.map((column) => column.key);
+      const { error: publishError } = await publishGrades(
+        selectedCourse,
+        evaluationKeys,
+        authState.profile?.id || authState.user?.id
+      );
+
+      if (publishError) throw publishError;
+
+      setSuccessMessage('Notes publiées avec succès. Les étudiants concernés ont été notifiés.');
+      await loadCourseData(selectedCourse);
+    } catch (err) {
+      console.error('Erreur publication notes:', err);
+      setError('Erreur lors de la publication des notes: ' + (err.message || 'Erreur inconnue'));
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -761,9 +791,9 @@ const GradesManagementPage = () => {
                   startIcon={<PublishIcon />}
                   onClick={() => setPublishDialog(true)}
                   color="success"
-                  disabled={hasUnsavedChanges}
+                  disabled={hasUnsavedChanges || saving || publishing || students.length === 0}
                 >
-                  Publier les notes
+                  {publishing ? 'Publication...' : 'Publier les notes'}
                 </Button>
                 <Divider orientation="vertical" flexItem />
                 <Button
@@ -881,13 +911,11 @@ const GradesManagementPage = () => {
             color="success"
             onClick={async () => {
               setPublishDialog(false);
-              // La publication utilise la même logique que la sauvegarde
-              // mais avec un marqueur de publication
-              await handleSave();
-              setSuccessMessage('Notes publiées avec succès ! Les étudiants seront notifiés.');
+              await handlePublish();
             }}
+            disabled={publishing}
           >
-            Confirmer la publication
+            {publishing ? 'Publication...' : 'Confirmer la publication'}
           </Button>
         </DialogActions>
       </Dialog>

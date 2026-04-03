@@ -38,7 +38,6 @@ import {
   Clear as ClearIcon,
   FilterList as FilterListIcon
 } from '@mui/icons-material';
-import { supabase } from '../../../../utils/supabase';
 
 /**
  * Composant pour la gestion des étudiants assignés à un examen

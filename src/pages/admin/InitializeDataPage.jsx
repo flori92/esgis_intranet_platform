@@ -14,7 +14,6 @@ import {
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
-import { supabase } from '@/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -28,10 +27,33 @@ const InitializeDataPage = () => {
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
 
+  const insertWithFallback = async (attempts) => {
+    let lastError = null;
+
+    for (const attempt of attempts) {
+      const { data, error } = await supabase
+        .from(attempt.table)
+        .insert(attempt.rows)
+        .select();
+
+      if (!error) {
+        return {
+          data,
+          table: attempt.table
+        };
+      }
+
+      lastError = error;
+      console.warn(`Insertion impossible dans ${attempt.table}, tentative suivante...`, error);
+    }
+
+    throw lastError || new Error('Aucune table compatible trouvée pour l’insertion');
+  };
+
   // Rediriger si l'utilisateur n'est pas administrateur
   React.useEffect(() => {
     if (!authState.isAdmin) {
-      navigate('/dashboard');
+      navigate('/', { replace: true });
     }
   }, [authState.isAdmin, navigate]);
 
@@ -102,8 +124,9 @@ const InitializeDataPage = () => {
       
       const departmentId = departments && departments.length > 0 ? departments[0].id : 1;
       
-      // Préparation des données d'offres
-      const offresData = [
+      const now = new Date().toISOString();
+
+      const canonicalOffresData = [
         {
           titre: 'Stage développeur Full-Stack',
           description: 'Nous recherchons un développeur Full-Stack pour participer au développement de notre nouvelle plateforme web.',
@@ -113,11 +136,14 @@ const InitializeDataPage = () => {
           lieu: 'Paris',
           type_stage: 'temps_plein',
           competences_requises: ['JavaScript', 'React', 'Node.js', 'SQL'],
-          statut: 'publie',
-          department_id: departmentId,
-          niveau_requis: 'M1',
+          duree: 90,
+          date_publication: now,
+          departement_id: departmentId,
+          niveau_requis: ['M1'],
+          etat: 'active',
+          professeur_id: null,
           remuneration: 1000,
-          created_at: new Date().toISOString()
+          created_at: now
         },
         {
           titre: 'Stage développeur mobile',
@@ -128,11 +154,14 @@ const InitializeDataPage = () => {
           lieu: 'Lyon',
           type_stage: 'temps_plein',
           competences_requises: ['Swift', 'Kotlin', 'Flutter', 'Firebase'],
-          statut: 'publie',
-          department_id: departmentId,
-          niveau_requis: 'M2',
+          duree: 180,
+          date_publication: now,
+          departement_id: departmentId,
+          niveau_requis: ['M2'],
+          etat: 'active',
+          professeur_id: null,
           remuneration: 1200,
-          created_at: new Date().toISOString()
+          created_at: now
         },
         {
           titre: 'Stage data analyst',
@@ -143,27 +172,42 @@ const InitializeDataPage = () => {
           lieu: 'Bordeaux',
           type_stage: 'temps_plein',
           competences_requises: ['Python', 'R', 'Tableau', 'SQL'],
-          statut: 'publie',
-          department_id: departmentId,
-          niveau_requis: 'L3',
+          duree: 180,
+          date_publication: now,
+          departement_id: departmentId,
+          niveau_requis: ['L3'],
+          etat: 'active',
+          professeur_id: null,
           remuneration: 800,
-          created_at: new Date().toISOString()
+          created_at: now
         }
       ];
-      
-      const { data, error } = await supabase
-        .from('offres_stage')
-        .insert(offresData)
-        .select();
 
-      if (error) {
-        throw error;
-      }
+      const legacyOffresData = canonicalOffresData.map((offre) => ({
+        titre: offre.titre,
+        description: offre.description,
+        entreprise_id: offre.entreprise_id,
+        date_debut: offre.date_debut,
+        date_fin: offre.date_fin,
+        lieu: offre.lieu,
+        type_stage: offre.type_stage,
+        competences_requises: offre.competences_requises,
+        statut: 'publie',
+        department_id: offre.departement_id,
+        niveau_requis: offre.niveau_requis[0],
+        remuneration: offre.remuneration,
+        created_at: offre.created_at
+      }));
+
+      const { data, table } = await insertWithFallback([
+        { table: 'stage_offres', rows: canonicalOffresData },
+        { table: 'offres_stage', rows: legacyOffresData }
+      ]);
       
       return {
         success: true,
         data,
-        message: `${data?.length || 0} offres de stage ajoutées`
+        message: `${data?.length || 0} offres de stage ajoutées dans ${table}`
       };
     } catch (error) {
       console.error('Erreur lors de l\'ajout des offres de stage:', error);
@@ -177,49 +221,49 @@ const InitializeDataPage = () => {
 
   const initializeNews = async () => {
     try {
-      const newsData = [
+      const canonicalNewsData = [
         {
-          titre: 'Ouverture de la campagne de stages 2025',
-          contenu: 'Nous sommes heureux de vous annoncer l\'ouverture officielle de la campagne de stages pour l\'année académique 2025. De nombreuses entreprises partenaires proposent des stages dans différents domaines.',
+          title: 'Ouverture de la campagne de stages 2025',
+          description: 'Nous sommes heureux de vous annoncer l\'ouverture officielle de la campagne de stages pour l\'année académique 2025. De nombreuses entreprises partenaires proposent des stages dans différents domaines.',
           image_url: 'https://example.com/images/news/stages2025.jpg',
-          date_publication: new Date().toISOString(),
-          categorie: 'general',
-          auteur: 'Service des stages',
-          visible: true
+          date: new Date().toISOString(),
+          link: '/actualites/campagne-stages-2025'
         },
         {
-          titre: 'Conférence sur l\'emploi dans le numérique',
-          contenu: 'Une conférence sur les perspectives d\'emploi dans le secteur du numérique sera organisée le 15 mai 2025. Des représentants de grandes entreprises seront présents pour répondre à vos questions.',
+          title: 'Conférence sur l\'emploi dans le numérique',
+          description: 'Une conférence sur les perspectives d\'emploi dans le secteur du numérique sera organisée le 15 mai 2025. Des représentants de grandes entreprises seront présents pour répondre à vos questions.',
           image_url: 'https://example.com/images/news/conference.jpg',
-          date_publication: new Date().toISOString(),
-          categorie: 'evenement',
-          auteur: 'Service communication',
-          visible: true
+          date: new Date().toISOString(),
+          link: '/actualites/conference-emploi-numerique'
         },
         {
-          titre: 'Nouveau partenariat avec TechInnovate',
-          contenu: 'Nous sommes fiers d\'annoncer notre nouveau partenariat avec l\'entreprise TechInnovate. Ce partenariat permettra à nos étudiants d\'accéder à des stages de qualité et à des opportunités d\'emploi.',
+          title: 'Nouveau partenariat avec TechInnovate',
+          description: 'Nous sommes fiers d\'annoncer notre nouveau partenariat avec l\'entreprise TechInnovate. Ce partenariat permettra à nos étudiants d\'accéder à des stages de qualité et à des opportunités d\'emploi.',
           image_url: 'https://example.com/images/news/partenariat.jpg',
-          date_publication: new Date().toISOString(),
-          categorie: 'partenariat',
-          auteur: 'Direction des relations entreprises',
-          visible: true
+          date: new Date().toISOString(),
+          link: '/actualites/partenariat-techinnovate'
         }
       ];
-      
-      const { data, error } = await supabase
-        .from('actualites')
-        .insert(newsData)
-        .select();
 
-      if (error) {
-        throw error;
-      }
+      const legacyNewsData = canonicalNewsData.map((item) => ({
+        titre: item.title,
+        contenu: item.description,
+        image_url: item.image_url,
+        date_publication: item.date,
+        categorie: 'general',
+        auteur: 'Administration ESGIS',
+        visible: true
+      }));
+
+      const { data, table } = await insertWithFallback([
+        { table: 'news', rows: canonicalNewsData },
+        { table: 'actualites', rows: legacyNewsData }
+      ]);
       
       return {
         success: true,
         data,
-        message: `${data?.length || 0} actualités ajoutées`
+        message: `${data?.length || 0} actualités ajoutées dans ${table}`
       };
     } catch (error) {
       console.error('Erreur lors de l\'ajout des actualités:', error);
@@ -233,7 +277,7 @@ const InitializeDataPage = () => {
 
   const initializeSchedule = async () => {
     try {
-      // Récupérer un cours, un professeur et un département pour les emplois du temps
+      // Récupérer des cours et des professeurs pour créer des séances canonique
       const { data: courses } = await supabase
         .from('courses')
         .select('id')
@@ -243,20 +287,13 @@ const InitializeDataPage = () => {
         .from('professors')
         .select('id')
         .limit(3);
-      
-      const { data: classrooms } = await supabase
-        .from('classrooms')
-        .select('id')
-        .limit(3);
-      
-      // Utilisez des identifiants par défaut si les données ne sont pas trouvées
+
       const defaultCourseId = 1;
       const defaultProfessorId = 1;
-      const defaultClassroomId = 1;
       
-      // Créer des créneaux pour les trois prochains jours
       const now = new Date();
-      const scheduleData = [];
+      const canonicalSessions = [];
+      const legacySchedules = [];
       
       for (let i = 1; i <= 3; i++) {
         const date = new Date();
@@ -275,11 +312,35 @@ const InitializeDataPage = () => {
         const afternoonEnd = new Date(date);
         afternoonEnd.setHours(17, 0, 0, 0);
         
-        // Ajouter le créneau du matin
-        scheduleData.push({
+        const morningCourseId = courses && courses[i - 1] ? courses[i - 1].id : defaultCourseId;
+        const morningProfessorId = professors && professors[i - 1] ? professors[i - 1].id : defaultProfessorId;
+        const afternoonProfessorId = professors && professors[0] ? professors[0].id : defaultProfessorId;
+
+        canonicalSessions.push({
+          course_id: morningCourseId,
+          professor_id: morningProfessorId,
+          date: morningStart.toISOString(),
+          duration: 180,
+          room: `Salle A10${i}`,
+          status: 'scheduled',
+          created_at: now.toISOString(),
+          updated_at: now.toISOString()
+        });
+
+        canonicalSessions.push({
+          course_id: morningCourseId,
+          professor_id: afternoonProfessorId,
+          date: afternoonStart.toISOString(),
+          duration: 180,
+          room: `Salle B20${i}`,
+          status: 'scheduled',
+          created_at: now.toISOString(),
+          updated_at: now.toISOString()
+        });
+
+        legacySchedules.push({
           course_id: courses && courses[i-1] ? courses[i-1].id : defaultCourseId,
-          professor_id: professors && professors[i-1] ? professors[i-1].id : defaultProfessorId,
-          classroom_id: classrooms && classrooms[i-1] ? classrooms[i-1].id : defaultClassroomId,
+          professor_id: morningProfessorId,
           start_time: morningStart.toISOString(),
           end_time: morningEnd.toISOString(),
           day_of_week: date.getDay(),
@@ -289,11 +350,9 @@ const InitializeDataPage = () => {
           updated_at: now.toISOString()
         });
         
-        // Ajouter le créneau de l'après-midi
-        scheduleData.push({
+        legacySchedules.push({
           course_id: courses && courses[i-1] ? courses[i-1].id : defaultCourseId,
-          professor_id: professors && professors[0] ? professors[0].id : defaultProfessorId,
-          classroom_id: classrooms && classrooms[0] ? classrooms[0].id : defaultClassroomId,
+          professor_id: afternoonProfessorId,
           start_time: afternoonStart.toISOString(),
           end_time: afternoonEnd.toISOString(),
           day_of_week: date.getDay(),
@@ -303,20 +362,16 @@ const InitializeDataPage = () => {
           updated_at: now.toISOString()
         });
       }
-      
-      const { data, error } = await supabase
-        .from('schedules')
-        .insert(scheduleData)
-        .select();
 
-      if (error) {
-        throw error;
-      }
+      const { data, table } = await insertWithFallback([
+        { table: 'course_sessions', rows: canonicalSessions },
+        { table: 'schedules', rows: legacySchedules }
+      ]);
       
       return {
         success: true,
         data,
-        message: `${data?.length || 0} emplois du temps ajoutés`
+        message: `${data?.length || 0} séances ajoutées dans ${table}`
       };
     } catch (error) {
       console.error('Erreur lors de l\'ajout des emplois du temps:', error);
@@ -397,7 +452,7 @@ const InitializeDataPage = () => {
             <li>3 entreprises</li>
             <li>3 offres de stage</li>
             <li>3 actualités</li>
-            <li>3 emplois du temps</li>
+            <li>6 séances de cours</li>
           </ul>
         </Typography>
 

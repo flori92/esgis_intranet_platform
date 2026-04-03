@@ -18,10 +18,17 @@ const QuizNavigation = () => {
   
   const isFirstQuestion = currentQuestionIndex === 0;
   const isLastQuestion = currentQuestionIndex === questions.length - 1;
+  const answeredCount = Object.values(userAnswers).filter((value) => {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+
+    return value !== null && value !== undefined && value !== '';
+  }).length;
   
   // Calcul du pourcentage de progression
   const progress = questions.length > 0 
-    ? ((Object.keys(userAnswers).length / questions.length) * 100).toFixed(0) 
+    ? ((answeredCount / questions.length) * 100).toFixed(0) 
     : "0";
   
   return (

@@ -41,11 +41,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-// Import des composants locaux
-import StudentAnswersList from './components/StudentAnswersList';
 import GradeQuestionItem from './components/GradeQuestionItem';
-
-// Correction du chemin d'importation de Supabase
+import { useAuth } from '@/context/AuthContext';
+import { createNotification } from '@/api/notifications';
 import { supabase } from '@/supabase';
 
 /**
@@ -116,6 +114,7 @@ import { supabase } from '@/supabase';
 const ExamGradingPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { authState } = useAuth();
   const examId = id ? parseInt(id) : 0;
   
   // États de base
@@ -240,14 +239,25 @@ const ExamGradingPage = () => {
         if (studentIds.length > 0) {
           const { data: students, error: studentsError } = await supabase
             .from('students')
-            .select('id, full_name as name, email, profile_image')
+            .select('id, profile_id, profiles:profile_id(full_name, email, avatar_url)')
             .in('id', studentIds);
           
           if (studentsError) {
             throw studentsError;
           }
           
-          setStudentsData(students || []);
+          const normalizedStudents = (students || []).map((student) => {
+            const profile = Array.isArray(student.profiles) ? student.profiles[0] : student.profiles;
+            return {
+              id: student.id,
+              profile_id: student.profile_id,
+              name: profile?.full_name || 'Étudiant inconnu',
+              email: profile?.email || '',
+              profile_image: profile?.avatar_url || null
+            };
+          });
+
+          setStudentsData(normalizedStudents);
         }
         
         examDataRef.current = {
@@ -298,32 +308,33 @@ const ExamGradingPage = () => {
       setSelectedStudentExam(studentExam);
       
       // Récupérer les réponses de l'étudiant
-      const { data: answers, error: answersError } = await supabase
-        .from('student_answers')
-        .select('*')
+      const rawAnswers = typeof studentExam.answers === 'string'
+        ? JSON.parse(studentExam.answers || '{}')
+        : (studentExam.answers || {});
+
+      const { data: gradeRows, error: gradesError } = await supabase
+        .from('exam_grades')
+        .select('id, question_id, points_earned, feedback')
         .eq('student_exam_id', studentExamId);
       
-      if (answersError) {
-        throw answersError;
+      if (gradesError) {
+        throw gradesError;
       }
       
       // Initialiser les réponses manquantes (si l'étudiant n'a pas répondu à toutes les questions)
       const allAnswers = questions.map(question => {
-        const existingAnswer = answers.find(a => a.question_id === question.id);
-        
-        if (existingAnswer) {
-          return existingAnswer;
-        }
-        
-        // Créer une réponse vide pour les questions sans réponse
+        const gradeRow = (gradeRows || []).find((row) => row.question_id === question.id);
         return {
-          id: `temp-${question.id}`,
+          id: gradeRow?.id || `temp-${question.id}`,
           student_exam_id: studentExamId,
           question_id: question.id,
-          answer_value: null,
-          is_correct: null,
-          grade: null,
-          feedback: null
+          answer_value: rawAnswers?.[question.id] ?? null,
+          is_correct: typeof gradeRow?.points_earned === 'number'
+            ? gradeRow.points_earned >= question.points
+            : null,
+          grade: typeof gradeRow?.points_earned === 'number' ? gradeRow.points_earned : null,
+          feedback: gradeRow?.feedback || null,
+          grade_record_id: gradeRow?.id || null
         };
       });
       
@@ -345,25 +356,12 @@ const ExamGradingPage = () => {
    * @param {string} feedback - Commentaire
    * @param {boolean} isCorrect - Indique si la réponse est correcte
    */
-  const handleAnswerGraded = (answerId, grade, feedback, isCorrect) => {
+  const handleAnswerGraded = (questionId, grade, feedback, isCorrect, gradeRecordId) => {
     setStudentAnswers(prev => prev.map(answer => 
-      answer.id === answerId 
-        ? { ...answer, grade, feedback, is_correct: isCorrect } 
+      answer.question_id === questionId 
+        ? { ...answer, grade, feedback, is_correct: isCorrect, grade_record_id: gradeRecordId || answer.grade_record_id } 
         : answer
     ));
-    
-    // Mettre à jour la base de données
-    if (!answerId.toString().startsWith('temp-')) {
-      supabase
-        .from('student_answers')
-        .update({ grade, feedback, is_correct: isCorrect })
-        .eq('id', answerId)
-        .then(({ error }) => {
-          if (error) {
-            console.error('Erreur lors de la mise à jour de la réponse:', error);
-          }
-        });
-    }
   };
   
   /**
@@ -386,6 +384,11 @@ const ExamGradingPage = () => {
     }, 0);
   };
 
+  const totalScore = calculateTotalScore();
+  const totalPoints = exam?.total_points || 0;
+  const percentageScore = totalPoints > 0 ? (totalScore / totalPoints) * 100 : 0;
+  const isPassing = exam ? totalScore >= (exam.passing_grade || 0) : false;
+
   /**
    * Fonction pour finaliser la notation de l'examen d'un étudiant
    */
@@ -397,39 +400,13 @@ const ExamGradingPage = () => {
     setSaving(true);
     
     try {
-      const totalScore = calculateTotalScore();
-      const totalPoints = exam.total_points;
-      const percentageScore = (totalScore / totalPoints) * 100;
-      const isPassing = percentageScore >= exam.passing_grade;
-      
-      // Déterminer la lettre de note en fonction du pourcentage
-      let gradeLetter = '';
-      
-      if (percentageScore >= 90) {
-        gradeLetter = 'A';
-      } else if (percentageScore >= 80) {
-        gradeLetter = 'B';
-      } else if (percentageScore >= 70) {
-        gradeLetter = 'C';
-      } else if (percentageScore >= 60) {
-        gradeLetter = 'D';
-      } else {
-        gradeLetter = 'F';
-      }
-      
       // Mettre à jour l'examen de l'étudiant
       const { error: updateError } = await supabase
         .from('student_exams')
         .update({
-          graded: true,
-          score: totalScore,
-          max_score: totalPoints,
-          grade_letter: gradeLetter,
-          grade_percentage: percentageScore,
-          grade_note: gradingNote,
-          passing: isPassing,
-          graded_at: new Date().toISOString(),
-          graded_by: exam.professor_id
+          grade: totalScore,
+          status: isPassing ? 'passed' : 'failed',
+          comments: gradingNote || null
         })
         .eq('id', selectedStudentExam.id);
       
@@ -438,16 +415,15 @@ const ExamGradingPage = () => {
       }
       
       // Insérer une notification pour l'étudiant
-      const { error: notificationError } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: selectedStudent.id,
-          title: `Note disponible pour l'examen: ${exam.title}`,
-          content: `Votre note pour l'examen "${exam.title}" est maintenant disponible. Vous avez obtenu ${totalScore}/${totalPoints} points (${percentageScore.toFixed(2)}%).`,
-          type: 'grade',
-          read: false,
-          link: `/student/exams/${exam.id}/results`
-        });
+      const { error: notificationError } = await createNotification({
+        sender_id: authState.profile?.id || null,
+        recipient_id: selectedStudent.profile_id,
+        recipient_role: 'student',
+        title: `Note disponible pour l'examen: ${exam.title}`,
+        content: `Votre note pour l'examen "${exam.title}" est maintenant disponible. Vous avez obtenu ${totalScore}/${totalPoints} points (${percentageScore.toFixed(2)}%).`,
+        priority: 'medium',
+        read: false
+      });
       
       if (notificationError) {
         console.error('Erreur lors de la création de la notification:', notificationError);
@@ -456,7 +432,7 @@ const ExamGradingPage = () => {
       // Mettre à jour la liste des étudiants
       setStudentExams(prev => prev.map(se => 
         se.id === selectedStudentExam.id
-          ? { ...se, graded: true, score: totalScore, max_score: totalPoints, grade_letter: gradeLetter }
+          ? { ...se, grade: totalScore, status: isPassing ? 'passed' : 'failed', comments: gradingNote || null }
           : se
       ));
       
@@ -607,7 +583,9 @@ const ExamGradingPage = () => {
                       selected={selectedStudentExam?.id === studentExam.id}
                       onClick={() => loadStudentAnswers(student.id, studentExam.id)}
                       sx={{
-                        borderLeft: studentExam.graded ? '4px solid green' : '4px solid orange',
+                        borderLeft: studentExam.grade !== null && studentExam.grade !== undefined
+                          ? '4px solid green'
+                          : '4px solid orange',
                         mb: 1
                       }}
                     >
@@ -617,12 +595,12 @@ const ExamGradingPage = () => {
                         </Typography>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="body2" color="textSecondary">
-                            {studentExam.status === 'completed' ? 'Terminé' : 'En cours'}
+                            {studentExam.status || 'pending'}
                           </Typography>
-                          {studentExam.graded ? (
+                          {studentExam.grade !== null && studentExam.grade !== undefined ? (
                             <Chip 
-                              size="small" 
-                              label={`${studentExam.score || 0}/${studentExam.max_score || exam?.total_points || 0}`} 
+                              size="small"
+                              label={`${studentExam.grade}/${exam?.total_points || 0}`}
                               color="success" 
                               variant="outlined" 
                             />
@@ -714,7 +692,8 @@ const ExamGradingPage = () => {
                     {questions[currentQuestionIndex] && studentAnswers[currentQuestionIndex] && (
                       <GradeQuestionItem
                         question={questions[currentQuestionIndex]}
-                        answer={studentAnswers[currentQuestionIndex]}
+                        studentAnswer={studentAnswers[currentQuestionIndex]}
+                        gradedBy={authState.professor?.id}
                         onGraded={handleAnswerGraded}
                       />
                     )}
@@ -727,14 +706,33 @@ const ExamGradingPage = () => {
                       Résumé des réponses
                     </Typography>
                     
-                    <StudentAnswersList
-                      studentAnswers={studentAnswers}
-                      questions={questions}
-                      onViewQuestion={(index) => {
-                        setTabIndex(0);
-                        goToQuestion(index);
-                      }}
-                    />
+                    <List>
+                      {questions.map((question, index) => {
+                        const answer = studentAnswers.find((item) => item.question_id === question.id);
+                        return (
+                          <ListItem
+                            key={question.id}
+                            secondaryAction={
+                              <Button size="small" onClick={() => {
+                                setTabIndex(0);
+                                goToQuestion(index);
+                              }}>
+                                Voir
+                              </Button>
+                            }
+                          >
+                            <Box sx={{ width: '100%' }}>
+                              <Typography variant="subtitle2">
+                                Q{question.question_number}. {question.question_text}
+                              </Typography>
+                              <Typography variant="body2" color="textSecondary">
+                                Note: {answer?.grade ?? 'Non notée'} / {question.points}
+                              </Typography>
+                            </Box>
+                          </ListItem>
+                        );
+                      })}
+                    </List>
                     
                     <Divider sx={{ my: 3 }} />
                     
@@ -746,8 +744,8 @@ const ExamGradingPage = () => {
                       <Grid item xs={12} sm={6} md={4}>
                         <Card variant="outlined">
                           <CardContent>
-                            <Typography variant="h5" color={exam && (calculateTotalScore() / exam.total_points * 100) >= exam.passing_grade ? 'success.main' : 'error.main'}>
-                              {calculateTotalScore()} / {exam?.total_points}
+                            <Typography variant="h5" color={isPassing ? 'success.main' : 'error.main'}>
+                              {totalScore} / {exam?.total_points}
                             </Typography>
                             <Typography variant="body2" color="textSecondary">
                               Score total
@@ -759,8 +757,8 @@ const ExamGradingPage = () => {
                       <Grid item xs={12} sm={6} md={4}>
                         <Card variant="outlined">
                           <CardContent>
-                            <Typography variant="h5" color={exam && (calculateTotalScore() / exam.total_points * 100) >= exam.passing_grade ? 'success.main' : 'error.main'}>
-                              {exam && ((calculateTotalScore() / exam.total_points) * 100).toFixed(2)}%
+                            <Typography variant="h5" color={isPassing ? 'success.main' : 'error.main'}>
+                              {percentageScore.toFixed(2)}%
                             </Typography>
                             <Typography variant="body2" color="textSecondary">
                               Pourcentage
@@ -772,13 +770,11 @@ const ExamGradingPage = () => {
                       <Grid item xs={12} sm={6} md={4}>
                         <Card variant="outlined">
                           <CardContent>
-                            <Typography variant="h5" color={exam && (calculateTotalScore() / exam.total_points * 100) >= exam.passing_grade ? 'success.main' : 'error.main'}>
-                              {exam && (calculateTotalScore() / exam.total_points * 100) >= exam.passing_grade 
-                                ? "Réussi"
-                                : "Échec"}
+                            <Typography variant="h5" color={isPassing ? 'success.main' : 'error.main'}>
+                              {isPassing ? 'Réussi' : 'Échec'}
                             </Typography>
                             <Typography variant="body2" color="textSecondary">
-                              Seuil de passage: {exam?.passing_grade}%
+                              Seuil de passage: {exam?.passing_grade} / {exam?.total_points}
                             </Typography>
                           </CardContent>
                         </Card>
@@ -852,7 +848,7 @@ const ExamGradingPage = () => {
             Vous êtes sur le point de finaliser la notation de l'examen pour {selectedStudent?.name}.
           </Typography>
           <Typography variant="body1" paragraph>
-            Score final: <strong>{calculateTotalScore()} / {exam?.total_points}</strong> ({exam && (calculateTotalScore() / exam.total_points * 100).toFixed(2)}%)
+            Score final: <strong>{totalScore} / {exam?.total_points}</strong> ({percentageScore.toFixed(2)}%)
           </Typography>
           <Typography variant="body1">
             Cette action notifiera l'étudiant et rendra ses résultats disponibles. Êtes-vous sûr de vouloir continuer ?

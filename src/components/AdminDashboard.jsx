@@ -4,7 +4,6 @@ import { useAuth } from "../hooks/useAuth";
 // Remplacer l'import de lucide-react par une icône de Material-UI
 import { AccessTime as Clock } from "@mui/icons-material";
 // Import du client Supabase depuis le bon chemin
-import { supabase } from '@/supabase';
 
 /**
  * @typedef {Object} ActiveStudent

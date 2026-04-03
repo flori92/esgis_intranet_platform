@@ -18,8 +18,8 @@ import {
   Timer as TimerIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import Quiz from '../core/Quiz';
+import { getStudentExamLaunchData, markStudentExamStarted } from '@/api/exams';
 
 /**
  * Page permettant à un étudiant de passer un examen
@@ -40,59 +40,24 @@ const TakeExamPage = () => {
       try {
         setLoading(true);
         
-        if (!authState.user || !authState.isStudent) {
+        if (!authState.isStudent || !authState.student?.id || !authState.profile?.id) {
           throw new Error('Accès non autorisé');
         }
-        
-        // Récupérer les détails de l'examen
-        const { data: examData, error: examError } = await supabase
-          .from('exams')
-          .select(`
-            id,
-            title,
-            course_id,
-            courses:course_id (name, code),
-            professor_id,
-            professor_name,
-            date,
-            duration,
-            type,
-            room,
-            total_points,
-            passing_grade,
-            status,
-            description
-          `)
-          .eq('id', id)
-          .single();
-        
-        if (examError) throw examError;
-        
-        if (!examData) {
-          throw new Error('Examen non trouvé');
-        }
-        
-        // Vérifier si l'étudiant est inscrit à cet examen
-        const { data: studentExam, error: studentExamError } = await supabase
-          .from('student_exams')
-          .select('*')
-          .eq('exam_id', id)
-          .eq('student_id', authState.user.id)
-          .single();
-        
-        if (studentExamError && studentExamError.code !== 'PGRST116') {
-          throw studentExamError;
-        }
-        
-        if (!studentExam) {
-          throw new Error('Vous n\'êtes pas inscrit à cet examen');
+
+        const { exam: examData, studentExam, error: launchError } = await getStudentExamLaunchData({
+          examId: id,
+          studentId: authState.student.id
+        });
+
+        if (launchError) {
+          throw launchError;
         }
         
         // Vérifier si l'examen est disponible
         const examDate = new Date(examData.date);
         const now = new Date();
-        
-        if (examData.status !== 'active') {
+
+        if (!['published', 'in_progress'].includes(examData.status)) {
           throw new Error('Cet examen n\'est pas encore disponible');
         }
         
@@ -107,7 +72,7 @@ const TakeExamPage = () => {
         // Formater les données de l'examen
         const formattedExam = {
           ...examData,
-          course_name: examData.courses && typeof examData.courses === 'object' ? examData.courses.name : 'Cours inconnu',
+          course_name: examData.course_name || 'Cours inconnu',
           professor_name: examData.professor_name || 'Professeur inconnu',
           student_exam_id: studentExam.id,
           attempt_status: studentExam.attempt_status
@@ -127,12 +92,11 @@ const TakeExamPage = () => {
   
   const handleStartExam = async () => {
     try {
-      // Mettre à jour le statut de la tentative
-      const { error } = await supabase
-        .from('student_exams')
-        .update({ attempt_status: 'in_progress' })
-        .eq('id', exam.student_exam_id);
-      
+      const { error } = await markStudentExamStarted({
+        studentExamId: exam.student_exam_id,
+        examId: Number(id)
+      });
+
       if (error) throw error;
       
       // Marquer l'examen comme commencé
@@ -155,7 +119,7 @@ const TakeExamPage = () => {
   };
   
   const handleGoBack = () => {
-    navigate('/exams');
+    navigate('/student/exams');
   };
   
   // Si l'examen est commencé, afficher le composant Quiz
@@ -190,7 +154,7 @@ const TakeExamPage = () => {
           
           <Box sx={{ mb: 4 }}>
             <Typography variant="subtitle1" color="text.secondary">
-              {exam.course_name} ({exam.courses?.code})
+              {exam.course_name} ({exam.course_code || 'N/A'})
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Professeur: {exam.professor_name}

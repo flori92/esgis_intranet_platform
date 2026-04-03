@@ -10,8 +10,9 @@
  * - Historique des documents générés
  */
 
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { supabase } from '../supabase';
+import { uploadFile, getPublicUrl } from '../api/storage';
+import { insertDocumentGenere, getDocumentGenereByReference, getDocumentsGeneresByStudent } from '../api/documents';
+import { loadPdfLib } from '../utils/pdfLib';
 
 /**
  * Génère un identifiant unique pour un document
@@ -71,6 +72,7 @@ async function fetchImageAsBytes(url) {
 export async function generateCertificatScolarite(studentData, options = {}) {
   const reference = options.reference || generateDocumentReference('CERT');
   const verificationUrl = getVerificationUrl(reference);
+  const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595.28, 841.89]); // A4
@@ -198,6 +200,7 @@ export async function generateCertificatScolarite(studentData, options = {}) {
 export async function generateReleveNotes(studentData, grades = [], options = {}) {
   const reference = options.reference || generateDocumentReference('REL');
   const verificationUrl = getVerificationUrl(reference);
+  const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595.28, 841.89]);
@@ -333,34 +336,27 @@ export async function saveGeneratedDocument(docData) {
   try {
     // Upload du PDF vers Supabase Storage
     const fileName = `documents/${docData.etudiant_id}/${docData.reference}.pdf`;
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(fileName, docData.pdfBytes, {
-        contentType: 'application/pdf',
-        upsert: true
-      });
+    const { error: uploadError } = await uploadFile('documents', fileName, docData.pdfBytes, {
+      contentType: 'application/pdf',
+      upsert: true
+    });
 
     let fileUrl = '';
     if (!uploadError) {
-      const { data: urlData } = supabase.storage
-        .from('documents')
-        .getPublicUrl(fileName);
-      fileUrl = urlData?.publicUrl || '';
+      const { publicUrl } = getPublicUrl('documents', fileName);
+      fileUrl = publicUrl || '';
     }
 
     // Enregistrer dans la table documents_generes
-    const { data, error } = await supabase
-      .from('documents_generes')
-      .insert({
-        document_type_id: docData.typeId || null,
-        etudiant_id: docData.etudiant_id,
-        fichier_url: fileUrl,
-        date_generation: new Date().toISOString(),
-        reference: docData.reference,
-        type_document: docData.type,
-        verification_url: docData.verificationUrl,
-      })
-      .select();
+    const { data, error } = await insertDocumentGenere({
+      document_type_id: docData.typeId || null,
+      etudiant_id: docData.etudiant_id,
+      fichier_url: fileUrl,
+      date_generation: new Date().toISOString(),
+      reference: docData.reference,
+      type_document: docData.type,
+      verification_url: docData.verificationUrl
+    });
 
     if (error) throw error;
     return { data, error: null, fileUrl };
@@ -377,20 +373,7 @@ export async function saveGeneratedDocument(docData) {
  */
 export async function verifyDocument(reference) {
   try {
-    const { data, error } = await supabase
-      .from('documents_generes')
-      .select(`
-        id, reference, date_generation, type_document, fichier_url,
-        etudiant:etudiant_id(
-          first_name, last_name,
-          inscriptions:inscriptions(
-            annee_academique,
-            niveaux:niveau_id(name, filieres:filiere_id(name))
-          )
-        )
-      `)
-      .eq('reference', reference)
-      .single();
+    const { data, error } = await getDocumentGenereByReference(reference);
 
     if (error) {
       if (error.code === 'PGRST116') {
@@ -430,11 +413,7 @@ export async function verifyDocument(reference) {
  */
 export async function getStudentDocumentHistory(studentId) {
   try {
-    const { data, error } = await supabase
-      .from('documents_generes')
-      .select('*')
-      .eq('etudiant_id', studentId)
-      .order('date_generation', { ascending: false });
+    const { data, error } = await getDocumentsGeneresByStudent(studentId);
 
     if (error) throw error;
     return { data, error: null };

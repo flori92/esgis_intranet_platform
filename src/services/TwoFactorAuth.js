@@ -8,7 +8,6 @@
  * - Authentification biométrique sur mobile (Face ID / empreinte)
  */
 
-import { supabase } from '../supabase';
 
 /**
  * Génère un code OTP à 6 chiffres

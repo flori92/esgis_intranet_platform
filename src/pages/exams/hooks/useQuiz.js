@@ -1,20 +1,76 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '@/context/AuthContext';
+import {
+  finalizeStudentExamSubmission,
+  getStudentExamLaunchData
+} from '@/api/exams';
+import {
+  getExamQuestions,
+  recordActiveStudent,
+  recordCheatingAttempt,
+  updateActiveStudent
+} from '@/api/quiz';
 
-/**
- * Hook personnalisé pour gérer l'état et la logique d'un quiz/examen
- * @returns {Object} État et fonctions pour gérer le quiz
- */
+const AUTO_GRADED_TYPES = new Set(['multiple_choice', 'true_false', 'short_answer', 'numeric']);
+
+const normalizeQuestion = (question) => ({
+  ...question,
+  text: question.text || question.question_text || '',
+  correctAnswer: question.correctAnswer ?? question.correct_answer ?? null,
+  options: Array.isArray(question.options) ? question.options : []
+});
+
+const getInitialAnswerValue = (question) => {
+  if (question.question_type === 'multiple_select') {
+    return [];
+  }
+
+  return '';
+};
+
+const isQuestionAutoGradable = (question) => AUTO_GRADED_TYPES.has(question.question_type);
+
+const normalizeString = (value) => String(value ?? '').trim().toLowerCase();
+
+const computeQuestionScore = (question, answer) => {
+  if (answer === null || answer === undefined || answer === '') {
+    return 0;
+  }
+
+  if (question.question_type === 'multiple_choice') {
+    return normalizeString(answer) === normalizeString(question.correctAnswer) ? question.points : 0;
+  }
+
+  if (question.question_type === 'true_false') {
+    const expected = normalizeString(question.correctAnswer);
+    const received = normalizeString(answer);
+    return expected === received ? question.points : 0;
+  }
+
+  if (question.question_type === 'short_answer') {
+    return normalizeString(answer) === normalizeString(question.correctAnswer) ? question.points : 0;
+  }
+
+  if (question.question_type === 'numeric') {
+    const expected = Number(question.correctAnswer);
+    const received = Number(answer);
+    if (Number.isFinite(expected) && Number.isFinite(received)) {
+      return expected === received ? question.points : 0;
+    }
+  }
+
+  return 0;
+};
+
 export const useQuiz = () => {
-  const { id: examId } = useParams();
+  const { id: examIdParam } = useParams();
   const navigate = useNavigate();
   const { authState } = useAuth();
-  
-  // États du quiz
-  const [quizStatus, setQuizStatus] = useState('NOT_STARTED'); // NOT_STARTED, IN_PROGRESS, COMPLETED
+  const examId = Number(examIdParam);
+
+  const [quizStatus, setQuizStatus] = useState('NOT_STARTED');
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -23,382 +79,354 @@ export const useQuiz = () => {
   const [studentExamId, setStudentExamId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // Références pour les timers et intervalles
+  const [cheatingAttempts, setCheatingAttempts] = useState(0);
+  const [scoreSummary, setScoreSummary] = useState(null);
+
   const timerIntervalRef = useRef(null);
+  const pingIntervalRef = useRef(null);
   const endTimeRef = useRef(null);
   const cheatingAttemptsRef = useRef(0);
-  
-  // Charger les données de l'examen et les questions
+  const answersRef = useRef({});
+  const questionsRef = useRef([]);
+  const timerRef = useRef({ minutes: 0, seconds: 0 });
+  const examDataRef = useRef(null);
+  const studentExamIdRef = useRef(null);
+
+  const clearRuntimeIntervals = useCallback(() => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
+  }, []);
+
+  const calculateScore = useCallback(() => {
+    return questions.reduce((total, question) => {
+      if (!isQuestionAutoGradable(question)) {
+        return total;
+      }
+
+      return total + computeQuestionScore(question, answers[question.id]);
+    }, 0);
+  }, [answers, questions]);
+
   useEffect(() => {
-    const fetchExamData = async () => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  useEffect(() => {
+    questionsRef.current = questions;
+  }, [questions]);
+
+  useEffect(() => {
+    timerRef.current = timer;
+  }, [timer]);
+
+  useEffect(() => {
+    examDataRef.current = examData;
+  }, [examData]);
+
+  useEffect(() => {
+    studentExamIdRef.current = studentExamId;
+  }, [studentExamId]);
+
+  const submitQuiz = useCallback(async () => {
+    if (!examDataRef.current || !studentExamIdRef.current || !authState.profile?.id || !authState.student?.id) {
+      return;
+    }
+
+    clearRuntimeIntervals();
+
+    const currentQuestions = questionsRef.current;
+    const currentAnswers = answersRef.current;
+    const currentTimer = timerRef.current;
+    const currentExam = examDataRef.current;
+    const autoScore = currentQuestions.reduce((total, question) => {
+      if (!isQuestionAutoGradable(question)) {
+        return total;
+      }
+
+      return total + computeQuestionScore(question, currentAnswers[question.id]);
+    }, 0);
+    const hasManualQuestions = currentQuestions.some((question) => !isQuestionAutoGradable(question));
+    const maxScore = currentQuestions.reduce((total, question) => total + Number(question.points || 0), 0);
+    const percentage = maxScore > 0 ? Math.round((autoScore / maxScore) * 100) : 0;
+
+    try {
+      const completionTime = currentExam.duration * 60 - (currentTimer.minutes * 60 + currentTimer.seconds);
+      const { error: submitError } = await finalizeStudentExamSubmission({
+        studentExamId: studentExamIdRef.current,
+        examId,
+        profileId: authState.profile.id,
+        answers: currentAnswers,
+        score: autoScore,
+        totalQuestions: currentQuestions.length,
+        completionTime,
+        cheatingAttempts: cheatingAttemptsRef.current,
+        hasManualQuestions,
+        passingGrade: currentExam.passing_grade
+      });
+
+      if (submitError) {
+        throw submitError;
+      }
+
+      await updateActiveStudent(authState.profile.id, examId, false);
+
+      setScoreSummary({
+        score: autoScore,
+        maxScore,
+        percentage,
+        passed: hasManualQuestions ? null : autoScore >= Number(currentExam.passing_grade || 0),
+        hasManualQuestions
+      });
+      setQuizStatus('COMPLETED');
+      toast.success('Examen soumis avec succès.');
+    } catch (submitError) {
+      console.error("Erreur lors de la soumission de l'examen:", submitError);
+      toast.error("Erreur lors de la soumission de l'examen.");
+    }
+  }, [
+    authState.profile?.id,
+    authState.student?.id,
+    clearRuntimeIntervals,
+    examId,
+  ]);
+
+  useEffect(() => {
+    const fetchQuizData = async () => {
+      setLoading(true);
+      setError(null);
+
       try {
-        if (!authState.user || !authState.isStudent) {
-          {
-            throw new Error('Accès non autorisé');
-          }
+        if (!authState.isStudent || !authState.student?.id || !authState.profile?.id) {
+          throw new Error('Accès non autorisé');
         }
-        
-        // Récupérer les détails de l'examen
-        const { data: examData, error: examError } = await supabase
-          .from('exams')
-          .select(`
-            id,
-            title,
-            course_id,
-            courses:course_id (name, code),
-            professor_id,
-            professors:professor_id (profiles:profile_id(full_name)),
-            date,
-            duration,
-            type,
-            room,
-            total_points,
-            passing_grade,
-            status,
-            description
-          `)
-          .eq('id', examId)
-          .single();
-        
-        if (examError) throw examError;
-        
-        if (!examData) {
-          {
-            throw new Error('Examen non trouvé');
-          }
-        }
-        
-        // Récupérer l'inscription de l'étudiant à l'examen
-        const { data: studentExam, error: studentExamError } = await supabase
-          .from('student_exams')
-          .select('*')
-          .eq('exam_id', examId)
-          .eq('student_id', authState.user.id)
-          .single();
-        
-        if (studentExamError && studentExamError.code !== 'PGRST116') {
-          throw studentExamError;
-        }
-        
-        if (!studentExam) {
-          {
-            throw new Error('Vous n\'êtes pas inscrit à cet examen');
-          }
-        }
-        
-        // Récupérer les questions de l'examen
-        const { data: questionsData, error: questionsError } = await supabase
-          .from('exam_questions')
-          .select(`
-            id,
-            question_text,
-            question_type,
-            points,
-            options,
-            correct_answer,
-            order
-          `)
-          .eq('exam_id', examId)
-          .order('order', { ascending: true });
-        
-        if (questionsError) throw questionsError;
-        
-        if (!questionsData || questionsData.length === 0) {
-          // Si aucune question n'est trouvée, utiliser des questions fictives pour le développement
-          const mockQuestions = [
-            {
-              id: 1,
-              question_text: "Qu'est-ce que la virtualisation ?",
-              question_type: "multiple_choice",
-              points: 2,
-              options: [
-                "Une technique pour créer des versions virtuelles de ressources informatiques",
-                "Un langage de programmation",
-                "Un type de base de données",
-                "Un protocole réseau"
-              ],
-              correct_answer: "Une technique pour créer des versions virtuelles de ressources informatiques",
-              order: 1
-            },
-            {
-              id: 2,
-              question_text: "Quels sont les avantages de la virtualisation ? (Sélectionnez toutes les réponses correctes)",
-              question_type: "multiple_select",
-              points: 3,
-              options: [
-                "Réduction des coûts matériels",
-                "Augmentation de la consommation d'énergie",
-                "Meilleure utilisation des ressources",
-                "Facilité de sauvegarde et de récupération"
-              ],
-              correct_answer: ["Réduction des coûts matériels", "Meilleure utilisation des ressources", "Facilité de sauvegarde et de récupération"],
-              order: 2
-            },
-            {
-              id: 3,
-              question_text: "Expliquez la différence entre la virtualisation de type 1 et de type 2.",
-              question_type: "text",
-              points: 5,
-              options: [],
-              correct_answer: "",
-              order: 3
-            }
-          ];
-          setQuestions(mockQuestions);
-        } else {
-          setQuestions(questionsData);
-        }
-        
-        // Initialiser le timer avec la durée de l'examen
-        setTimer({ minutes: examData.duration, seconds: 0 });
-        
-        // Sauvegarder les données de l'examen et l'ID de l'inscription
-        setExamData(examData);
-        setStudentExamId(studentExam.id);
-        
-        // Initialiser les réponses vides
-        const initialAnswers = {};
-        questionsData.forEach(q => {
-          initialAnswers[q.id] = q.question_type === 'multiple_select' ? [] : '';
+
+        const { exam, studentExam, error: launchError } = await getStudentExamLaunchData({
+          examId,
+          studentId: authState.student.id
         });
+
+        if (launchError) {
+          throw launchError;
+        }
+
+        if (!['published', 'in_progress'].includes(exam.status)) {
+          throw new Error("Cet examen n'est pas disponible.");
+        }
+
+        if (studentExam.attempt_status === 'submitted') {
+          throw new Error("Cet examen a déjà été soumis.");
+        }
+
+        const { questions: fetchedQuestions, error: questionsError } = await getExamQuestions(examId);
+
+        if (questionsError) {
+          throw questionsError;
+        }
+
+        if (!fetchedQuestions || fetchedQuestions.length === 0) {
+          throw new Error("Aucune question n'est disponible pour cet examen.");
+        }
+
+        const normalizedQuestions = fetchedQuestions.map(normalizeQuestion);
+        const existingAnswers = typeof studentExam.answers === 'string'
+          ? JSON.parse(studentExam.answers || '{}')
+          : (studentExam.answers || {});
+        const initialAnswers = {};
+
+        normalizedQuestions.forEach((question) => {
+          initialAnswers[question.id] = existingAnswers[question.id] ?? getInitialAnswerValue(question);
+        });
+
+        setExamData(exam);
+        setStudentExamId(studentExam.id);
+        setQuestions(normalizedQuestions);
         setAnswers(initialAnswers);
-        
-      } catch (error) {
-        console.error('Erreur lors du chargement de l\'examen:', error);
-        setError(error.message);
-        toast.error(error.message);
-        
-        // Rediriger vers la liste des examens en cas d'erreur
+        setCheatingAttempts(0);
+        cheatingAttemptsRef.current = 0;
+        setCurrentQuestionIndex(0);
+
+        const now = new Date();
+        const examStartedAt = studentExam.arrival_time ? new Date(studentExam.arrival_time) : null;
+
+        if (studentExam.attempt_status === 'in_progress' && examStartedAt) {
+          const resumeEndTime = new Date(examStartedAt.getTime() + Number(exam.duration || 0) * 60000);
+          endTimeRef.current = resumeEndTime;
+
+          if (resumeEndTime <= now) {
+            setTimer({ minutes: 0, seconds: 0 });
+            setQuizStatus('IN_PROGRESS');
+            setTimeout(() => submitQuiz(), 0);
+          } else {
+            const diff = resumeEndTime.getTime() - now.getTime();
+            setTimer({
+              minutes: Math.floor(diff / 60000),
+              seconds: Math.floor((diff % 60000) / 1000)
+            });
+            setQuizStatus('IN_PROGRESS');
+          }
+        } else {
+          setTimer({ minutes: Number(exam.duration || 0), seconds: 0 });
+          setQuizStatus('NOT_STARTED');
+        }
+      } catch (loadError) {
+        console.error("Erreur lors du chargement de l'examen:", loadError);
+        setError(loadError.message || "Impossible de charger l'examen.");
+        toast.error(loadError.message || "Impossible de charger l'examen.");
         setTimeout(() => {
-          navigate('/exams');
-        }, 3000);
+          navigate('/student/exams');
+        }, 2000);
       } finally {
         setLoading(false);
       }
     };
-    
-    fetchExamData();
-    
-    // Nettoyage lors du démontage du composant
+
+    fetchQuizData();
+
     return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
+      clearRuntimeIntervals();
     };
-  }, [examId, authState, navigate]);
-  
-  /**
-   * Démarrer le quiz et initialiser le timer
-   */
-  const startQuiz = useCallback(() => {
-    if (quizStatus !== 'NOT_STARTED' || !examData) {
-      return;
+  }, [
+    authState.isStudent,
+    authState.profile?.id,
+    authState.student?.id,
+    clearRuntimeIntervals,
+    examId,
+    navigate,
+    submitQuiz
+  ]);
+
+  useEffect(() => {
+    if (quizStatus !== 'IN_PROGRESS' || !examData || !authState.profile?.id) {
+      return undefined;
     }
-    
-    // Définir l'heure de fin
-    const now = new Date();
-    const endTime = new Date(now.getTime() + examData.duration * 60000);
-    endTimeRef.current = endTime;
-    
-    // Démarrer le timer
-    timerIntervalRef.current = setInterval(() => {
+
+    const syncTimer = () => {
       const now = new Date();
-      const diff = endTimeRef.current - now;
-      
+      const diff = endTimeRef.current ? endTimeRef.current.getTime() - now.getTime() : 0;
+
       if (diff <= 0) {
-        // Temps écoulé, soumettre automatiquement
-        clearInterval(timerIntervalRef.current);
         setTimer({ minutes: 0, seconds: 0 });
         submitQuiz();
         return;
       }
-      
-      const minutes = Math.floor(diff / 60000);
-      const seconds = Math.floor((diff % 60000) / 1000);
-      
-      setTimer({ minutes, seconds });
-    }, 1000);
-    
+
+      setTimer({
+        minutes: Math.floor(diff / 60000),
+        seconds: Math.floor((diff % 60000) / 1000)
+      });
+    };
+
+    syncTimer();
+    timerIntervalRef.current = setInterval(syncTimer, 1000);
+    pingIntervalRef.current = setInterval(() => {
+      updateActiveStudent(authState.profile.id, examId, true);
+    }, 30000);
+
+    return () => {
+      clearRuntimeIntervals();
+    };
+  }, [
+    authState.profile?.id,
+    clearRuntimeIntervals,
+    examData,
+    examId,
+    quizStatus,
+    submitQuiz
+  ]);
+
+  const startQuiz = useCallback(async () => {
+    if (quizStatus !== 'NOT_STARTED' || !examData || !authState.profile?.id) {
+      return;
+    }
+
+    const now = new Date();
+    endTimeRef.current = new Date(now.getTime() + Number(examData.duration || 0) * 60000);
     setQuizStatus('IN_PROGRESS');
-    toast.success('L\'examen a commencé. Bonne chance !');
-  }, [quizStatus, examData]);
-  
-  /**
-   * Passer à la question suivante
-   */
+
+    await recordActiveStudent({
+      student_id: authState.profile.id,
+      exam_id: examId,
+      start_time: now.toISOString(),
+      last_ping: now.toISOString(),
+      created_at: now.toISOString(),
+      updated_at: now.toISOString()
+    });
+
+    toast.success("L'examen a commencé. Bonne chance.");
+  }, [authState.profile?.id, examData, examId, quizStatus]);
+
   const goToNextQuestion = useCallback(() => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-    }
-  }, [currentQuestionIndex, questions.length]);
-  
-  /**
-   * Revenir à la question précédente
-   */
+    setCurrentQuestionIndex((previous) => Math.min(previous + 1, questions.length - 1));
+  }, [questions.length]);
+
   const goToPreviousQuestion = useCallback(() => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
-    }
-  }, [currentQuestionIndex]);
-  
-  /**
-   * Aller à une question spécifique
-   * @param {number} index - Index de la question
-   */
+    setCurrentQuestionIndex((previous) => Math.max(previous - 1, 0));
+  }, []);
+
   const goToQuestion = useCallback((index) => {
     if (index >= 0 && index < questions.length) {
       setCurrentQuestionIndex(index);
     }
   }, [questions.length]);
-  
-  /**
-   * Enregistrer la réponse à une question
-   * @param {number} questionId - ID de la question
-   * @param {string|Array} answer - Réponse de l'utilisateur
-   */
+
   const saveAnswer = useCallback((questionId, answer) => {
-    setAnswers(prev => ({
-      ...prev,
+    setAnswers((previous) => ({
+      ...previous,
       [questionId]: answer
     }));
   }, []);
-  
-  /**
-   * Soumettre le quiz
-   */
-  const submitQuiz = useCallback(async () => {
-    if (quizStatus !== 'IN_PROGRESS') {
+
+  const reportCheatingAttemptHandler = useCallback(async () => {
+    if (quizStatus !== 'IN_PROGRESS' || !authState.profile?.id) {
       return;
     }
-    
-    try {
-      // Arrêter le timer
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-      
-      // Calculer le score
-      let totalScore = 0;
-      let maxScore = 0;
-      
-      questions.forEach(question => {
-        maxScore += question.points;
-        
-        const userAnswer = answers[question.id];
-        
-        if (!userAnswer) {
-          return; // Pas de réponse
-        }
-        
-        if (question.question_type === 'multiple_choice') {
-          if (userAnswer === question.correct_answer) {
-            totalScore += question.points;
-          }
-        } else if (question.question_type === 'multiple_select') {
-          // Vérifier si les tableaux sont identiques (même contenu)
-          const correctAnswers = question.correct_answer;
-          if (Array.isArray(correctAnswers) && 
-              Array.isArray(userAnswer) && 
-              correctAnswers.length === userAnswer.length &&
-              correctAnswers.every(item => userAnswer.includes(item))) {
-            totalScore += question.points;
-          }
-        } else if (question.question_type === 'text') {
-          // Pour les questions textuelles, on ne peut pas calculer automatiquement
-          // Le professeur devra corriger manuellement
-        }
-      });
-      
-      // Calculer le pourcentage
-      const scorePercentage = Math.round((totalScore / (maxScore === 0 ? 1 : maxScore)) * 100);
-      
-      // Déterminer si l'examen est réussi
-      const isPassed = scorePercentage >= (examData.passing_grade || 50);
-      
-      // Enregistrer les résultats dans la base de données
-      const { error } = await supabase
-        .from('exam_results')
-        .insert({
-          exam_id: examId,
-          student_id: authState.user.id,
-          student_exam_id: studentExamId,
-          score: totalScore,
-          max_score: maxScore,
-          percentage: scorePercentage,
-          passed: isPassed,
-          answers: answers,
-          submitted_at: new Date().toISOString(),
-          cheating_attempts: cheatingAttemptsRef.current
-        });
-      
-      if (error) throw error;
-      
-      // Mettre à jour le statut de la tentative
-      await supabase
-        .from('student_exams')
-        .update({ attempt_status: 'submitted' })
-        .eq('id', studentExamId);
-      
-      // Mettre à jour l'état du quiz
-      setQuizStatus('COMPLETED');
-      
-      toast.success('Examen soumis avec succès !');
-      
-    } catch (error) {
-      console.error('Erreur lors de la soumission de l\'examen:', error);
-      toast.error('Erreur lors de la soumission de l\'examen. Veuillez réessayer.');
+
+    cheatingAttemptsRef.current += 1;
+    setCheatingAttempts(cheatingAttemptsRef.current);
+
+    await recordCheatingAttempt({
+      student_id: authState.profile.id,
+      exam_id: examId,
+      student_exam_id: studentExamId,
+      details: "Sortie d'onglet ou perte de focus detectee",
+      attempt_count: cheatingAttemptsRef.current,
+      detected_at: new Date().toISOString()
+    });
+
+    if (cheatingAttemptsRef.current >= 3) {
+      toast.error("Trop de tentatives de triche detectees. Soumission automatique.");
+      submitQuiz();
     }
-  }, [quizStatus, questions, answers, examId, examData, authState.user.id, studentExamId]);
-  
-  /**
-   * Signaler une tentative de triche
-   */
-  const reportCheatingAttempt = useCallback(async () => {
-    if (quizStatus !== 'IN_PROGRESS') {
-      return;
-    }
-    
-    try {
-      // Incrémenter le compteur de tentatives de triche
-      cheatingAttemptsRef.current += 1;
-      
-      // Enregistrer la tentative de triche dans la base de données
-      await supabase
-        .from('cheating_attempts')
-        .insert({
-          exam_id: examId,
-          student_id: authState.user.id,
-          student_exam_id: studentExamId,
-          timestamp: new Date().toISOString(),
-          attempt_count: cheatingAttemptsRef.current
-        });
-      
-      // Si trop de tentatives de triche, soumettre automatiquement
-      if (cheatingAttemptsRef.current >= 3) {
-        toast.error('Trop de tentatives de triche détectées. L\'examen sera soumis automatiquement.');
-        submitQuiz();
-      }
-    } catch (error) {
-      console.error('Erreur lors de l\'enregistrement de la tentative de triche:', error);
-    }
-  }, [quizStatus, examId, authState.user.id, studentExamId, submitQuiz]);
-  
+  }, [authState.profile?.id, examId, quizStatus, studentExamId, submitQuiz]);
+
   return {
     quizStatus,
     questions,
     currentQuestionIndex,
     answers,
+    userAnswers: answers,
     timer,
     examData,
     loading,
     error,
+    cheatingAttempts,
+    scoreSummary,
     startQuiz,
     goToNextQuestion,
     goToPreviousQuestion,
     goToQuestion,
     saveAnswer,
+    answerQuestion: saveAnswer,
     submitQuiz,
-    reportCheatingAttempt
+    endQuiz: submitQuiz,
+    reportCheatingAttempt: reportCheatingAttemptHandler,
+    calculateScore
   };
 };

@@ -19,7 +19,13 @@ import {
   VisibilityOff as VisibilityOffIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
+import {
+  getProfileSettings,
+  updateCurrentUserPassword,
+  updateProfileSettings,
+  uploadProfileAvatar,
+  uploadStudentCv
+} from '@/api/profile';
 
 /**
  * Page Profil & Paramètres — ESGIS Campus §3.9
@@ -28,6 +34,7 @@ import { supabase } from '@/supabase';
 const ProfileSettingsPage = () => {
   const { authState, updateProfile } = useAuth();
   const { user, profile, isAdmin, isProfessor, isStudent } = authState;
+  const currentProfileId = profile?.id || user?.id || null;
   const fileInputRef = useRef(null);
   const cvInputRef = useRef(null);
 
@@ -71,29 +78,30 @@ const ProfileSettingsPage = () => {
     const loadProfile = async () => {
       setLoading(true);
       try {
-        if (!user) return;
-        const { data, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
+        if (!user || !currentProfileId) {
+          return;
+        }
 
-        if (!profileError && data) {
+        const { profile: detailedProfile, error: profileError } = await getProfileSettings(currentProfileId);
+
+        if (!profileError && detailedProfile) {
           setProfileData({
-            first_name: data.first_name || '',
-            last_name: data.last_name || '',
-            phone: data.phone || '',
-            address: data.address || '',
-            bio: data.bio || '',
-            birth_date: data.birth_date || '',
-            secondary_email: data.secondary_email || '',
+            first_name: detailedProfile.first_name || '',
+            last_name: detailedProfile.last_name || '',
+            phone: detailedProfile.phone || '',
+            address: detailedProfile.address || '',
+            bio: detailedProfile.bio || '',
+            birth_date: detailedProfile.birth_date || '',
+            secondary_email: detailedProfile.secondary_email || '',
           });
-          setAvatarPreview(data.profile_picture || null);
-          setCvUrl(data.cv_url || '');
-          if (data.notification_preferences) {
-            setNotifPrefs(prev => ({ ...prev, ...data.notification_preferences }));
+          setAvatarPreview(detailedProfile.avatar_url || null);
+          setCvUrl(detailedProfile.cv_url || '');
+          if (detailedProfile.notification_preferences) {
+            setNotifPrefs(prev => ({ ...prev, ...detailedProfile.notification_preferences }));
           }
-          if (data.language) setLanguage(data.language);
+          if (detailedProfile.language) {
+            setLanguage(detailedProfile.language);
+          }
         } else if (profile) {
           setProfileData(prev => ({
             ...prev,
@@ -109,7 +117,7 @@ const ProfileSettingsPage = () => {
       }
     };
     loadProfile();
-  }, [user, profile]);
+  }, [user, profile, currentProfileId]);
 
   const handleAvatarChange = (event) => {
     const file = event.target.files[0];
@@ -133,32 +141,30 @@ const ProfileSettingsPage = () => {
     setSaving(true);
     setError(null);
     try {
+      if (!currentProfileId) {
+        throw new Error('Profil introuvable');
+      }
+
       let avatarUrl = avatarPreview;
       let newCvUrl = cvUrl;
 
       if (avatarFile) {
-        const fileExt = avatarFile.name.split('.').pop();
-        const fileName = `avatars/${user.id}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('profiles').upload(fileName, avatarFile, { upsert: true });
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage.from('profiles').getPublicUrl(fileName);
-          avatarUrl = urlData.publicUrl;
+        const { url, error: uploadError } = await uploadProfileAvatar(currentProfileId, avatarFile);
+        if (uploadError) {
+          throw uploadError;
         }
+        avatarUrl = url;
       }
 
       if (cvFile) {
-        const fileExt = cvFile.name.split('.').pop();
-        const fileName = `cv/${user.id}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('documents').upload(fileName, cvFile, { upsert: true });
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
-          newCvUrl = urlData.publicUrl;
+        const { url, error: uploadError } = await uploadStudentCv(currentProfileId, cvFile);
+        if (uploadError) {
+          throw uploadError;
         }
+        newCvUrl = url;
       }
 
-      const { error: updateError } = await supabase.from('profiles').update({
+      const { error: updateError } = await updateProfileSettings(currentProfileId, {
         first_name: profileData.first_name,
         last_name: profileData.last_name,
         phone: profileData.phone,
@@ -166,12 +172,11 @@ const ProfileSettingsPage = () => {
         bio: profileData.bio,
         birth_date: profileData.birth_date || null,
         secondary_email: profileData.secondary_email,
-        profile_picture: avatarUrl,
+        avatar_url: avatarUrl,
         cv_url: newCvUrl,
         notification_preferences: notifPrefs,
-        language: language,
-        updated_at: new Date().toISOString()
-      }).eq('user_id', user.id);
+        language
+      });
 
       if (updateError) throw updateError;
 
@@ -203,7 +208,7 @@ const ProfileSettingsPage = () => {
     setSaving(true);
     setError(null);
     try {
-      const { error } = await supabase.auth.updateUser({ password: passwordData.newPassword });
+      const { error } = await updateCurrentUserPassword(passwordData.newPassword);
       if (error) throw error;
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setSuccessMessage('Mot de passe modifié avec succès.');
@@ -217,11 +222,27 @@ const ProfileSettingsPage = () => {
   const handleSaveNotifications = async () => {
     setSaving(true);
     try {
-      await supabase.from('profiles').update({
+      if (!currentProfileId) {
+        throw new Error('Profil introuvable');
+      }
+
+      const { error } = await updateProfileSettings(currentProfileId, {
+        first_name: profileData.first_name,
+        last_name: profileData.last_name,
+        phone: profileData.phone,
+        address: profileData.address,
+        bio: profileData.bio,
+        birth_date: profileData.birth_date || null,
+        secondary_email: profileData.secondary_email,
+        avatar_url: avatarPreview,
+        cv_url: cvUrl,
         notification_preferences: notifPrefs,
-        language: language,
-        updated_at: new Date().toISOString()
-      }).eq('user_id', user.id);
+        language
+      });
+
+      if (error) {
+        throw error;
+      }
       setSuccessMessage('Préférences sauvegardées.');
     } catch (err) {
       setError('Erreur: ' + (err.message || ''));

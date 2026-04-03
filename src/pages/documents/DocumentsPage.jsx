@@ -1,638 +1,214 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Box,
-  Typography,
-  Paper,
-  Grid,
-  Button,
-  CircularProgress,
   Alert,
-  Tabs,
-  Tab,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  Grid,
+  IconButton,
+  InputAdornment,
+  InputLabel,
+  LinearProgress,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
-  Chip,
+  Paper,
+  Select,
+  Snackbar,
+  Tab,
+  Tabs,
+  TextField,
   Tooltip,
-  InputAdornment,
+  Typography
 } from '@mui/material';
 import {
-  Description as DescriptionIcon,
-  School as SchoolIcon,
-  Folder as FolderIcon,
-  CloudUpload as CloudUploadIcon,
-  CloudDownload as CloudDownloadIcon,
-  Delete as DeleteIcon,
-  Search as SearchIcon,
-  Add as AddIcon,
-  FilterList as FilterListIcon,
-  Share as ShareIcon,
-  InsertDriveFile as InsertDriveFileIcon,
-  PictureAsPdf as PdfIcon,
-  Image as ImageIcon,
-  Movie as VideoIcon,
   Archive as ArchiveIcon,
+  CloudDownload as CloudDownloadIcon,
+  CloudUpload as CloudUploadIcon,
+  Delete as DeleteIcon,
+  Description as DescriptionIcon,
+  FilterList as FilterListIcon,
+  Image as ImageIcon,
+  InsertDriveFile as InsertDriveFileIcon,
+  Movie as VideoIcon,
+  PictureAsPdf as PdfIcon,
+  School as SchoolIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
-import { useAuth } from '../../context/AuthContext';
-// Correction du chemin d'importation de Supabase
-import { supabase } from '@/supabase';
+
+import { useAuth } from '@/context/AuthContext';
+import {
+  createDocumentDownloadUrl,
+  deleteUploadedDocument,
+  getDocumentsPageData,
+  uploadDocument
+} from '@/api/documents';
 import { triggerDownload } from '@/utils/DownloadLinkUtil';
 
-/**
- * @typedef {Object} Document
- * @property {number} id - Identifiant unique du document
- * @property {string} title - Titre du document
- * @property {string|null} description - Description du document
- * @property {string} file_path - Chemin du fichier
- * @property {string} file_type - Type de fichier
- * @property {number} file_size - Taille du fichier en octets
- * @property {string} uploaded_by - Identifiant de l'utilisateur qui a uploadé
- * @property {string} uploaded_at - Date d'upload
- * @property {'course'|'administrative'|'resource'|'other'} category - Catégorie du document
- * @property {number|null} course_id - Identifiant du cours associé
- * @property {string|null} course_name - Nom du cours associé
- * @property {boolean} is_public - Indique si le document est public
- * @property {number|null} department_id - Identifiant du département
- * @property {string|null} department_name - Nom du département
- * @property {string[]} [tags] - Tags associés au document
- */
+const uploadInitialState = {
+  title: '',
+  description: '',
+  visibility: 'course',
+  course_id: '',
+  file: null,
+  tags: []
+};
 
-/**
- * @typedef {Object} Category
- * @property {string} id - Identifiant de la catégorie
- * @property {string} name - Nom de la catégorie
- * @property {React.ReactNode} icon - Icône de la catégorie
- */
-
-/**
- * Page de gestion des documents
- * Permet aux utilisateurs de consulter, télécharger, uploader et supprimer des documents
- * @returns {JSX.Element} Page de documents
- */
 const DocumentsPage = () => {
   const { authState } = useAuth();
+
+  const currentProfileId = authState.profile?.id || authState.user?.id || '';
+  const currentStudentId = authState.student?.id || null;
+  const currentProfessorId = authState.professor?.id || null;
+
+  const canUploadDocuments = authState.isProfessor || authState.isAdmin;
+  const canViewOfficialDocuments = authState.isStudent || authState.isAdmin;
+
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
-  const [documents, setDocuments] = useState([]);
-  const [filteredDocuments, setFilteredDocuments] = useState([]);
-  const [tabValue, setTabValue] = useState(0);
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedCourse, setSelectedCourse] = useState('all');
+  const [selectedVisibility, setSelectedVisibility] = useState('all');
+  const [selectedTag, setSelectedTag] = useState('all');
   const [courses, setCourses] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [generatedDocuments, setGeneratedDocuments] = useState([]);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [uploadFormData, setUploadFormData] = useState({
-    title: '',
-    description: '',
-    category: 'course',
-    course_id: '',
-    is_public: false,
-    file: null,
-    tags: [],
-  });
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [availableTags, setAvailableTags] = useState([]);
+  const [uploadData, setUploadData] = useState(uploadInitialState);
   const [tagInput, setTagInput] = useState('');
-  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
-  const [dateFilter, setDateFilter] = useState({
-    startDate: null,
-    endDate: null,
-  });
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [filterTags, setFilterTags] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Définir les catégories
-  const categories = [
-    { id: 'all', name: 'Tous les documents', icon: <DescriptionIcon /> },
-    { id: 'course', name: 'Documents de cours', icon: <SchoolIcon /> },
-    { id: 'administrative', name: 'Documents administratifs', icon: <FolderIcon /> },
-    { id: 'resource', name: 'Ressources pédagogiques', icon: <DescriptionIcon /> },
-    { id: 'other', name: 'Autres documents', icon: <DescriptionIcon /> },
-  ];
+  const tabs = useMemo(() => {
+    const baseTabs = [
+      { value: 'all', label: 'Tous' },
+      { value: 'course', label: 'Documents de cours' },
+      { value: 'administrative', label: 'Administratifs' }
+    ];
 
-  /**
-   * Récupère les documents depuis Supabase en fonction du profil de l'utilisateur
-   */
-  const fetchDocuments = async () => {
-    setLoading(true);
-    try {
-      if (!authState.user) {
-        throw new Error('Utilisateur non connecté');
-      }
-
-      // On récupère d'abord les données de l'utilisateur depuis les métadonnées
-      // pour contourner les problèmes de RLS avec la table profiles
-      const userData = authState.user.user_metadata || {};
-      const userRole = userData.role || 'student';
-      const profileBackup = userData.profile_backup || {};
-      const userId = authState.user.id;
-
-      // Récupérer les cours disponibles en utilisant service_role si nécessaire
-      let coursesList = [];
-      try {
-        if (userRole === 'student') {
-          const { data: coursesData, error: coursesError } = await supabase
-            .from('student_courses')
-            .select('course_id, courses(id, name, code)')
-            .eq('student_id', userId);
-
-          if (!coursesError && coursesData) {
-            coursesList = coursesData
-              .filter(item => item.courses) // Ignorer les items sans relation courses
-              .map(item => ({
-                id: item.courses.id,
-                name: item.courses.name,
-                code: item.courses.code
-              }));
-          } else {
-            console.warn('Erreur de récupération des cours étudiant, tentative de récupération depuis backup', coursesError);
-            // Tenter de récupérer depuis le backup dans les métadonnées
-            coursesList = userData.courses || profileBackup.courses || [];
-          }
-        } else if (userRole === 'professor') {
-          const { data: coursesData, error: coursesError } = await supabase
-            .from('professor_courses')
-            .select('course_id, courses(id, name, code)')
-            .eq('professor_id', userId);
-
-          if (!coursesError && coursesData) {
-            coursesList = coursesData
-              .filter(item => item.courses) // Ignorer les items sans relation courses
-              .map(item => ({
-                id: item.courses.id,
-                name: item.courses.name,
-                code: item.courses.code
-              }));
-          } else {
-            console.warn('Erreur de récupération des cours professeur, tentative de récupération depuis backup', coursesError);
-            // Tenter de récupérer depuis le backup dans les métadonnées
-            coursesList = userData.courses || profileBackup.courses || [];
-          }
-        }
-
-        setCourses(coursesList);
-      } catch (coursesError) {
-        console.error('Exception lors de la récupération des cours:', coursesError);
-        // En cas d'erreur, utiliser les cours du backup s'ils existent
-        setCourses(userData.courses || profileBackup.courses || []);
-      }
-
-      // Tentative 1: Utiliser l'API standard pour récupérer les documents
-      try {
-        // Construire la requête pour récupérer les documents
-        let query = supabase.from('documents').select('*');
-
-        if (userRole === 'student') {
-          // Les étudiants peuvent voir les documents publics et ceux liés à leurs cours
-          const studentCourseIds = coursesList.map(course => course.id).filter(id => id);
-          
-          if (studentCourseIds.length > 0) {
-            query = query.or(`is_public.eq.true,course_id.in.(${studentCourseIds.join(',')})`);
-          } else {
-            query = query.eq('is_public', true);
-          }
-        } else if (userRole === 'professor') {
-          // Les professeurs peuvent voir les documents publics et ceux qu'ils ont uploadés
-          query = query.or(`is_public.eq.true,uploaded_by.eq.${userId}`);
-        } else if (userRole === 'admin') {
-          // Les admins peuvent tout voir, pas de filtrage supplémentaire
-        }
-
-        const { data, error } = await query;
-
-        if (!error && data) {
-          handleDocumentsData(data);
-          return; // Sortir de la fonction si la requête a réussi
-        }
-        
-        // Si l'erreur est liée à la récursion infinie dans la politique RLS, on continue avec le plan B
-        console.warn('Erreur lors de la récupération des documents avec la requête standard:', error);
-      } catch (standardQueryError) {
-        console.error('Exception lors de la requête standard:', standardQueryError);
-      }
-
-      // Tentative 2: Récupérer un jeu de données basique depuis la collection documents_public
-      // qui a été créée spécifiquement pour contourner les problèmes de RLS
-      try {
-        const { data, error } = await supabase.from('documents_public').select('*');
-        
-        if (!error && data) {
-          handleDocumentsData(data);
-          return; // Sortir de la fonction si la requête a réussi
-        }
-        
-        console.warn('Erreur lors de la récupération des documents depuis documents_public:', error);
-      } catch (publicQueryError) {
-        console.error('Exception lors de la requête sur documents_public:', publicQueryError);
-      }
-
-      // Tentative 3: Utiliser les métadonnées utilisateur comme dernier recours
-      const backupDocuments = userData.documents_backup || profileBackup.documents || [];
-      if (backupDocuments.length > 0) {
-        console.log('Utilisation des documents de secours depuis les métadonnées utilisateur');
-        handleDocumentsData(backupDocuments);
-        return;
-      }
-
-      // Si toutes les tentatives échouent, afficher un message d'erreur mais ne pas bloquer l'interface
-      setDocuments([]);
-      setFilteredDocuments([]);
-      setError('Erreur lors du chargement des documents. Veuillez réessayer plus tard.');
-    } catch (err) {
-      console.error('Erreur critique lors du chargement des documents:', err);
-      setError(err.message || 'Une erreur est survenue lors du chargement des documents');
-    } finally {
-      setLoading(false);
+    if (canViewOfficialDocuments) {
+      baseTabs.push({ value: 'official', label: 'Documents officiels' });
     }
-  };
 
-  /**
-   * Traite les données de documents récupérées et met à jour l'état
-   * @param {Array} documentsData - Données des documents
-   */
-  const handleDocumentsData = (documentsData) => {
-    // Extraire tous les tags uniques
-    const tagsSet = new Set();
-    documentsData.forEach(doc => {
-      if (doc.tags && Array.isArray(doc.tags)) {
-        doc.tags.forEach(tag => tagsSet.add(tag));
+    return baseTabs;
+  }, [canViewOfficialDocuments]);
+
+  const availableTags = useMemo(() => {
+    const tags = new Set();
+    documents.forEach((document) => {
+      (document.tags || []).forEach((tag) => tags.add(tag));
+    });
+    return Array.from(tags).sort((left, right) => left.localeCompare(right));
+  }, [documents]);
+
+  const combinedItems = useMemo(() => {
+    const uploadedItems = documents.map((document) => ({
+      ...document,
+      source: 'uploaded'
+    }));
+
+    const officialItems = generatedDocuments.map((document) => ({
+      ...document,
+      source: 'generated'
+    }));
+
+    return [...officialItems, ...uploadedItems].sort((left, right) => (
+      new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+    ));
+  }, [documents, generatedDocuments]);
+
+  const filteredItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return combinedItems.filter((item) => {
+      const searchableContent = [
+        item.title,
+        item.description,
+        item.course_name,
+        item.template_name,
+        item.student_name,
+        ...(item.tags || [])
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      if (query && !searchableContent.includes(query)) {
+        return false;
+      }
+
+      if (selectedCourse !== 'all' && item.source === 'uploaded' && item.course_id !== Number(selectedCourse)) {
+        return false;
+      }
+
+      if (selectedVisibility !== 'all' && item.source === 'uploaded' && item.visibility !== selectedVisibility) {
+        return false;
+      }
+
+      if (selectedTag !== 'all' && item.source === 'uploaded' && !(item.tags || []).includes(selectedTag)) {
+        return false;
+      }
+
+      switch (activeTab) {
+        case 'course':
+          return item.source === 'uploaded' && !!item.course_id;
+        case 'administrative':
+          return item.source === 'uploaded' && !item.course_id;
+        case 'official':
+          return item.source === 'generated';
+        case 'all':
+        default:
+          return true;
       }
     });
-    setAvailableTags(Array.from(tagsSet));
-    
-    setDocuments(documentsData);
-    setFilteredDocuments(documentsData);
-    setError(null); // Réinitialiser l'erreur en cas de succès
-  };
+  }, [activeTab, combinedItems, searchQuery, selectedCourse, selectedTag, selectedVisibility]);
 
-  // Filtrer les documents en fonction des critères
-  useEffect(() => {
-    if (documents.length === 0) {
-      return;
-    }
-
-    let filtered = [...documents];
-
-    // Filtrer par catégorie
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(doc => doc.category === selectedCategory);
-    }
-
-    // Filtrer par cours
-    if (selectedCourse !== 'all') {
-      filtered = filtered.filter(doc => doc.course_id === parseInt(selectedCourse, 10));
-    }
-
-    // Filtrer par recherche
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        doc =>
-          doc.title.toLowerCase().includes(query) ||
-          (doc.description && doc.description.toLowerCase().includes(query)) ||
-          (doc.tags && doc.tags.some(tag => tag.toLowerCase().includes(query)))
-      );
-    }
-
-    // Filtrer par date
-    if (dateFilter.startDate) {
-      filtered = filtered.filter(
-        doc => new Date(doc.uploaded_at) >= new Date(dateFilter.startDate)
-      );
-    }
-    if (dateFilter.endDate) {
-      filtered = filtered.filter(
-        doc => new Date(doc.uploaded_at) <= new Date(dateFilter.endDate)
-      );
-    }
-
-    // Filtrer par tags
-    if (filterTags.length > 0) {
-      filtered = filtered.filter(
-        doc => doc.tags && filterTags.every(tag => doc.tags.includes(tag))
-      );
-    }
-
-    // Appliquer le filtre d'onglets
-    if (tabValue === 1) {
-      // Mes documents (uploadés par l'utilisateur)
-      filtered = filtered.filter(doc => doc.uploaded_by === authState.user.id);
-    } else if (tabValue === 2) {
-      // Documents de cours
-      filtered = filtered.filter(doc => doc.category === 'course');
-    } else if (tabValue === 3) {
-      // Documents administratifs
-      filtered = filtered.filter(doc => doc.category === 'administrative');
-    }
-
-    setFilteredDocuments(filtered);
-  }, [documents, selectedCategory, selectedCourse, searchQuery, tabValue, dateFilter, filterTags]);
-
-  // Charger les documents au chargement de la page
-  useEffect(() => {
-    if (authState.user) {
-      fetchDocuments();
-    }
-  }, [authState.user]);
-
-  /**
-   * Gérer le changement d'onglet
-   * @param {React.SyntheticEvent} _event - Événement React
-   * @param {number} newValue - Nouvel index d'onglet
-   */
-  const handleTabChange = (_event, newValue) => {
-    setTabValue(newValue);
-  };
-
-  /**
-   * Gérer le changement de catégorie
-   * @param {Object} event - Événement de changement
-   */
-  const handleCategoryChange = (event) => {
-    setSelectedCategory(event.target.value);
-  };
-
-  /**
-   * Gérer le changement de cours
-   * @param {Object} event - Événement de changement
-   */
-  const handleCourseChange = (event) => {
-    setSelectedCourse(event.target.value);
-  };
-
-  /**
-   * Gérer la recherche
-   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
-   */
-  const handleSearchChange = (event) => {
-    setSearchQuery(event.target.value);
-  };
-
-  /**
-   * Ouvrir la boîte de dialogue d'upload
-   */
-  const handleOpenUploadDialog = () => {
-    setUploadDialogOpen(true);
-  };
-
-  /**
-   * Fermer la boîte de dialogue d'upload
-   */
-  const handleCloseUploadDialog = () => {
-    setUploadDialogOpen(false);
-    // Réinitialiser le formulaire
-    setUploadFormData({
-      title: '',
-      description: '',
-      category: 'course',
-      course_id: '',
-      is_public: false,
-      file: null,
-      tags: [],
-    });
-    setUploadProgress(0);
-    setIsUploading(false);
-    setTagInput('');
-  };
-
-  /**
-   * Gérer les changements dans le formulaire d'upload
-   * @param {React.ChangeEvent<HTMLInputElement|HTMLTextAreaElement>} event - Événement de changement
-   */
-  const handleUploadFormChange = (event) => {
-    const { name, value } = event.target;
-    setUploadFormData({
-      ...uploadFormData,
-      [name]: value,
-    });
-  };
-
-  /**
-   * Gérer les changements de sélection dans le formulaire d'upload
-   * @param {Object} event - Événement de changement
-   */
-  const handleUploadSelectChange = (event) => {
-    const { name, value } = event.target;
-    setUploadFormData({
-      ...uploadFormData,
-      [name]: value,
-    });
-  };
-
-  /**
-   * Gérer la sélection de fichier
-   * @param {React.ChangeEvent<HTMLInputElement>} event - Événement de changement
-   */
-  const handleFileChange = (event) => {
-    if (event.target.files && event.target.files[0]) {
-      setUploadFormData({
-        ...uploadFormData,
-        file: event.target.files[0],
-      });
-    }
-  };
-
-  /**
-   * Télécharger un document
-   * @param {Document} document - Document à télécharger
-   */
-  const handleDownload = async (document) => {
-    try {
-      // Récupérer l'URL de téléchargement
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(document.file_path, 60);
-        
-      if (error) {
-        throw new Error(`Erreur lors de la création de l'URL de téléchargement: ${error.message}`);
-      }
-      
-      // Utilisation de l'utilitaire mutualisé
-      triggerDownload({ url: data.signedUrl, filename: document.title || 'document' });
-    } catch (err) {
-      console.error('Erreur lors du téléchargement du document:', err);
-      setError(`Erreur lors du téléchargement: ${err.message}`);
-    }
-  };
-
-  /**
-   * Supprimer un document
-   * @param {Document} document - Document à supprimer
-   */
-  const handleDelete = async (document) => {
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer "${document.title}" ?`)) {
-      return;
-    }
-    
-    try {
-      // Supprimer le fichier du stockage
-      const { error: storageError } = await supabase.storage
-        .from('documents')
-        .remove([document.file_path]);
-        
-      if (storageError) {
-        throw new Error(`Erreur lors de la suppression du fichier: ${storageError.message}`);
-      }
-      
-      // Supprimer l'entrée de la base de données
-      const { error: dbError } = await supabase
-        .from('documents')
-        .delete()
-        .eq('id', document.id);
-        
-      if (dbError) {
-        throw new Error(`Erreur lors de la suppression de l'entrée: ${dbError.message}`);
-      }
-      
-      // Mettre à jour l'état local
-      setDocuments(prev => prev.filter(doc => doc.id !== document.id));
-      setFilteredDocuments(prev => prev.filter(doc => doc.id !== document.id));
-      
-      // Message de confirmation
-      alert('Document supprimé avec succès!');
-    } catch (err) {
-      console.error('Erreur lors de la suppression du document:', err);
-      setError(`Erreur lors de la suppression: ${err.message}`);
-    }
-  };
-
-  /**
-   * Uploader un document
-   */
-  const handleUpload = async () => {
-    if (!uploadFormData.file || !uploadFormData.title) {
-      alert('Veuillez remplir les champs obligatoires (titre et fichier)');
-      return;
-    }
-    
-    setIsUploading(true);
-    
-    try {
-      const filePath = `${authState.user.id}/${Date.now()}_${uploadFormData.file.name}`;
-      
-      // Upload du fichier vers le stockage
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(filePath, uploadFormData.file, {
-          cacheControl: '3600',
-          upsert: false,
-          onUploadProgress: (progress) => {
-            const percent = Math.round((progress.loaded / progress.total) * 100);
-            setUploadProgress(percent);
-          },
-        });
-        
-      if (uploadError) {
-        throw new Error(`Erreur lors de l'upload du fichier: ${uploadError.message}`);
-      }
-      
-      // Créer l'entrée dans la base de données
-      const fileType = uploadFormData.file.type || 'application/octet-stream';
-      
-      const documentData = {
-        title: uploadFormData.title,
-        description: uploadFormData.description || null,
-        file_path: filePath,
-        file_type: fileType,
-        file_size: uploadFormData.file.size,
-        uploaded_by: authState.user.id,
-        uploaded_at: new Date().toISOString(),
-        category: uploadFormData.category,
-        course_id: uploadFormData.course_id ? parseInt(uploadFormData.course_id, 10) : null,
-        course_name: uploadFormData.course_id 
-          ? courses.find(c => c.id.toString() === uploadFormData.course_id)?.name 
-          : null,
-        is_public: uploadFormData.is_public,
-        department_id: authState.user.department_id || null,
-        department_name: null, // À compléter si nécessaire
-        tags: uploadFormData.tags.length > 0 ? uploadFormData.tags : null,
-      };
-      
-      const { data, error: insertError } = await supabase
-        .from('documents')
-        .insert([documentData])
-        .select();
-        
-      if (insertError) {
-        // Si l'insertion échoue, essayer de supprimer le fichier uploadé
-        await supabase.storage.from('documents').remove([filePath]);
-        throw new Error(`Erreur lors de l'enregistrement du document: ${insertError.message}`);
-      }
-      
-      if (data && data.length > 0) {
-        // Ajouter le nouveau document à l'état local
-        setDocuments(prev => [...prev, data[0]]);
-        setFilteredDocuments(prev => [...prev, data[0]]);
-        
-        // Fermer la boîte de dialogue et réinitialiser le formulaire
-        handleCloseUploadDialog();
-        
-        // Message de confirmation
-        alert('Document uploadé avec succès!');
-      }
-    } catch (err) {
-      console.error('Erreur lors de l\'upload du document:', err);
-      setError(`Erreur lors de l'upload: ${err.message}`);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  /**
-   * Formater la taille du fichier
-   * @param {number} bytes - Taille en octets
-   * @returns {string} Taille formatée
-   */
   const formatFileSize = (bytes) => {
+    if (!bytes) {
+      return 'Taille inconnue';
+    }
     if (bytes < 1024) {
       return `${bytes} o`;
-    } else if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(2)} Ko`;
-    } else {
-      return `${(bytes / (1024 * 1024)).toFixed(2)} Mo`;
     }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} Ko`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
   };
 
-  /**
-   * Formater la date
-   * @param {string} dateString - Date au format ISO
-   * @returns {string} Date formatée
-   */
   const formatDate = (dateString) => {
+    if (!dateString) {
+      return 'Date inconnue';
+    }
+
     try {
-      const date = new Date(dateString);
       return new Intl.DateTimeFormat('fr-FR', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
         hour: '2-digit',
-        minute: '2-digit',
-      }).format(date);
-    } catch (e) {
+        minute: '2-digit'
+      }).format(new Date(dateString));
+    } catch (_error) {
       return dateString;
     }
   };
 
-  /**
-   * Obtenir l'icône en fonction du type de fichier
-   * @param {string} fileType - Type MIME du fichier
-   * @returns {React.ReactNode} Icône correspondante
-   */
   const getFileIcon = (fileType) => {
+    if (!fileType) {
+      return <InsertDriveFileIcon />;
+    }
     if (fileType.startsWith('image/')) {
       return <ImageIcon />;
     }
@@ -642,454 +218,562 @@ const DocumentsPage = () => {
     if (fileType.startsWith('video/')) {
       return <VideoIcon />;
     }
-    if (fileType.startsWith('application/zip') || fileType.startsWith('application/x-rar')) {
+    if (fileType.includes('zip') || fileType.includes('rar')) {
       return <ArchiveIcon />;
     }
     return <InsertDriveFileIcon />;
   };
 
-  /**
-   * Ajouter un tag aux filtres
-   * @param {string} tag - Tag à ajouter
-   */
-  const handleAddFilterTag = (tag) => {
-    if (!filterTags.includes(tag)) {
-      setFilterTags([...filterTags, tag]);
+  const getVisibilityLabel = (visibility) => {
+    switch (visibility) {
+      case 'course':
+        return 'Cours';
+      case 'department':
+        return 'Département';
+      case 'public':
+        return 'Public';
+      default:
+        return visibility || 'N/A';
     }
   };
 
-  /**
-   * Supprimer un tag des filtres
-   * @param {string} tag - Tag à supprimer
-   */
-  const handleRemoveFilterTag = (tag) => {
-    setFilterTags(filterTags.filter(t => t !== tag));
+  const getGeneratedStatusColor = (status) => {
+    switch (status) {
+      case 'approved':
+        return 'success';
+      case 'pending':
+        return 'warning';
+      case 'rejected':
+        return 'error';
+      default:
+        return 'default';
+    }
   };
 
-  /**
-   * Réinitialiser tous les filtres
-   */
-  const handleResetFilters = () => {
-    setSearchQuery('');
-    setSelectedCategory('all');
-    setSelectedCourse('all');
-    setFilterTags([]);
-    setDateFilter({
-      startDate: null,
-      endDate: null,
-    });
+  const loadData = async () => {
+    if (!currentProfileId) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { courses: courseRows, documents: uploadedRows, generatedDocuments: generatedRows, error: loadError } = await getDocumentsPageData({
+        isAdmin: authState.isAdmin,
+        isStudent: authState.isStudent,
+        isProfessor: authState.isProfessor,
+        studentId: currentStudentId,
+        professorId: currentProfessorId,
+        canViewOfficialDocuments
+      });
+
+      if (loadError) {
+        throw loadError;
+      }
+
+      setCourses(courseRows);
+      setDocuments(uploadedRows);
+      setGeneratedDocuments(generatedRows);
+    } catch (loadError) {
+      console.error('Erreur lors du chargement des documents:', loadError);
+      setError(loadError.message || 'Impossible de charger les documents');
+      setDocuments([]);
+      setGeneratedDocuments([]);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    if (!authState.user) {
+      return;
+    }
+
+    if ((authState.isStudent && !currentStudentId) || (authState.isProfessor && !currentProfessorId)) {
+      return;
+    }
+
+    loadData();
+  }, [authState.user, authState.isStudent, authState.isProfessor, authState.isAdmin, currentProfileId, currentStudentId, currentProfessorId]);
+
+  const handleDownload = async (item) => {
+    try {
+      const { url, error: downloadError } = await createDocumentDownloadUrl(item.file_path, 60);
+
+      if (downloadError) {
+        throw downloadError;
+      }
+
+      const filename = item.source === 'generated'
+        ? `${item.template_name || item.title || 'document'}.pdf`
+        : item.title || 'document';
+
+      triggerDownload({ url, filename });
+    } catch (downloadError) {
+      console.error('Erreur lors du téléchargement du document:', downloadError);
+      setError(downloadError.message || 'Impossible de télécharger le document');
+    }
+  };
+
+  const handleDelete = async (item) => {
+    if (item.source !== 'uploaded') {
+      return;
+    }
+
+    if (!window.confirm(`Supprimer "${item.title}" ?`)) {
+      return;
+    }
+
+    try {
+      const { success, error: deleteError } = await deleteUploadedDocument(item.id, item.file_path);
+
+      if (!success || deleteError) {
+        throw deleteError;
+      }
+
+      setDocuments((prevDocuments) => prevDocuments.filter((document) => document.id !== item.id));
+      setSuccessMessage('Document supprimé');
+    } catch (deleteError) {
+      console.error('Erreur lors de la suppression du document:', deleteError);
+      setError(deleteError.message || 'Impossible de supprimer le document');
+    }
+  };
+
+  const resetUploadForm = () => {
+    setUploadData(uploadInitialState);
+    setTagInput('');
+    setUploadProgress(0);
+  };
+
+  const closeUploadDialog = () => {
+    if (uploading) {
+      return;
+    }
+    setUploadDialogOpen(false);
+    resetUploadForm();
+  };
+
+  const handleUpload = async () => {
+    if (!uploadData.title.trim() || !uploadData.file) {
+      setError('Le titre et le fichier sont obligatoires');
+      return;
+    }
+
+    if (uploadData.visibility === 'course' && !uploadData.course_id) {
+      setError('Un cours est obligatoire pour un document de cours');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(10);
+    setError(null);
+
+    try {
+      const { document: newDocument, error: uploadError } = await uploadDocument({
+        title: uploadData.title,
+        description: uploadData.description,
+        visibility: uploadData.visibility,
+        courseId: uploadData.course_id,
+        file: uploadData.file,
+        uploadedBy: currentProfileId,
+        tags: uploadData.tags
+      });
+
+      if (uploadError || !newDocument) {
+        throw uploadError || new Error('Impossible d’uploader le document');
+      }
+
+      setUploadProgress(80);
+      setDocuments((prevDocuments) => [newDocument, ...prevDocuments]);
+      setUploadProgress(100);
+      setSuccessMessage('Document uploadé');
+      setUploadDialogOpen(false);
+      resetUploadForm();
+    } catch (uploadError) {
+      console.error('Erreur lors de l’upload du document:', uploadError);
+      setError(uploadError.message || 'Impossible d’uploader le document');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const isDeleteAllowed = (item) => (
+    item.source === 'uploaded' &&
+    (authState.isAdmin || item.uploaded_by === currentProfileId)
+  );
 
   return (
-    <Box sx={{ padding: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Gestion des documents
-      </Typography>
+    <Box sx={{ py: 4, px: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">
+          Documents
+        </Typography>
+        {canUploadDocuments && (
+          <Button
+            variant="contained"
+            startIcon={<CloudUploadIcon />}
+            onClick={() => setUploadDialogOpen(true)}
+          >
+            Ajouter un document
+          </Button>
+        )}
+      </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
 
-      <Paper sx={{ mb: 3, p: 2 }}>
+      <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={12} md={4}>
             <TextField
               fullWidth
-              variant="outlined"
-              placeholder="Rechercher un document..."
+              placeholder="Rechercher un document"
               value={searchQuery}
-              onChange={handleSearchChange}
+              onChange={(event) => setSearchQuery(event.target.value)}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
                     <SearchIcon />
                   </InputAdornment>
-                ),
+                )
               }}
             />
           </Grid>
+
           <Grid item xs={12} sm={6} md={2}>
             <FormControl fullWidth>
-              <InputLabel>Catégorie</InputLabel>
+              <InputLabel id="visibility-filter-label">Visibilité</InputLabel>
               <Select
-                value={selectedCategory}
-                label="Catégorie"
-                onChange={handleCategoryChange}
+                labelId="visibility-filter-label"
+                label="Visibilité"
+                value={selectedVisibility}
+                onChange={(event) => setSelectedVisibility(event.target.value)}
               >
-                {categories.map((category) => (
-                  <MenuItem key={category.id} value={category.id}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      {category.icon}
-                      <Box sx={{ ml: 1 }}>{category.name}</Box>
-                    </Box>
+                <MenuItem value="all">Toutes</MenuItem>
+                <MenuItem value="course">Cours</MenuItem>
+                <MenuItem value="department">Département</MenuItem>
+                <MenuItem value="public">Public</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={2}>
+            <FormControl fullWidth>
+              <InputLabel id="course-filter-label">Cours</InputLabel>
+              <Select
+                labelId="course-filter-label"
+                label="Cours"
+                value={selectedCourse}
+                onChange={(event) => setSelectedCourse(event.target.value)}
+              >
+                <MenuItem value="all">Tous</MenuItem>
+                {courses.map((course) => (
+                  <MenuItem key={course.id} value={String(course.id)}>
+                    {course.name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
-          {courses.length > 0 && (
-            <Grid item xs={12} sm={6} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Cours</InputLabel>
-                <Select
-                  value={selectedCourse}
-                  label="Cours"
-                  onChange={handleCourseChange}
-                >
-                  <MenuItem value="all">Tous les cours</MenuItem>
-                  {courses.map((course) => (
-                    <MenuItem key={course.id} value={course.id.toString()}>
-                      {course.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          )}
+
           <Grid item xs={12} sm={6} md={2}>
-            <Button
-              variant="outlined"
-              fullWidth
-              startIcon={<FilterListIcon />}
-              onClick={() => setAdvancedSearchOpen(!advancedSearchOpen)}
-            >
-              Filtres avancés
-            </Button>
+            <FormControl fullWidth>
+              <InputLabel id="tag-filter-label">Tag</InputLabel>
+              <Select
+                labelId="tag-filter-label"
+                label="Tag"
+                value={selectedTag}
+                onChange={(event) => setSelectedTag(event.target.value)}
+              >
+                <MenuItem value="all">Tous</MenuItem>
+                {availableTags.map((tag) => (
+                  <MenuItem key={tag} value={tag}>
+                    {tag}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
+
           <Grid item xs={12} sm={6} md={2}>
             <Button
-              variant="contained"
               fullWidth
-              startIcon={<CloudUploadIcon />}
-              onClick={handleOpenUploadDialog}
+              variant="outlined"
+              startIcon={<FilterListIcon />}
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCourse('all');
+                setSelectedVisibility('all');
+                setSelectedTag('all');
+              }}
             >
-              Upload
+              Réinitialiser
             </Button>
           </Grid>
         </Grid>
-
-        {advancedSearchOpen && (
-          <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(0, 0, 0, 0.02)', borderRadius: 1 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Filtres avancés
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField
-                  label="Date de début"
-                  type="date"
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                  value={dateFilter.startDate || ''}
-                  onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField
-                  label="Date de fin"
-                  type="date"
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                  value={dateFilter.endDate || ''}
-                  onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Tags</InputLabel>
-                  <Select
-                    value=""
-                    label="Tags"
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        handleAddFilterTag(e.target.value);
-                      }
-                    }}
-                  >
-                    <MenuItem value="">Sélectionner un tag</MenuItem>
-                    {availableTags.map((tag) => (
-                      <MenuItem key={tag} value={tag}>
-                        {tag}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6} md={2}>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  fullWidth
-                  onClick={handleResetFilters}
-                >
-                  Réinitialiser
-                </Button>
-              </Grid>
-            </Grid>
-            {filterTags.length > 0 && (
-              <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {filterTags.map((tag) => (
-                  <Chip
-                    key={tag}
-                    label={tag}
-                    onDelete={() => handleRemoveFilterTag(tag)}
-                  />
-                ))}
-              </Box>
-            )}
-          </Box>
-        )}
       </Paper>
 
       <Paper sx={{ mb: 3 }}>
         <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
+          value={activeTab}
+          onChange={(_event, value) => setActiveTab(value)}
           variant="scrollable"
           scrollButtons="auto"
         >
-          <Tab label="Tous les documents" />
-          <Tab label="Mes documents" />
-          <Tab label="Documents de cours" />
-          <Tab label="Documents administratifs" />
+          {tabs.map((tab) => (
+            <Tab key={tab.value} value={tab.value} label={tab.label} />
+          ))}
         </Tabs>
       </Paper>
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
-      ) : filteredDocuments.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h6" color="textSecondary">
+          <Typography variant="h6" color="text.secondary">
             Aucun document trouvé
           </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Essayez de modifier vos critères de recherche ou d'uploader un nouveau document.
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Ajustez les filtres ou rechargez des documents depuis les modules concernés.
           </Typography>
         </Paper>
       ) : (
-        <List>
-          {filteredDocuments.map((document) => (
-            <React.Fragment key={document.id}>
-              <ListItem>
-                <ListItemIcon>
-                  {getFileIcon(document.file_type)}
-                </ListItemIcon>
-                <ListItemText
-                  primary={document.title}
-                  secondary={
+        <Paper>
+          <List disablePadding>
+            {filteredItems.map((item, index) => (
+              <React.Fragment key={`${item.source}-${item.id}`}>
+                <ListItem
+                  secondaryAction={(
                     <Box>
-                      <Typography variant="body2" component="span">
-                        {document.description && `${document.description} • `}
-                        {formatFileSize(document.file_size)} • Uploaded {formatDate(document.uploaded_at)}
-                      </Typography>
-                      {document.course_name && (
-                        <Typography variant="body2" component="div">
-                          Cours: {document.course_name}
-                        </Typography>
-                      )}
-                      {document.tags && document.tags.length > 0 && (
-                        <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {document.tags.map((tag) => (
-                            <Chip
-                              key={tag}
-                              label={tag}
-                              size="small"
-                              onClick={() => handleAddFilterTag(tag)}
-                              sx={{ mr: 0.5, mb: 0.5 }}
-                            />
-                          ))}
-                        </Box>
+                      <Tooltip title="Télécharger">
+                        <IconButton edge="end" onClick={() => handleDownload(item)}>
+                          <CloudDownloadIcon />
+                        </IconButton>
+                      </Tooltip>
+                      {isDeleteAllowed(item) && (
+                        <Tooltip title="Supprimer">
+                          <IconButton edge="end" onClick={() => handleDelete(item)}>
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
                       )}
                     </Box>
-                  }
-                />
-                <ListItemSecondaryAction>
-                  <Tooltip title="Télécharger">
-                    <IconButton
-                      edge="end"
-                      aria-label="download"
-                      onClick={() => handleDownload(document)}
-                    >
-                      <CloudDownloadIcon />
-                    </IconButton>
-                  </Tooltip>
-                  {(authState.isAdmin || document.uploaded_by === authState.user.id) && (
-                    <Tooltip title="Supprimer">
-                      <IconButton
-                        edge="end"
-                        aria-label="delete"
-                        onClick={() => handleDelete(document)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
                   )}
-                </ListItemSecondaryAction>
-              </ListItem>
-              <Divider variant="inset" component="li" />
-            </React.Fragment>
-          ))}
-        </List>
+                  sx={{ py: 2 }}
+                >
+                  <ListItemIcon>
+                    {item.source === 'generated' ? <DescriptionIcon /> : getFileIcon(item.file_type)}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={(
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="subtitle1">
+                          {item.title}
+                        </Typography>
+                        {item.source === 'uploaded' ? (
+                          <Chip
+                            size="small"
+                            icon={item.course_id ? <SchoolIcon /> : undefined}
+                            label={getVisibilityLabel(item.visibility)}
+                            variant="outlined"
+                          />
+                        ) : (
+                          <Chip
+                            size="small"
+                            label={item.status}
+                            color={getGeneratedStatusColor(item.status)}
+                            variant="outlined"
+                          />
+                        )}
+                      </Box>
+                    )}
+                    secondary={(
+                      <Box sx={{ mt: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {item.description || 'Sans description'}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                          {item.source === 'uploaded'
+                            ? `${item.course_name ? `${item.course_name} • ` : ''}${formatFileSize(item.file_size)} • Ajouté le ${formatDate(item.created_at)}`
+                            : `${item.template_name} • ${item.student_name} • Généré le ${formatDate(item.created_at)}`}
+                        </Typography>
+                        {item.tags?.length > 0 && (
+                          <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                            {item.tags.map((tag) => (
+                              <Chip
+                                key={`${item.id}-${tag}`}
+                                size="small"
+                                label={tag}
+                                onClick={() => setSelectedTag(tag)}
+                              />
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
+                    )}
+                  />
+                </ListItem>
+                {index < filteredItems.length - 1 && <Divider component="li" />}
+              </React.Fragment>
+            ))}
+          </List>
+        </Paper>
       )}
 
-      {/* Boîte de dialogue d'upload */}
-      <Dialog open={uploadDialogOpen} onClose={handleCloseUploadDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Uploader un nouveau document</DialogTitle>
+      <Dialog open={uploadDialogOpen} onClose={closeUploadDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Ajouter un document</DialogTitle>
         <DialogContent>
-          <Box sx={{ p: 1 }}>
-            <TextField
-              name="title"
-              label="Titre"
-              value={uploadFormData.title}
-              onChange={handleUploadFormChange}
-              fullWidth
-              margin="normal"
-              required
-            />
-            <TextField
-              name="description"
-              label="Description"
-              value={uploadFormData.description}
-              onChange={handleUploadFormChange}
-              fullWidth
-              margin="normal"
-              multiline
-              rows={3}
-            />
+          <TextField
+            label="Titre"
+            fullWidth
+            required
+            margin="normal"
+            value={uploadData.title}
+            onChange={(event) => setUploadData((prev) => ({ ...prev, title: event.target.value }))}
+          />
+
+          <TextField
+            label="Description"
+            fullWidth
+            multiline
+            rows={3}
+            margin="normal"
+            value={uploadData.description}
+            onChange={(event) => setUploadData((prev) => ({ ...prev, description: event.target.value }))}
+          />
+
+          <FormControl fullWidth margin="normal">
+            <InputLabel id="upload-visibility-label">Visibilité</InputLabel>
+            <Select
+              labelId="upload-visibility-label"
+              label="Visibilité"
+              value={uploadData.visibility}
+              onChange={(event) => setUploadData((prev) => ({
+                ...prev,
+                visibility: event.target.value,
+                course_id: event.target.value === 'course' ? prev.course_id : ''
+              }))}
+            >
+              <MenuItem value="course">Cours</MenuItem>
+              <MenuItem value="department">Département</MenuItem>
+              <MenuItem value="public">Public</MenuItem>
+            </Select>
+          </FormControl>
+
+          {uploadData.visibility === 'course' && (
             <FormControl fullWidth margin="normal">
-              <InputLabel>Catégorie</InputLabel>
+              <InputLabel id="upload-course-label">Cours</InputLabel>
               <Select
-                name="category"
-                value={uploadFormData.category}
-                label="Catégorie"
-                onChange={handleUploadSelectChange}
+                labelId="upload-course-label"
+                label="Cours"
+                value={uploadData.course_id}
+                onChange={(event) => setUploadData((prev) => ({ ...prev, course_id: event.target.value }))}
               >
-                <MenuItem value="course">Document de cours</MenuItem>
-                <MenuItem value="administrative">Document administratif</MenuItem>
-                <MenuItem value="resource">Ressource pédagogique</MenuItem>
-                <MenuItem value="other">Autre</MenuItem>
-              </Select>
-            </FormControl>
-            {uploadFormData.category === 'course' && courses.length > 0 && (
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Cours</InputLabel>
-                <Select
-                  name="course_id"
-                  value={uploadFormData.course_id}
-                  label="Cours"
-                  onChange={handleUploadSelectChange}
-                >
-                  <MenuItem value="">Aucun</MenuItem>
-                  {courses.map((course) => (
-                    <MenuItem key={course.id} value={course.id.toString()}>
-                      {course.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Visibilité</InputLabel>
-              <Select
-                name="is_public"
-                value={uploadFormData.is_public ? 'true' : 'false'}
-                label="Visibilité"
-                onChange={(e) =>
-                  setUploadFormData({
-                    ...uploadFormData,
-                    is_public: e.target.value === 'true',
-                  })
-                }
-              >
-                <MenuItem value="false">Département uniquement</MenuItem>
-                <MenuItem value="true">Public</MenuItem>
-              </Select>
-            </FormControl>
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', mt: 2 }}>
-              <TextField
-                label="Ajouter un tag"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                sx={{ flexGrow: 1, mr: 1 }}
-              />
-              <Button 
-                variant="outlined" 
-                onClick={() => {
-                  if (tagInput && !uploadFormData.tags.includes(tagInput)) {
-                    setUploadFormData({
-                      ...uploadFormData,
-                      tags: [...uploadFormData.tags, tagInput],
-                    });
-                    setTagInput('');
-                  }
-                }}
-                disabled={!tagInput}
-              >
-                Ajouter
-              </Button>
-            </Box>
-            {uploadFormData.tags.length > 0 && (
-              <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {uploadFormData.tags.map((tag) => (
-                  <Chip
-                    key={tag}
-                    label={tag}
-                    onDelete={() => {
-                      setUploadFormData({
-                        ...uploadFormData,
-                        tags: uploadFormData.tags.filter((t) => t !== tag),
-                      });
-                    }}
-                  />
+                {courses.map((course) => (
+                  <MenuItem key={course.id} value={String(course.id)}>
+                    {course.name}
+                  </MenuItem>
                 ))}
-              </Box>
-            )}
+              </Select>
+            </FormControl>
+          )}
+
+          <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, mt: 2 }}>
+            <TextField
+              label="Ajouter un tag"
+              fullWidth
+              value={tagInput}
+              onChange={(event) => setTagInput(event.target.value)}
+            />
             <Button
               variant="outlined"
-              component="label"
-              startIcon={<CloudUploadIcon />}
-              fullWidth
-              sx={{ mt: 2 }}
+              onClick={() => {
+                const normalizedTag = tagInput.trim();
+                if (!normalizedTag || uploadData.tags.includes(normalizedTag)) {
+                  return;
+                }
+                setUploadData((prev) => ({ ...prev, tags: [...prev.tags, normalizedTag] }));
+                setTagInput('');
+              }}
             >
-              Sélectionner un fichier
-              <input
-                type="file"
-                hidden
-                onChange={handleFileChange}
-              />
+              Ajouter
             </Button>
-            {uploadFormData.file && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  Fichier sélectionné: {uploadFormData.file.name} ({formatFileSize(uploadFormData.file.size)})
-                </Typography>
-              </Box>
-            )}
-            {isUploading && (
-              <Box sx={{ mt: 2 }}>
-                <CircularProgress variant="determinate" value={uploadProgress} />
-                <Typography variant="body2">{uploadProgress}%</Typography>
-              </Box>
-            )}
           </Box>
+
+          {uploadData.tags.length > 0 && (
+            <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {uploadData.tags.map((tag) => (
+                <Chip
+                  key={tag}
+                  label={tag}
+                  onDelete={() => setUploadData((prev) => ({
+                    ...prev,
+                    tags: prev.tags.filter((item) => item !== tag)
+                  }))}
+                />
+              ))}
+            </Box>
+          )}
+
+          <Button
+            variant="outlined"
+            component="label"
+            fullWidth
+            startIcon={<CloudUploadIcon />}
+            sx={{ mt: 3 }}
+          >
+            Sélectionner un fichier
+            <input
+              hidden
+              type="file"
+              onChange={(event) => {
+                const file = event.target.files?.[0] || null;
+                setUploadData((prev) => ({ ...prev, file }));
+              }}
+            />
+          </Button>
+
+          {uploadData.file && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {uploadData.file.name} • {formatFileSize(uploadData.file.size)}
+            </Typography>
+          )}
+
+          {uploading && (
+            <Box sx={{ mt: 3 }}>
+              <LinearProgress variant="determinate" value={uploadProgress} />
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Upload en cours: {uploadProgress}%
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseUploadDialog} disabled={isUploading}>
+          <Button onClick={closeUploadDialog} disabled={uploading}>
             Annuler
           </Button>
-          <Button
-            onClick={handleUpload}
-            variant="contained"
-            disabled={isUploading || !uploadFormData.file}
-          >
+          <Button onClick={handleUpload} variant="contained" disabled={uploading}>
             Uploader
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={4000}
+        onClose={() => setSuccessMessage(null)}
+      >
+        <Alert onClose={() => setSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

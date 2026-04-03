@@ -1,4 +1,3 @@
-import { supabase } from '@/supabase';
 import { GROUP_MEMBER_STATUS } from '@/types/groups';
 
 /**

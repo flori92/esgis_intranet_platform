@@ -19,7 +19,6 @@ import {
   School as SchoolIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import { getScheduleEvents, createScheduleEvent, updateScheduleEvent, deleteScheduleEvent } from '@/api/calendar';
 
 const EVENT_TYPES = [

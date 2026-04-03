@@ -60,11 +60,11 @@ const RegisterPage = () => {
     if (authState.user && !authState.loading) {
       // Rediriger vers le tableau de bord approprié selon le rôle
       if (authState.isAdmin) {
-        navigate('/admin/dashboard');
+        navigate('/admin');
       } else if (authState.isProfessor) {
-        navigate('/professor/dashboard');
+        navigate('/professor');
       } else {
-        navigate('/student/dashboard');
+        navigate('/student');
       }
     }
   }, [authState, navigate]);

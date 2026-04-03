@@ -3,32 +3,40 @@
  * @module pages/student/CertificatePage
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { generateCertificate, getStudentData } from '../../utils/certificateUtils';
 import { getAssetPath } from '../../utils/assetUtils';
-import { 
-  Box, 
-  Typography, 
-  Button, 
-  Paper, 
-  Container, 
-  Grid, 
-  CircularProgress, 
-  Card, 
-  CardContent, 
+import { uploadFile, createSignedUrl, removeFiles } from '@/api/storage';
+import { insertGeneratedDocument, getDocumentTemplateByType, getStudentGeneratedCertificates } from '@/api/documents';
+import { triggerDownload } from '@/utils/DownloadLinkUtil';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
   CardActions,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
   Divider,
-  Alert
+  Grid,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  Paper,
+  Typography
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import DownloadIcon from '@mui/icons-material/Download';
 import SchoolIcon from '@mui/icons-material/School';
 import ArticleIcon from '@mui/icons-material/Article';
+import DescriptionIcon from '@mui/icons-material/Description';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-// Styles personnalisés
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
   marginBottom: theme.spacing(3),
@@ -48,10 +56,7 @@ const DocumentPreview = styled(Box)(({ theme }) => ({
   '&::after': {
     content: '""',
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    inset: 0,
     backgroundImage: `url(${getAssetPath('images/logo-esgis-white.svg')})`,
     backgroundRepeat: 'no-repeat',
     backgroundPosition: 'center',
@@ -87,74 +92,167 @@ const ActionButton = styled(Button)(({ theme }) => ({
   padding: theme.spacing(1, 3)
 }));
 
-/**
- * Composant de la page de certificats de scolarité
- * @returns {JSX.Element} Composant CertificatePage
- */
 const CertificatePage = () => {
-  const { user } = useAuth();
+  const { authState, user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  
-  // Date du jour formatée en français
-  const currentDate = format(new Date(), "dd MMMM yyyy", { locale: fr });
-  
-  /**
-   * Génère et télécharge le certificat de scolarité
-   */
+  const [certificates, setCertificates] = useState([]);
+
+  const currentDate = format(new Date(), 'dd MMMM yyyy', { locale: fr });
+
+  const previewIdentity = useMemo(() => {
+    const fullName = authState.profile?.full_name || user?.user_metadata?.fullName || 'Étudiant ESGIS';
+    const parts = fullName.split(' ').filter(Boolean);
+    return {
+      firstName: parts.slice(0, -1).join(' ') || parts[0] || 'Étudiant',
+      lastName: parts.length > 1 ? parts[parts.length - 1].toUpperCase() : 'ESGIS'
+    };
+  }, [authState.profile?.full_name, user?.user_metadata?.fullName]);
+
+  const resolveStoragePath = (filePath) => {
+    if (!filePath) {
+      return null;
+    }
+    return filePath.replace(/^documents\//, '');
+  };
+
+  const fetchCertificates = async () => {
+    if (!authState.student?.id) {
+      setHistoryLoading(false);
+      return;
+    }
+
+    setHistoryLoading(true);
+
+    try {
+      const { certificates: fetched, error: certificatesError } = await getStudentGeneratedCertificates(authState.student.id);
+
+      if (certificatesError) {
+        throw certificatesError;
+      }
+
+      setCertificates(fetched);
+    } catch (certificatesError) {
+      console.error('Erreur lors du chargement de l\'historique des certificats:', certificatesError);
+      setCertificates([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCertificates();
+  }, [authState.student?.id]);
+
+  const handleDownloadStoredCertificate = async (certificate) => {
+    try {
+      const storagePath = resolveStoragePath(certificate.file_path);
+
+      if (!storagePath) {
+        throw new Error('Chemin du certificat introuvable');
+      }
+
+      const { signedUrl, error: signedUrlError } = await createSignedUrl('documents', storagePath, 60);
+
+      if (signedUrlError) {
+        throw signedUrlError;
+      }
+
+      triggerDownload({
+        url: signedUrl,
+        filename: `certificat_scolarite_${format(new Date(certificate.created_at), 'yyyy-MM-dd')}.pdf`
+      });
+    } catch (downloadError) {
+      console.error('Erreur lors du téléchargement du certificat archivé:', downloadError);
+      setError(downloadError.message || 'Impossible de télécharger le certificat archivé.');
+    }
+  };
+
   const handleGenerateCertificate = async () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
-    
+
     try {
-      // Récupération des données de l'étudiant
-      const studentData = await getStudentData(user.id);
-      
-      // Génération du certificat
+      if (!authState.student?.id || !authState.profile?.id) {
+        throw new Error('Profil étudiant incomplet');
+      }
+
+      const studentData = await getStudentData(authState.profile.id);
       const pdfBytes = await generateCertificate(studentData);
-      
-      // Création d'un blob pour le téléchargement
+
+      const { template, error: templateError } = await getDocumentTemplateByType('certificate');
+
+      if (templateError) {
+        throw templateError;
+      }
+
+      const dateSlug = format(new Date(), 'yyyy-MM-dd_HH-mm');
+      const safeLastName = (studentData.lastName || 'etudiant').toLowerCase().replace(/\s+/g, '_');
+      const storagePath = `official/${authState.profile.id}/certificat_scolarite_${safeLastName}_${dateSlug}.pdf`;
+
+      const { error: uploadError } = await uploadFile('documents', storagePath, pdfBytes, {
+        contentType: 'application/pdf',
+        cacheControl: '3600',
+        upsert: false
+      });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { error: insertError } = await insertGeneratedDocument({
+        template_id: template.id,
+        student_id: authState.student.id,
+        file_path: `documents/${storagePath}`,
+        status: 'approved',
+        generated_by: authState.profile.id
+      });
+
+      if (insertError) {
+        await removeFiles('documents', [storagePath]);
+        throw insertError;
+      }
+
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
-      
-      // Création d'un lien de téléchargement
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `certificat_scolarite_${studentData.lastName.toLowerCase()}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
+      triggerDownload({
+        url,
+        filename: `certificat_scolarite_${safeLastName}_${format(new Date(), 'yyyy-MM-dd')}.pdf`
+      });
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+
       setSuccess(true);
-    } catch (err) {
-      console.error("Erreur lors de la génération du certificat:", err);
-      setError("Impossible de générer le certificat. Veuillez réessayer plus tard.");
+      fetchCertificates();
+    } catch (generationError) {
+      console.error('Erreur lors de la génération du certificat:', generationError);
+      setError(generationError.message || 'Impossible de générer le certificat. Veuillez réessayer plus tard.');
     } finally {
       setLoading(false);
     }
   };
-  
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Typography variant="h4" component="h1" gutterBottom sx={{ mb: 4 }}>
         <SchoolIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
         Certificat de Scolarité
       </Typography>
-      
+
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
-      
+
       {success && (
         <Alert severity="success" sx={{ mb: 3 }}>
-          Votre certificat a été généré avec succès et le téléchargement a démarré.
+          Votre certificat a été généré, archivé et téléchargé.
         </Alert>
       )}
-      
+
       <Grid container spacing={4}>
         <Grid item xs={12} md={5}>
           <StyledPaper>
@@ -163,14 +261,14 @@ const CertificatePage = () => {
               Générer votre certificat
             </Typography>
             <Typography variant="body2" paragraph>
-              Ce certificat atteste que vous êtes régulièrement inscrit(e) à l'ESGIS pour l'année académique en cours.
+              Le certificat est généré au format PDF, archivé dans votre dossier officiel et immédiatement téléchargeable.
             </Typography>
             <Typography variant="body2" paragraph>
-              Le document généré est un fichier PDF officiel que vous pouvez télécharger, imprimer et présenter comme justificatif de scolarité.
+              Ce flux alimente l’historique administratif de vos documents au lieu d’une simple génération locale non tracée.
             </Typography>
             <Divider sx={{ my: 2 }} />
             <Typography variant="body2" paragraph>
-              <strong>Note:</strong> Le certificat est automatiquement daté du jour de sa génération et comporte une signature numérique officielle.
+              <strong>Note:</strong> chaque génération crée une nouvelle archive officielle associée à votre profil étudiant.
             </Typography>
             <ActionButton
               variant="contained"
@@ -180,18 +278,54 @@ const CertificatePage = () => {
               disabled={loading}
               fullWidth
             >
-              {loading ? "Génération en cours..." : "Générer mon certificat"}
+              {loading ? 'Génération en cours...' : 'Générer mon certificat'}
             </ActionButton>
           </StyledPaper>
-          
+
           <Card>
             <CardContent>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Besoin d'autres documents ?
+                Historique de mes certificats
               </Typography>
-              <Typography variant="body2">
-                D'autres documents administratifs sont disponibles dans la section "Documents" de votre espace étudiant.
-              </Typography>
+              {historyLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : certificates.length === 0 ? (
+                <Typography variant="body2">
+                  Aucun certificat archivé pour le moment.
+                </Typography>
+              ) : (
+                <List dense>
+                  {certificates.map((certificate) => (
+                    <ListItem
+                      key={certificate.id}
+                      secondaryAction={
+                        <IconButton edge="end" onClick={() => handleDownloadStoredCertificate(certificate)}>
+                          <DownloadIcon />
+                        </IconButton>
+                      }
+                    >
+                      <ListItemText
+                        primary={(
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <DescriptionIcon fontSize="small" />
+                            <Typography variant="body2">
+                              Certificat du {format(new Date(certificate.created_at), 'dd/MM/yyyy')}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              color={certificate.status === 'approved' ? 'success' : 'default'}
+                              label={certificate.status}
+                            />
+                          </Box>
+                        )}
+                        secondary={certificate.approval_date ? `Archivé le ${format(new Date(certificate.approval_date), 'dd/MM/yyyy HH:mm')}` : 'En attente'}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </CardContent>
             <CardActions>
               <Button size="small" href="/student/documents">
@@ -200,7 +334,7 @@ const CertificatePage = () => {
             </CardActions>
           </Card>
         </Grid>
-        
+
         <Grid item xs={12} md={7}>
           <StyledPaper>
             <Typography variant="h6" gutterBottom>
@@ -218,13 +352,13 @@ const CertificatePage = () => {
                   certifie que :
                 </Typography>
                 <Typography variant="body1" paragraph sx={{ fontWeight: 'bold', ml: 4 }}>
-                  {user?.user_metadata?.firstName || user?.firstName || ''} {(user?.user_metadata?.lastName || user?.lastName || '').toUpperCase()}
+                  {previewIdentity.firstName} {previewIdentity.lastName}
                 </Typography>
                 <Typography variant="body1" paragraph sx={{ ml: 4 }}>
-                  Numéro d'étudiant : {user?.user_metadata?.studentId || user?.id?.substring(0, 8).toUpperCase() || ''}
+                  Numéro d'étudiant : {authState.student?.student_number || user?.id?.substring(0, 8).toUpperCase() || ''}
                 </Typography>
                 <Typography variant="body1" paragraph sx={{ ml: 4 }}>
-                  est régulièrement inscrit(e) en {user?.user_metadata?.level || 'Licence'} {user?.user_metadata?.program || 'Informatique'}
+                  est régulièrement inscrit(e) en {authState.student?.level || 'Licence'} {user?.user_metadata?.program || 'Informatique'}
                 </Typography>
                 <Typography variant="body1" paragraph sx={{ ml: 4 }}>
                   pour l'année académique en cours.
@@ -240,7 +374,7 @@ const CertificatePage = () => {
                 <Typography variant="body2" sx={{ mt: 2, fontWeight: 'bold' }}>
                   Le Directeur
                 </Typography>
-                <Box sx={{ height: 40 }} /> {/* Espace pour la signature */}
+                <Box sx={{ height: 40 }} />
               </DocumentFooter>
             </DocumentPreview>
           </StyledPaper>

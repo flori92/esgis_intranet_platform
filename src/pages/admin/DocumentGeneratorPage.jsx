@@ -16,7 +16,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Autocomplete,
   FormControlLabel,
   Checkbox,
   Card,
@@ -36,13 +35,13 @@ import {
   Save as SaveIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-// Correction du chemin d'importation de Supabase
-import { supabase } from '@/supabase';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { uploadFile, downloadFile } from '@/api/storage';
+import { insertGeneratedDocument, updateGeneratedDocumentStatus, getAllGeneratedDocuments } from '@/api/documents';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getRecordsWithRelation as fetchRecords, insertRecord, getRecordsWithRelation as fetchWithRelations } from '@/utils/supabase-helpers';
 import { triggerDownload } from '@/utils/DownloadLinkUtil';
+import { loadPdfLib } from '@/utils/pdfLib';
 
 const DocumentGeneratorPage = () => {
   const { authState } = useAuth();
@@ -55,9 +54,24 @@ const DocumentGeneratorPage = () => {
   const [students, setStudents] = useState([]);
   const [formValues, setFormValues] = useState({});
   const [documentData, setDocumentData] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [generatedDocuments, setGeneratedDocuments] = useState([]);
   const [sendEmailChecked, setSendEmailChecked] = useState(false);
+
+  useEffect(() => {
+    if (!documentData) {
+      setPreviewUrl(null);
+      return undefined;
+    }
+
+    const url = URL.createObjectURL(new Blob([documentData], { type: 'application/pdf' }));
+    setPreviewUrl(url);
+
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [documentData]);
 
   // Fonction pour charger les modèles de documents
   const fetchTemplates = async () => {
@@ -131,22 +145,7 @@ const DocumentGeneratorPage = () => {
       await Promise.all([fetchTemplates(), fetchStudents()]);
       
       // Récupérer les documents générés
-      const { data: documents, error: documentsError } = await supabase
-        .from('generated_documents')
-        .select(`
-          *,
-          students (
-            id,
-            profiles (
-              full_name
-            )
-          ),
-          document_templates (
-            id,
-            name
-          )
-        `)
-        .order('created_at', { ascending: false })
+      const { documents, error: documentsError } = await getAllGeneratedDocuments()
         .limit(10);
       
       if (documentsError) {
@@ -222,6 +221,7 @@ const DocumentGeneratorPage = () => {
     try {
       // Récupérer le modèle sélectionné
       const template = templates.find(t => t.id === selectedTemplate);
+      const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
       
       if (!template) {
         throw new Error('Modèle non trouvé');
@@ -420,35 +420,23 @@ const DocumentGeneratorPage = () => {
       const filePath = `documents/${fileName}`;
       
       // Stocker le fichier dans le bucket de stockage
-      const { error: storageError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, documentData, {
-          contentType: 'application/pdf',
-          cacheControl: '3600'
-        });
-      
+      const { error: storageError } = await uploadFile('documents', fileName, documentData, {
+        contentType: 'application/pdf',
+        cacheControl: '3600'
+      });
+
       if (storageError) {
         throw storageError;
       }
-      
-      // Obtenir l'URL publique du fichier
-      const { data: publicURL } = supabase.storage
-        .from('documents')
-        .getPublicUrl(fileName);
-      
+
       // Enregistrer le document dans la base de données
-      const { data: document, error: insertError } = await supabase
-        .from('generated_documents')
-        .insert({
-          template_id: selectedTemplate,
-          student_id: selectedStudent.id,
-          file_path: filePath,
-          status: 'pending', // En attente d'approbation
-          generated_by: authState.user?.id || null,
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
+      const { document, error: insertError } = await insertGeneratedDocument({
+        template_id: selectedTemplate,
+        student_id: selectedStudent.id,
+        file_path: filePath,
+        status: 'pending',
+        generated_by: authState.user?.id || null
+      });
       
       if (insertError) {
         throw insertError;
@@ -479,7 +467,8 @@ const DocumentGeneratorPage = () => {
 
   // Télécharger le document
   const downloadDocument = (pdfBlob) => {
-    const url = URL.createObjectURL(pdfBlob);
+    const blob = pdfBlob instanceof Blob ? pdfBlob : new Blob([pdfBlob], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
     triggerDownload({ url, filename: `document_${new Date().getTime()}.pdf` });
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
@@ -494,9 +483,7 @@ const DocumentGeneratorPage = () => {
       const fileName = filePath.split('/').pop();
       
       // Télécharger le fichier depuis le stockage
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .download(fileName);
+      const { data, error } = await downloadFile('documents', fileName);
       
       if (error) {
         throw error;
@@ -532,14 +519,7 @@ const DocumentGeneratorPage = () => {
     
     try {
       // Mettre à jour le statut du document
-      const { error } = await supabase
-        .from('generated_documents')
-        .update({
-          status: 'approved',
-          approved_by: authState.user?.id || null,
-          approval_date: new Date().toISOString()
-        })
-        .eq('id', documentId);
+      const { error } = await updateGeneratedDocumentStatus(documentId, 'approved', authState.user?.id);
       
       if (error) {
         throw error;
@@ -571,14 +551,7 @@ const DocumentGeneratorPage = () => {
     
     try {
       // Mettre à jour le statut du document
-      const { error } = await supabase
-        .from('generated_documents')
-        .update({
-          status: 'rejected',
-          approved_by: authState.user?.id || null, // Pour enregistrer qui a rejeté
-          approval_date: new Date().toISOString()
-        })
-        .eq('id', documentId);
+      const { error } = await updateGeneratedDocumentStatus(documentId, 'rejected', authState.user?.id);
       
       if (error) {
         throw error;
@@ -663,16 +636,26 @@ const DocumentGeneratorPage = () => {
               </Grid>
               
               <Grid item xs={12}>
-                <Autocomplete
-                  options={students}
-                  getOptionLabel={(option) => `${option.full_name} (${option.student_number})`}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Étudiant" />
-                  )}
-                  value={selectedStudent}
-                  onChange={(_, newValue) => setSelectedStudent(newValue)}
-                  isOptionEqualToValue={(option, value) => option.id === value.id}
-                />
+                <FormControl fullWidth>
+                  <InputLabel id="student-select-label">Étudiant</InputLabel>
+                  <Select
+                    labelId="student-select-label"
+                    value={selectedStudent?.id || ''}
+                    onChange={(event) => {
+                      const student = students.find(
+                        (item) => String(item.id) === String(event.target.value)
+                      ) || null;
+                      setSelectedStudent(student);
+                    }}
+                    label="Étudiant"
+                  >
+                    {students.map((student) => (
+                      <MenuItem key={student.id} value={student.id}>
+                        {`${student.full_name} (${student.student_number})`}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               
               {selectedTemplate && (
@@ -801,7 +784,7 @@ const DocumentGeneratorPage = () => {
           {documentData ? (
             <Box sx={{ width: '100%', height: '500px', overflow: 'hidden' }}>
               <iframe
-                src={`data:application/pdf;base64,${Buffer.from(documentData).toString('base64')}`}
+                src={previewUrl || ''}
                 width="100%"
                 height="100%"
                 title="Aperçu du document"

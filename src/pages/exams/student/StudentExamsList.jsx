@@ -32,7 +32,6 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/supabase';
 import { format, parseISO, isBefore, isAfter } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getExamsFromUserMetadata, filterExamsByStatus, searchExams } from '@/utils/examUtils';

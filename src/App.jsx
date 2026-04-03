@@ -1,22 +1,23 @@
-import React from 'react';
+import { Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Box, CircularProgress, Typography } from '@mui/material';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import LoginPage from './pages/auth/LoginPage';
-import ResetPasswordPage from './pages/auth/ResetPasswordPage';
-import MainLayout from './components/layout/MainLayout';
-import AdminRoutes from './routes/AdminRoutes';
-import ProfessorRoutes from './routes/ProfessorRoutes';
-import StudentRoutes from './routes/StudentRoutes';
-import SchedulePage from './pages/schedule/SchedulePage';
-import GradesPage from './pages/grades/GradesPage';
-import DocumentsPage from './pages/documents/DocumentsPage';
-import MessagesPage from './pages/messages/MessagesPage';
-import NotificationsPage from './pages/notifications/NotificationsPage';
-import StagesPage from './pages/stages/StagesPage';
-import ProfileSettingsPage from './pages/shared/ProfileSettingsPage';
-import ForumPage from './pages/shared/ForumPage';
-import VerifyDocumentPage from './pages/public/VerifyDocumentPage';
+import RouteLoader from './components/common/RouteLoader';
+
+const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
+const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
+const MainLayout = lazy(() => import('./components/layout/MainLayout'));
+const AdminRoutes = lazy(() => import('./routes/AdminRoutes'));
+const ProfessorRoutes = lazy(() => import('./routes/ProfessorRoutes'));
+const StudentRoutes = lazy(() => import('./routes/StudentRoutes'));
+const SchedulePage = lazy(() => import('./pages/schedule/SchedulePage'));
+const GradesPage = lazy(() => import('./pages/grades/GradesPage'));
+const DocumentsPage = lazy(() => import('./pages/documents/DocumentsPage'));
+const MessagesPage = lazy(() => import('./pages/messages/MessagesPage'));
+const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage'));
+const StagesPage = lazy(() => import('./pages/stages/StagesPage'));
+const ProfileSettingsPage = lazy(() => import('./pages/shared/ProfileSettingsPage'));
+const ForumPage = lazy(() => import('./pages/shared/ForumPage'));
+const VerifyDocumentPage = lazy(() => import('./pages/public/VerifyDocumentPage'));
 
 /**
  * Composant de protection des routes
@@ -31,12 +32,7 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   
   // Afficher un loader pendant le chargement de l'auth
   if (authState.loading) {
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 2 }}>
-        <CircularProgress size={48} />
-        <Typography color="text.secondary">Chargement...</Typography>
-      </Box>
-    );
+    return <RouteLoader fullScreen />;
   }
   
   // Si l'utilisateur n'est pas connecté, rediriger vers login
@@ -68,12 +64,7 @@ const RoleBasedRedirect = () => {
   const { authState } = useAuth();
   
   if (authState.loading) {
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 2 }}>
-        <CircularProgress size={48} />
-        <Typography color="text.secondary">Chargement...</Typography>
-      </Box>
-    );
+    return <RouteLoader fullScreen />;
   }
   if (!authState.user) return <Navigate to="/login" replace />;
   if (authState.isAdmin) return <Navigate to="/admin" replace />;
@@ -88,124 +79,126 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <Routes>
-          {/* Routes d'authentification */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          
-          {/* Routes protégées avec layout */}
-          <Route element={<MainLayout />}>
-            {/* Routes administrateur */}
-            <Route 
-              path="/admin/*" 
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <AdminRoutes />
-                </ProtectedRoute>
-              } 
-            />
+        <Suspense fallback={<RouteLoader fullScreen />}>
+          <Routes>
+            {/* Routes d'authentification */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             
-            {/* Routes étudiant - utilise StudentRoutes avec sous-routes */}
-            <Route 
-              path="/student/*" 
-              element={
-                <ProtectedRoute requiredRole="student">
-                  <StudentRoutes />
-                </ProtectedRoute>
-              } 
-            />
+            {/* Routes protégées avec layout */}
+            <Route element={<MainLayout />}>
+              {/* Routes administrateur */}
+              <Route 
+                path="/admin/*" 
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AdminRoutes />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Routes étudiant - utilise StudentRoutes avec sous-routes */}
+              <Route 
+                path="/student/*" 
+                element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentRoutes />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Routes professeur */}
+              <Route 
+                path="/professor/*" 
+                element={
+                  <ProtectedRoute requiredRole="professor">
+                    <ProfessorRoutes />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Routes partagées (accessibles à tous les rôles authentifiés) */}
+              <Route 
+                path="/stages/*" 
+                element={
+                  <ProtectedRoute>
+                    <StagesPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/schedule" 
+                element={
+                  <ProtectedRoute>
+                    <SchedulePage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/grades" 
+                element={
+                  <ProtectedRoute>
+                    <GradesPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/documents" 
+                element={
+                  <ProtectedRoute>
+                    <DocumentsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/messages" 
+                element={
+                  <ProtectedRoute>
+                    <MessagesPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/notifications" 
+                element={
+                  <ProtectedRoute>
+                    <NotificationsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/profile" 
+                element={
+                  <ProtectedRoute>
+                    <ProfileSettingsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/forums" 
+                element={
+                  <ProtectedRoute>
+                    <ForumPage />
+                  </ProtectedRoute>
+                } 
+              />
+            </Route>
             
-            {/* Routes professeur */}
-            <Route 
-              path="/professor/*" 
-              element={
-                <ProtectedRoute requiredRole="professor">
-                  <ProfessorRoutes />
-                </ProtectedRoute>
-              } 
-            />
+            {/* Route publique: Vérification de document QR */}
+            <Route path="/verify/:reference" element={<VerifyDocumentPage />} />
             
-            {/* Routes partagées (accessibles à tous les rôles authentifiés) */}
-            <Route 
-              path="/stages/*" 
-              element={
-                <ProtectedRoute>
-                  <StagesPage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/schedule" 
-              element={
-                <ProtectedRoute>
-                  <SchedulePage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/grades" 
-              element={
-                <ProtectedRoute>
-                  <GradesPage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/documents" 
-              element={
-                <ProtectedRoute>
-                  <DocumentsPage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/messages" 
-              element={
-                <ProtectedRoute>
-                  <MessagesPage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/notifications" 
-              element={
-                <ProtectedRoute>
-                  <NotificationsPage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/profile" 
-              element={
-                <ProtectedRoute>
-                  <ProfileSettingsPage />
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/forums" 
-              element={
-                <ProtectedRoute>
-                  <ForumPage />
-                </ProtectedRoute>
-              } 
-            />
-          </Route>
-          
-          {/* Route publique: Vérification de document QR */}
-          <Route path="/verify/:reference" element={<VerifyDocumentPage />} />
-          
-          {/* Redirection intelligente selon le rôle */}
-          <Route path="/" element={<RoleBasedRedirect />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+            {/* Redirection intelligente selon le rôle */}
+            <Route path="/" element={<RoleBasedRedirect />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Suspense>
       </AuthProvider>
     </Router>
   );

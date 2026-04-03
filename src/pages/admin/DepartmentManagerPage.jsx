@@ -37,8 +37,6 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 // Correction du chemin d'importation de Supabase
-import { supabase } from '@/supabase';
-import { getRecordsWithRelation as fetchWithRelations, getRecordsWithRelation as fetchRecords, insertRecord, updateRecord, deleteRecord } from '@/utils/supabase-helpers';
 
 const DepartmentManagerPage = () => {
   const theme = useTheme();

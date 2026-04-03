@@ -14,15 +14,10 @@ import {
   Chip,
   FormHelperText,
   Alert,
-  Autocomplete,
   InputAdornment
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { fr } from 'date-fns/locale';
-import { supabase } from '@/supabase';
+import { getStageCompanies } from '@/api/stages';
 
 /**
  * @typedef {import('../types').Offre} Offre
@@ -52,8 +47,8 @@ const AjouterOffre = ({ onSubmit, departementId }) => {
   const [description, setDescription] = useState('');
   const [entrepriseId, setEntrepriseId] = useState(null);
   const [entrepriseSelectionnee, setEntrepriseSelectionnee] = useState(null);
-  const [dateDebut, setDateDebut] = useState(null);
-  const [dateFin, setDateFin] = useState(null);
+  const [dateDebut, setDateDebut] = useState('');
+  const [dateFin, setDateFin] = useState('');
   const [lieu, setLieu] = useState('');
   const [typeStage, setTypeStage] = useState('stage_etude');
   const [competencesRequises, setCompetencesRequises] = useState([]);
@@ -64,7 +59,6 @@ const AjouterOffre = ({ onSubmit, departementId }) => {
 
   // États pour les données externes
   const [entreprises, setEntreprises] = useState([]);
-  const [departements, setDepartements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
@@ -82,34 +76,11 @@ const AjouterOffre = ({ onSubmit, departementId }) => {
    */
   const chargerDonnees = async () => {
     try {
-      // Charger les entreprises
-      const { data: entreprisesData, error: entreprisesError } = await supabase
-        .from('entreprises')
-        .select('*')
-        .order('nom');
-      
+      const { data: entreprisesData, error: entreprisesError } = await getStageCompanies();
       if (entreprisesError) {
         throw entreprisesError;
       }
       setEntreprises(entreprisesData || []);
-
-      // Charger les départements
-      const { data: departementsData, error: departementsError } = await supabase
-        .from('departments')
-        .select('id, name')
-        .order('name');
-      
-      if (departementsError) {
-        throw departementsError;
-      }
-      
-      // Adapter les données pour correspondre à l'interface Departement
-      const formattedDepartments = (departementsData || []).map(dept => ({
-        id: dept.id,
-        nom: dept.name
-      }));
-      
-      setDepartements(formattedDepartments);
     } catch (err) {
       console.error('Erreur lors du chargement des données:', err);
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
@@ -137,7 +108,10 @@ const AjouterOffre = ({ onSubmit, departementId }) => {
    * @param {any} _ - Événement non utilisé
    * @param {Entreprise|null} newValue - Nouvelle entreprise sélectionnée
    */
-  const handleEntrepriseChange = (_, newValue) => {
+  const handleEntrepriseChange = (event) => {
+    const newValue = entreprises.find(
+      (item) => String(item.id) === String(event.target.value)
+    ) || null;
     setEntrepriseSelectionnee(newValue);
     setEntrepriseId(newValue ? newValue.id : null);
   };
@@ -292,8 +266,8 @@ const AjouterOffre = ({ onSubmit, departementId }) => {
         titre,
         description,
         entreprise: entrepriseSelectionnee,
-        dateDebut: dateDebut ? dateDebut.toISOString().split('T')[0] : '',
-        dateFin: dateFin ? dateFin.toISOString().split('T')[0] : '',
+        dateDebut: dateDebut || '',
+        dateFin: dateFin || '',
         lieu,
         typeStage,
         competencesRequises,
@@ -314,8 +288,8 @@ const AjouterOffre = ({ onSubmit, departementId }) => {
         setDescription('');
         setEntrepriseId(null);
         setEntrepriseSelectionnee(null);
-        setDateDebut(null);
-        setDateFin(null);
+        setDateDebut('');
+        setDateFin('');
         setLieu('');
         setTypeStage('stage_etude');
         setCompetencesRequises([]);
@@ -335,7 +309,6 @@ const AjouterOffre = ({ onSubmit, departementId }) => {
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
       <Paper sx={{ p: 3 }}>
         <Typography variant="h5" gutterBottom>
           Publier une nouvelle offre de stage
@@ -382,54 +355,50 @@ const AjouterOffre = ({ onSubmit, departementId }) => {
             </Grid>
             
             <Grid item xs={12}>
-              <Autocomplete
-                options={entreprises}
-                getOptionLabel={(option) => `${option.nom} - ${option.secteur}`}
-                value={entrepriseSelectionnee}
-                onChange={handleEntrepriseChange}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Entreprise"
-                    error={!!errors.entreprise}
-                    helperText={errors.entreprise}
-                    required
-                  />
+              <FormControl fullWidth error={!!errors.entreprise} required>
+                <InputLabel>Entreprise</InputLabel>
+                <Select
+                  value={entrepriseId || ''}
+                  onChange={handleEntrepriseChange}
+                  label="Entreprise"
+                >
+                  {entreprises.map((entreprise) => (
+                    <MenuItem key={entreprise.id} value={entreprise.id}>
+                      {`${entreprise.nom} - ${entreprise.secteur}`}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.entreprise && (
+                  <FormHelperText>{errors.entreprise}</FormHelperText>
                 )}
-              />
+              </FormControl>
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <DatePicker
+              <TextField
                 label="Date de début"
+                type="date"
                 value={dateDebut}
-                onChange={setDateDebut}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    fullWidth
-                    error={!!errors.dateDebut}
-                    helperText={errors.dateDebut}
-                    required
-                  />
-                )}
+                onChange={(event) => setDateDebut(event.target.value)}
+                fullWidth
+                error={!!errors.dateDebut}
+                helperText={errors.dateDebut}
+                required
+                InputLabelProps={{ shrink: true }}
               />
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <DatePicker
+              <TextField
                 label="Date de fin"
+                type="date"
                 value={dateFin}
-                onChange={setDateFin}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    fullWidth
-                    error={!!errors.dateFin}
-                    helperText={errors.dateFin}
-                    required
-                  />
-                )}
+                onChange={(event) => setDateFin(event.target.value)}
+                fullWidth
+                error={!!errors.dateFin}
+                helperText={errors.dateFin}
+                required
+                InputLabelProps={{ shrink: true }}
               />
             </Grid>
             
@@ -564,7 +533,6 @@ const AjouterOffre = ({ onSubmit, departementId }) => {
           </Grid>
         </Box>
       </Paper>
-    </LocalizationProvider>
   );
 };
 

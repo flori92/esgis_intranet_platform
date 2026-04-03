@@ -21,32 +21,42 @@ import { supabase } from '../supabase';
 export const getExamQuestions = async (examId) => {
   try {
     const { data, error } = await supabase
-      .from('questions')
+      .from('exam_questions')
       .select(`
-        *,
-        question_options(*)
+        id,
+        exam_id,
+        question_number,
+        question_text,
+        question_type,
+        points,
+        options,
+        correct_answer,
+        rubric
       `)
       .eq('exam_id', examId)
-      .order('display_order');
+      .order('question_number');
 
     if (error) {
       console.error(`Erreur lors de la récupération des questions de l'examen ${examId}:`, error);
-      return { questions: [], error };
+      return { data: [], questions: [], error };
     }
 
-    // Formater les données pour avoir les options comme sous-tableau
-    const formattedQuestions = data.map((item) => {
-      const { question_options, ...question } = item;
+    const formattedQuestions = (data || []).map((item) => {
+      const rawOptions = Array.isArray(item.options) ? item.options : [];
+      const optionTexts = rawOptions.map((option) => (typeof option === 'string' ? option : option?.text || ''));
+
       return {
-        ...question,
-        options: question_options || []
+        ...item,
+        text: item.question_text,
+        options: optionTexts,
+        correctAnswer: item.correct_answer,
       };
     });
 
-    return { questions: formattedQuestions, error: null };
+    return { data: formattedQuestions, questions: formattedQuestions, error: null };
   } catch (err) {
     console.error(`Exception lors de la récupération des questions de l'examen ${examId}:`, err);
-    return { questions: [], error: err };
+    return { data: [], questions: [], error: err };
   }
 };
 
@@ -62,15 +72,22 @@ export const getExamQuestions = async (examId) => {
  */
 export const createQuestion = async (questionInputData, options) => {
   try {
-    // 1. Créer la question
-    const questionData = {
-      ...questionInputData,
-      created_at: new Date().toISOString()
+    const optionTexts = (options || []).map((option) => option.text);
+    const correctOption = (options || []).find((option) => option.is_correct);
+    const questionPayload = {
+      exam_id: questionInputData.exam_id,
+      question_number: questionInputData.question_number || questionInputData.display_order || 1,
+      question_text: questionInputData.question_text || questionInputData.text || '',
+      question_type: questionInputData.question_type || 'multiple_choice',
+      points: questionInputData.points || 1,
+      options: optionTexts,
+      correct_answer: correctOption?.text || questionInputData.correct_answer || null,
+      rubric: questionInputData.rubric || null,
     };
 
     const { data: questionResult, error: questionError } = await supabase
-      .from('questions')
-      .insert(questionData)
+      .from('exam_questions')
+      .insert(questionPayload)
       .select()
       .single();
 
@@ -79,39 +96,12 @@ export const createQuestion = async (questionInputData, options) => {
       return { question: null, error: questionError };
     }
 
-    // 2. Créer les options pour cette question
-    if (options.length > 0) {
-      const optionsWithQuestionId = options.map(option => ({
-        ...option,
-        question_id: questionResult.id,
-        created_at: new Date().toISOString()
-      }));
-
-      const { data: optionsData, error: optionsError } = await supabase
-        .from('question_options')
-        .insert(optionsWithQuestionId)
-        .select();
-
-      if (optionsError) {
-        console.error('Erreur lors de la création des options:', optionsError);
-        // Supprimer la question créée pour éviter les données orphelines
-        await supabase.from('questions').delete().eq('id', questionResult.id);
-        return { question: null, error: optionsError };
-      }
-
-      return {
-        question: {
-          ...questionResult,
-          options: optionsData || []
-        },
-        error: null
-      };
-    }
-
     return {
       question: {
         ...questionResult,
-        options: []
+        text: questionResult.question_text,
+        options: optionTexts,
+        correctAnswer: questionResult.correct_answer,
       },
       error: null
     };
@@ -135,13 +125,22 @@ export const createQuestion = async (questionInputData, options) => {
  */
 export const updateQuestion = async (questionId, updates, options) => {
   try {
-    // Démarrer une transaction pour assurer l'intégrité des données
-    // Note: Supabase ne supporte pas les vraies transactions, donc nous devons gérer manuellement
+    const optionTexts = Array.isArray(options) ? options.map((option) => option.text) : undefined;
+    const correctOption = Array.isArray(options) ? options.find((option) => option.is_correct) : null;
+    const payload = {
+      ...updates,
+    };
 
-    // 1. Mettre à jour la question
+    if (optionTexts) {
+      payload.options = optionTexts;
+    }
+    if (correctOption) {
+      payload.correct_answer = correctOption.text;
+    }
+
     const { data: updatedQuestion, error: questionError } = await supabase
-      .from('questions')
-      .update(updates)
+      .from('exam_questions')
+      .update(payload)
       .eq('id', questionId)
       .select()
       .single();
@@ -151,113 +150,12 @@ export const updateQuestion = async (questionId, updates, options) => {
       return { question: null, error: questionError };
     }
 
-    // 2. Si des options sont fournies, les mettre à jour
-    if (options && options.length > 0) {
-      // Récupérer les options existantes pour cette question
-      const { data: existingOptions, error: fetchError } = await supabase
-        .from('question_options')
-        .select('*')
-        .eq('question_id', questionId);
-
-      if (fetchError) {
-        console.error(`Erreur lors de la récupération des options existantes pour la question ${questionId}:`, fetchError);
-        return { question: null, error: fetchError };
-      }
-
-      // Créer des maps pour un traitement plus facile
-      const existingOptionsMap = {};
-      existingOptions.forEach(opt => {
-        existingOptionsMap[opt.id] = opt;
-      });
-
-      const newOptionsMap = {};
-      const updateOptionsMap = {};
-
-      // Séparer les options à créer et à mettre à jour
-      options.forEach(opt => {
-        if (opt.id && existingOptionsMap[opt.id]) {
-          updateOptionsMap[opt.id] = {
-            ...opt,
-            question_id: questionId,
-          };
-        } else {
-          // Nouvelle option (ou ID non existant)
-          newOptionsMap[opt.display_order] = {
-            ...opt,
-            question_id: questionId,
-            created_at: new Date().toISOString(),
-            id: opt.id || undefined // Supprimer les ID invalides
-          };
-        }
-      });
-
-      // Identifier les options à supprimer (celles qui ne sont pas dans la liste de mise à jour)
-      const optionsToDelete = existingOptions
-        .filter(opt => !updateOptionsMap[opt.id] && !options.some(o => o.id === opt.id))
-        .map(opt => opt.id);
-
-      // 2.1 Créer les nouvelles options
-      if (Object.keys(newOptionsMap).length > 0) {
-        const newOptions = Object.values(newOptionsMap);
-        const { error: createError } = await supabase
-          .from('question_options')
-          .insert(newOptions);
-
-        if (createError) {
-          console.error(`Erreur lors de la création des nouvelles options pour la question ${questionId}:`, createError);
-          return { question: null, error: createError };
-        }
-      }
-
-      // 2.2 Mettre à jour les options existantes
-      for (const optId in updateOptionsMap) {
-        const { error: updateError } = await supabase
-          .from('question_options')
-          .update(updateOptionsMap[optId])
-          .eq('id', optId);
-
-        if (updateError) {
-          console.error(`Erreur lors de la mise à jour de l'option ${optId}:`, updateError);
-          return { question: null, error: updateError };
-        }
-      }
-
-      // 2.3 Supprimer les options qui ne sont plus nécessaires
-      if (optionsToDelete.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('question_options')
-          .delete()
-          .in('id', optionsToDelete);
-
-        if (deleteError) {
-          console.error(`Erreur lors de la suppression des options pour la question ${questionId}:`, deleteError);
-          return { question: null, error: deleteError };
-        }
-      }
-    }
-
-    // 3. Récupérer la question mise à jour avec toutes ses options
-    const { data: refreshedQuestion, error: refreshError } = await supabase
-      .from('questions')
-      .select(`
-        *,
-        question_options(*)
-      `)
-      .eq('id', questionId)
-      .single();
-
-    if (refreshError) {
-      console.error(`Erreur lors de la récupération de la question mise à jour ${questionId}:`, refreshError);
-      return { question: null, error: refreshError };
-    }
-
-    // Formater les données
-    const { question_options, ...questionData } = refreshedQuestion;
-    
     return {
       question: {
-        ...questionData,
-        options: question_options || []
+        ...updatedQuestion,
+        text: updatedQuestion.question_text,
+        options: Array.isArray(updatedQuestion.options) ? updatedQuestion.options : [],
+        correctAnswer: updatedQuestion.correct_answer,
       },
       error: null
     };
@@ -274,21 +172,8 @@ export const updateQuestion = async (questionId, updates, options) => {
  */
 export const deleteQuestion = async (questionId) => {
   try {
-    // 1. Supprimer les options de la question (les contraintes de clé étrangère peuvent s'en charger,
-    // mais nous préférons être explicites)
-    const { error: optionsError } = await supabase
-      .from('question_options')
-      .delete()
-      .eq('question_id', questionId);
-
-    if (optionsError) {
-      console.error(`Erreur lors de la suppression des options de la question ${questionId}:`, optionsError);
-      return { success: false, error: optionsError };
-    }
-
-    // 2. Supprimer la question
     const { error: questionError } = await supabase
-      .from('questions')
+      .from('exam_questions')
       .delete()
       .eq('id', questionId);
 
@@ -319,13 +204,13 @@ export const saveQuizResult = async (resultData) => {
 
     if (error) {
       console.error('Erreur lors de l\'enregistrement du résultat du quiz:', error);
-      return { result: null, error };
+      return { data: null, result: null, error };
     }
 
-    return { result: data, error: null };
+    return { data, result: data, error: null };
   } catch (err) {
     console.error('Exception lors de l\'enregistrement du résultat du quiz:', err);
-    return { result: null, error: err };
+    return { data: null, result: null, error: err };
   }
 };
 
@@ -530,7 +415,7 @@ export const getStudentQuizResults = async (studentId) => {
       
     if (error) {
       console.error(`Erreur lors de la récupération des résultats de quiz pour l'étudiant ${studentId}:`, error);
-      return { results: [], error };
+      return { data: [], results: [], error };
     }
     
     // Formater les données
@@ -540,9 +425,9 @@ export const getStudentQuizResults = async (studentId) => {
       exam_description: item.exams?.description || ''
     }));
     
-    return { results: formattedResults, error: null };
+    return { data: formattedResults, results: formattedResults, error: null };
   } catch (err) {
     console.error(`Exception lors de la récupération des résultats de quiz pour l'étudiant ${studentId}:`, err);
-    return { results: [], error: err };
+    return { data: [], results: [], error: err };
   }
 };

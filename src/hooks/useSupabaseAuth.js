@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
+import {
+  signInWithEmail,
+  signUpWithEmail,
+  signOut as apiSignOut,
+  resetPassword as apiResetPassword,
+  onAuthStateChange,
+  getSession,
+  getUser
+} from '../api/auth';
+import { getProfileById, updateProfileSettings } from '../api/profile';
+import { getRoleEntities } from '../api/users';
 
 /**
  * Hook personnalisé pour gérer l'authentification avec Supabase
@@ -14,6 +24,8 @@ export const useSupabaseAuth = () => {
     isAdmin: false,
     isProfessor: false,
     isStudent: false,
+    admin: null,
+    professor: null,
     student: null,
     isAuthenticated: false,
     error: null,
@@ -23,14 +35,14 @@ export const useSupabaseAuth = () => {
 
   // Récupérer la session au chargement
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = onAuthStateChange(
       (_event, session) => {
         handleAuthChange(session);
       }
     );
 
     // Récupérer la session initiale
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getSession().then(({ data: { session } }) => {
       handleAuthChange(session);
     });
 
@@ -45,10 +57,10 @@ export const useSupabaseAuth = () => {
     if (session) {
       try {
         setAuthState(prev => ({ ...prev, loading: true }));
-        
+
         // Récupérer le profil utilisateur
         const userProfile = await fetchUserProfile(session.user.id);
-        
+
         // Déterminer le nom complet (full_name)
         let fullName = '';
         if (userProfile) {
@@ -62,34 +74,82 @@ export const useSupabaseAuth = () => {
             fullName = userProfile.nom_complet;
           }
         }
-        
+
+        const role = userProfile?.role || session.user.user_metadata?.role || null;
+
         // Déterminer le rôle de l'utilisateur
-        const isAdmin = userProfile?.role === 'admin';
-        const isProfessor = userProfile?.role === 'professor';
-        const isStudent = userProfile?.role === 'student';
-        
-        // Ajout d'un objet student si étudiant (même en fallback)
+        const isAdmin = role === 'admin';
+        const isProfessor = role === 'professor';
+        const isStudent = role === 'student';
+
+        const normalizedUser = {
+          ...session.user,
+          email: session.user.email || userProfile?.email || '',
+          full_name: fullName || userProfile?.full_name || session.user.user_metadata?.full_name || '',
+          role,
+          department_id: userProfile?.department_id ?? null,
+          avatar_url: userProfile?.avatar_url || session.user.user_metadata?.avatar_url || null
+        };
+
+        // Charger l'entité métier associée au profil quand elle existe.
+        const { studentEntity, professorEntity } = await getRoleEntities(session.user.id);
+
         let student = null;
+        let professor = null;
+        let admin = null;
+
         if (isStudent) {
           student = {
-            id: userProfile.id,
-            email: userProfile.email,
-            first_name: userProfile.first_name || userProfile.prenom || '',
-            last_name: userProfile.last_name || userProfile.nom || '',
-            level: userProfile.level || userProfile.niveau || '',
-            student_id: userProfile.student_id || userProfile.id,
+            ...(userProfile || {}),
+            ...(studentEntity || {}),
+            id: studentEntity?.id ?? userProfile?.id ?? session.user.id,
+            profile_id: studentEntity?.profile_id ?? session.user.id,
+            email: userProfile?.email || session.user.email || '',
+            first_name: userProfile?.first_name || userProfile?.prenom || '',
+            last_name: userProfile?.last_name || userProfile?.nom || '',
+            level: studentEntity?.level || userProfile?.level || userProfile?.niveau || '',
+            student_id: studentEntity?.student_number || userProfile?.student_id || userProfile?.id || session.user.id,
+            student_number: studentEntity?.student_number || userProfile?.student_id || null,
+            entry_year: studentEntity?.entry_year ?? null,
+            status: studentEntity?.status || userProfile?.status || 'active'
           };
         }
-        
+
+        if (isProfessor) {
+          professor = {
+            ...(userProfile || {}),
+            ...(professorEntity || {}),
+            id: professorEntity?.id ?? userProfile?.id ?? session.user.id,
+            profile_id: professorEntity?.profile_id ?? session.user.id,
+            email: userProfile?.email || session.user.email || '',
+            full_name: fullName || userProfile?.full_name || '',
+            department_id: userProfile?.department_id ?? null,
+            employee_number: professorEntity?.employee_number || null,
+            specialties: professorEntity?.specialties || [],
+            status: professorEntity?.status || userProfile?.status || 'active'
+          };
+        }
+
+        if (isAdmin) {
+          admin = {
+            ...(userProfile || {}),
+            id: userProfile?.id || session.user.id,
+            email: userProfile?.email || session.user.email || '',
+            full_name: fullName || userProfile?.full_name || ''
+          };
+        }
+
         setAuthState({
-          user: session.user,
+          user: normalizedUser,
           profile: userProfile,
           fullName,
           session,
           isAdmin,
           isProfessor,
           isStudent,
-          student, // Injection de l'objet student dans authState
+          admin,
+          professor,
+          student,
           isAuthenticated: true,
           error: null,
           loading: false
@@ -104,6 +164,8 @@ export const useSupabaseAuth = () => {
           isAdmin: false,
           isProfessor: false,
           isStudent: false,
+          admin: null,
+          professor: null,
           student: null,
           isAuthenticated: true,
           error,
@@ -120,6 +182,8 @@ export const useSupabaseAuth = () => {
         isAdmin: false,
         isProfessor: false,
         isStudent: false,
+        admin: null,
+        professor: null,
         student: null,
         isAuthenticated: false,
         error: null,
@@ -129,133 +193,108 @@ export const useSupabaseAuth = () => {
   };
 
   /**
+   * Construit un profil de secours à partir des métadonnées Auth.
+   * @param {string} userId
+   * @param {Object} userData - résultat de getUser()
+   * @returns {Object|null}
+   */
+  const buildFallbackProfile = (userId, userData) => {
+    if (!userData?.user) {
+      return null;
+    }
+
+    const userMetadata = userData.user.user_metadata || {};
+    const email = userData.user.email || '';
+
+    let role = userMetadata.role || 'user';
+    let firstName = userMetadata.first_name || '';
+    let lastName = userMetadata.last_name || '';
+
+    // Pour les comptes de test, déduire le rôle à partir de l'email si nécessaire
+    if (email.includes('mailinator.com') && !role) {
+      if (email.includes('admin')) {
+        role = 'admin';
+        firstName = 'Admin';
+        lastName = 'ESGIS';
+      } else if (email.includes('prof')) {
+        role = 'professor';
+        firstName = 'Floraice';
+        lastName = 'FAVI';
+      } else if (email.includes('etudiant')) {
+        role = 'student';
+        firstName = 'Marie';
+        lastName = 'Koné';
+      }
+    }
+
+    let fallback = {
+      id: userId,
+      email,
+      role,
+      first_name: firstName,
+      last_name: lastName,
+      avatar_url: userMetadata.avatar_url || null,
+      created_at: new Date().toISOString()
+    };
+
+    if (role === 'professor') {
+      fallback = { ...fallback, speciality: userMetadata.speciality || 'Cloud Computing' };
+    }
+
+    if (role === 'student') {
+      fallback = {
+        ...fallback,
+        student_id: userMetadata.student_id || 'ETU' + Math.floor(10000 + Math.random() * 90000),
+        level: userMetadata.level || 'Licence 3'
+      };
+    }
+
+    return fallback;
+  };
+
+  /**
    * Récupère le profil de l'utilisateur connecté
    * @param {string} userId - ID de l'utilisateur
    * @returns {Promise<Object>} Profil de l'utilisateur
    */
   const fetchUserProfile = async (userId) => {
-    // Créer un profil de secours basé sur les métadonnées
     let fallbackProfile = null;
-    
+
     try {
-      // Tenter d'abord de récupérer les métadonnées utilisateur directement
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      
-      if (!userError && userData && userData.user) {
-        const userMetadata = userData.user.user_metadata || {};
-        const email = userData.user.email || '';
-        
-        // Déterminer le rôle en fonction de l'email pour les comptes de test
-        let role = userMetadata.role || 'user';
-        let firstName = userMetadata.first_name || '';
-        let lastName = userMetadata.last_name || '';
-        
-        // Pour les comptes de test, déduire le rôle à partir de l'email si nécessaire
-        if (email.includes('mailinator.com') && !role) {
-          if (email.includes('admin')) {
-            role = 'admin';
-            firstName = 'Admin';
-            lastName = 'ESGIS';
-          } else if (email.includes('prof')) {
-            role = 'professor';
-            firstName = 'Floraice';
-            lastName = 'FAVI';
-          } else if (email.includes('etudiant')) {
-            role = 'student';
-            firstName = 'Marie';
-            lastName = 'Koné';
-          }
-        }
-        
-        fallbackProfile = {
-          id: userId,
-          email: email,
-          role: role,
-          first_name: firstName,
-          last_name: lastName,
-          avatar_url: userMetadata.avatar_url || null,
-          created_at: new Date().toISOString()
-        };
-        
-        // Ajouter des champs spécifiques au rôle
-        if (role === 'professor') {
-          fallbackProfile = {
-            ...fallbackProfile,
-            speciality: userMetadata.speciality || 'Cloud Computing'
-          };
-        }
-        
-        if (role === 'student') {
-          fallbackProfile = {
-            ...fallbackProfile,
-            student_id: userMetadata.student_id || 'ETU' + Math.floor(10000 + Math.random() * 90000),
-            level: userMetadata.level || 'Licence 3'
-          };
-        }
+      const { data: userData, error: userError } = await getUser();
+
+      if (!userError && userData) {
+        fallbackProfile = buildFallbackProfile(userId, userData);
       }
-      
-      // Vérifier si l'URL actuelle contient 'quiz' pour détecter la page de quiz
-      // Si c'est le cas, priorisons l'utilisation du profil de secours pour éviter la récursion infinie
+
+      // Si nous sommes sur la page de quiz, utiliser directement le fallback
       const isQuizPage = window.location.href.includes('/quiz/');
-      
-      // Si nous sommes sur la page de quiz et avons un profil de secours disponible,
-      // utilisons-le directement pour éviter les erreurs de récursion infinie
       if (isQuizPage && fallbackProfile) {
-        console.log('Page quiz détectée - Utilisation directe du profil de secours');
         return fallbackProfile;
       }
-      
-      try {
-        // Tentative de récupération du profil complet
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle();
 
-        if (error) {
-          // Détecter spécifiquement l'erreur de récursion infinie
-          if (error.message && error.message.includes('infinite recursion')) {
-            console.warn('Erreur de récursion infinie détectée dans la politique pour relation "profiles"');
-            if (fallbackProfile) {
-              console.log('Utilisation d\'un profil de secours suite à la récursion infinie');
-              return fallbackProfile;
-            }
-          }
-          
-          console.error('Erreur lors de la récupération du profil:', error);
-          
-          // Si nous avons un profil de secours, utilisons-le
-          if (fallbackProfile) {
-            console.log('Utilisation d\'un profil de secours basé sur les métadonnées:', fallbackProfile);
-            return fallbackProfile;
-          }
-          
-          throw error;
+      const { profile, error } = await getProfileById(userId);
+
+      if (error) {
+        if (error.message && error.message.includes('infinite recursion')) {
+          console.warn('Erreur de récursion infinie détectée dans la politique pour relation "profiles"');
         }
-        
-        return data;
-      } catch (dbError) {
-        console.error('Erreur lors de la requête à la base de données:', dbError);
-        
-        // En cas d'erreur, utiliser le profil de secours si disponible
+
         if (fallbackProfile) {
-          console.log('Utilisation du profil de secours suite à une erreur de base de données');
           return fallbackProfile;
         }
-        
-        throw dbError;
+
+        throw error;
       }
 
+      return profile;
     } catch (error) {
       console.error('Erreur lors de la récupération du profil:', error);
-      
-      // Si nous avons un profil de secours, utilisons-le
+
       if (fallbackProfile) {
-        console.log('Utilisation du profil de secours suite à une erreur générale');
         return fallbackProfile;
       }
-      
+
       throw error;
     }
   };
@@ -271,24 +310,19 @@ export const useSupabaseAuth = () => {
     setAuthState(prev => ({ ...prev, error: null }));
 
     try {
-      // Vérifier si c'est un compte de test
       const isTestAccount = email.includes('mailinator.com');
-      
-      // Tentative de connexion standard
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+
+      const { user: authUser, session: authSession, error } = await signInWithEmail(email, password);
 
       if (error) {
-        // Si l'erreur est due à un email non confirmé pour un compte de test, forcer la connexion
         if (error.message.includes('Email not confirmed') && isTestAccount) {
-          console.log('Email non confirmé pour un compte de test, tentative de connexion alternative...');
-          
-          try {
-            // Mettre à jour les métadonnées utilisateur pour faciliter l'identification
+          // Deuxième tentative pour les comptes de test
+          const retryResult = await signInWithEmail(email, password);
+
+          if (retryResult.error) {
+            // Simulation pour comptes de test non confirmés
             let userMetadata = {};
-            
+
             if (email.includes('admin')) {
               userMetadata = { role: 'admin', first_name: 'Admin', last_name: 'ESGIS' };
             } else if (email.includes('prof')) {
@@ -296,63 +330,43 @@ export const useSupabaseAuth = () => {
             } else if (email.includes('etudiant')) {
               userMetadata = { role: 'student', first_name: 'Marie', last_name: 'Koné' };
             }
-            
-            // Essayer de se connecter à nouveau, cette fois en ignorant la confirmation d'email
-            // Note: Ceci est une solution temporaire pour le développement uniquement
-            const { data: forceSignInData, error: forceSignInError } = await supabase.auth.signInWithPassword({
-              email,
-              password,
-            });
-            
-            if (forceSignInError) {
-              // Si la connexion forcée échoue, essayer de récupérer l'utilisateur
-              // Note: Cette fonctionnalité nécessite des droits admin, nous allons simuler une session
-              console.log('Simulation de connexion pour le compte de test');
-              
-              // Créer une session simulée
-              const mockSession = {
-                user: {
-                  id: crypto.randomUUID(),
-                  email: email,
-                  user_metadata: userMetadata
-                }
-              };
-              
-              setAuthState(prev => ({ 
-                ...prev, 
-                user: mockSession.user,
-                session: mockSession,
-                isAuthenticated: true
-              }));
-              
-              // Déclencher manuellement le changement d'authentification
-              handleAuthChange(mockSession);
-              
-              return { user: mockSession.user, session: mockSession };
-            }
-            
-            setAuthState(prev => ({ 
-              ...prev, 
-              user: forceSignInData.user, 
-              session: forceSignInData.session 
+
+            const mockSession = {
+              user: {
+                id: crypto.randomUUID(),
+                email,
+                user_metadata: userMetadata
+              }
+            };
+
+            setAuthState(prev => ({
+              ...prev,
+              user: mockSession.user,
+              session: mockSession,
+              isAuthenticated: true
             }));
-            
-            return forceSignInData;
-          } catch (innerError) {
-            console.error('Échec de la connexion alternative:', innerError);
-            throw error; // Revenir à l'erreur d'origine
+
+            handleAuthChange(mockSession);
+            return { user: mockSession.user, session: mockSession };
           }
-        } else {
-          throw error;
+
+          setAuthState(prev => ({
+            ...prev,
+            user: retryResult.user,
+            session: retryResult.session
+          }));
+
+          return retryResult;
         }
+
+        throw error;
       }
 
-      setAuthState(prev => ({ ...prev, user: data.user, session: data.session }));
-      return data;
+      setAuthState(prev => ({ ...prev, user: authUser, session: authSession }));
+      return { user: authUser, session: authSession };
     } catch (error) {
       console.error('Erreur lors de la connexion:', error.message);
-      
-      // Message d'erreur plus convivial pour les utilisateurs
+
       let errorMessage = error.message;
       if (error.message.includes('Email not confirmed')) {
         errorMessage = 'Veuillez confirmer votre email avant de vous connecter.';
@@ -361,9 +375,42 @@ export const useSupabaseAuth = () => {
       } else if (error.message.includes('For security purposes')) {
         errorMessage = 'Trop de tentatives. Veuillez réessayer dans quelques instants.';
       }
-      
+
       setAuthState(prev => ({ ...prev, error: errorMessage }));
       return { error: errorMessage };
+    } finally {
+      setAuthState(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  /**
+   * Inscription avec email/mot de passe
+   * @param {string} email
+   * @param {string} password
+   * @param {Object} profileData
+   * @returns {Promise<{data: Object|null, error: Error|null}>}
+   */
+  const signUp = async (email, password, profileData = {}) => {
+    setAuthState(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const { user, error } = await signUpWithEmail(email, password, profileData);
+
+      if (error) {
+        throw error;
+      }
+
+      return {
+        data: user ? { user } : null,
+        error: null
+      };
+    } catch (error) {
+      setAuthState(prev => ({
+        ...prev,
+        error: error?.message || 'Une erreur est survenue lors de l\'inscription.'
+      }));
+
+      return { data: null, error };
     } finally {
       setAuthState(prev => ({ ...prev, loading: false }));
     }
@@ -375,7 +422,7 @@ export const useSupabaseAuth = () => {
    */
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await apiSignOut();
     } catch (error) {
       console.error('Erreur de déconnexion:', error);
     }
@@ -383,19 +430,17 @@ export const useSupabaseAuth = () => {
 
   /**
    * Réinitialisation du mot de passe
-   * @param {string} email - Email de l'utilisateur
-   * @returns {Promise<Object>} Résultat de la demande
+   * @param {string} email
+   * @returns {Promise<Object>}
    */
   const resetPassword = async (email) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
-      });
-      
+      const { error } = await apiResetPassword(email);
+
       if (error) {
         throw error;
       }
-      
+
       return { error: null };
     } catch (error) {
       console.error('Erreur lors de la réinitialisation du mot de passe:', error);
@@ -404,34 +449,29 @@ export const useSupabaseAuth = () => {
   };
 
   /**
-   * Mise à jour du profil utilisateur
-   * @param {Object} profileData - Données du profil à mettre à jour
-   * @returns {Promise<Object>} Résultat de la mise à jour
+   * Mise à jour du profil utilisateur (via API profile)
+   * @param {Object} profileData
+   * @returns {Promise<Object>}
    */
   const updateProfile = async (profileData) => {
     try {
       if (!authState.user) {
         throw new Error('Utilisateur non connecté');
       }
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(profileData)
-        .eq('id', authState.user.id)
-        .select()
-        .single();
-        
+
+      const { profile, error } = await updateProfileSettings(authState.user.id, profileData);
+
       if (error) {
         throw error;
       }
-      
-      // Mettre à jour l'état
+
       setAuthState(prev => ({
         ...prev,
-        profile: { ...prev.profile, ...profileData }
+        profile: { ...prev.profile, ...profileData },
+        user: { ...prev.user, ...profileData }
       }));
-      
-      return { data, error: null };
+
+      return { data: profile, error: null };
     } catch (error) {
       console.error('Erreur lors de la mise à jour du profil:', error);
       return { data: null, error };
@@ -439,69 +479,64 @@ export const useSupabaseAuth = () => {
   };
 
   /**
-   * Création d'un compte utilisateur
-   * @param {string} email - Email de l'utilisateur
-   * @param {string} password - Mot de passe de l'utilisateur
-   * @param {Object} profileData - Données du profil
-   * @returns {Promise<Object>} Résultat de la création
+   * Création d'un compte utilisateur (délègue à signUpWithEmail)
+   * @param {string} email
+   * @param {string} password
+   * @param {Object} profileData
+   * @returns {Promise<Object>}
    */
   const createUserAccount = async (email, password, profileData) => {
     try {
-      // Créer l'utilisateur
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password
-      });
-      
-      if (authError) {
-        throw authError;
-      }
-
-      const userId = authData.user.id;
-
-      const accountProfileData = {
-        id: userId,
-        email: email,
-        first_name: profileData.first_name,
-        last_name: profileData.last_name,
+      const { user, error } = await signUpWithEmail(email, password, {
+        full_name: `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim(),
         role: profileData.role,
-        phone: profileData.phone,
-        avatar_url: profileData.avatar_url
-      };
-      
-      if (profileData.role === 'professor' && profileData.speciality) {
-        accountProfileData.speciality = profileData.speciality;
-      }
-      
-      if (profileData.role === 'student') {
-        if (profileData.student_id) {
-          accountProfileData.student_id = profileData.student_id;
-        }
-        if (profileData.level) {
-          accountProfileData.level = profileData.level;
-        }
-      }
-      
-      // Créer le profil
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([{ ...accountProfileData }]);
-        
-      if (profileError) {
-        throw profileError;
+        department_id: profileData.department_id || null,
+        avatar_url: profileData.avatar_url || null
+      });
+
+      if (error) {
+        throw error;
       }
 
-      return { userId, error: null };
+      return { userId: user?.id || null, error: null };
     } catch (error) {
       console.error('Erreur lors de la création du compte:', error);
       return { userId: null, error };
     }
   };
 
+  const login = async (email, password) => {
+    const result = await signIn(email, password);
+
+    if (result?.error) {
+      throw result.error instanceof Error
+        ? result.error
+        : new Error(typeof result.error === 'string' ? result.error : 'Une erreur est survenue lors de la connexion.');
+    }
+
+    return result;
+  };
+
   return {
     authState,
+    user: authState.user,
+    profile: authState.profile,
+    session: authState.session,
+    admin: authState.admin,
+    professor: authState.professor,
+    student: authState.student,
+    isAdmin: authState.isAdmin,
+    isProfessor: authState.isProfessor,
+    isStudent: authState.isStudent,
+    isAuthenticated: authState.isAuthenticated,
+    loading: authState.loading,
+    error: authState.error,
+    fullName: authState.fullName,
     signIn,
+    login,
+    signUp,
     signOut,
+    logout: signOut,
     resetPassword,
     updateProfile,
     createUserAccount

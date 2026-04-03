@@ -1,5 +1,14 @@
-import { supabase } from '@/supabase';
-import { DOCUMENT_TYPES, PERMISSION_TYPES } from '@/types/documents';
+import {
+  createLegacyDocument,
+  deleteLegacyDocumentRecord,
+  listLegacyDocuments,
+  updateLegacyDocument
+} from '@/api/documents';
+import {
+  uploadFile as uploadStorageFile,
+  downloadFile as downloadStorageFile,
+  getPublicUrl
+} from '@/api/storage';
 
 /**
  * Service pour la gestion des documents
@@ -16,32 +25,17 @@ class DocumentService {
    */
   async getUserDocuments(userId, options = {}) {
     try {
-      let query = supabase
-        .from('documents')
-        .select('*')
-        .or(`is_public.eq.true,created_by.eq.${userId}`);
-
-      // Appliquer les filtres
-      if (options.type) {
-        query = query.eq('type', options.type);
-      }
-      
-      if (options.courseId) {
-        query = query.eq('course_id', options.courseId);
-      }
-      
-      if (options.groupId) {
-        query = query.eq('group_id', options.groupId);
-      }
-
-      // Exécuter la requête
-      const { data, error } = await query.order('created_at', { ascending: false });
-
+      const { documents, error } = await listLegacyDocuments({
+        userId,
+        type: options.type,
+        courseId: options.courseId,
+        groupId: options.groupId
+      });
       if (error) {
         throw error;
       }
 
-      return data || [];
+      return documents || [];
     } catch (error) {
       console.error('Erreur lors de la récupération des documents:', error);
       throw error;
@@ -55,17 +49,12 @@ class DocumentService {
    */
   async getCourseDocuments(courseId) {
     try {
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('course_id', courseId)
-        .order('created_at', { ascending: false });
-
+      const { documents, error } = await listLegacyDocuments({ courseId });
       if (error) {
         throw error;
       }
 
-      return data || [];
+      return documents || [];
     } catch (error) {
       console.error('Erreur lors de la récupération des documents du cours:', error);
       throw error;
@@ -79,17 +68,12 @@ class DocumentService {
    */
   async getGroupDocuments(groupId) {
     try {
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('group_id', groupId)
-        .order('created_at', { ascending: false });
-
+      const { documents, error } = await listLegacyDocuments({ groupId });
       if (error) {
         throw error;
       }
 
-      return data || [];
+      return documents || [];
     } catch (error) {
       console.error('Erreur lors de la récupération des documents du groupe:', error);
       throw error;
@@ -103,17 +87,12 @@ class DocumentService {
    */
   async createDocument(document) {
     try {
-      const { data, error } = await supabase
-        .from('documents')
-        .insert([document])
-        .select()
-        .single();
-
+      const { document: createdDocument, error } = await createLegacyDocument(document);
       if (error) {
         throw error;
       }
 
-      return data;
+      return createdDocument;
     } catch (error) {
       console.error('Erreur lors de la création du document:', error);
       throw error;
@@ -128,18 +107,12 @@ class DocumentService {
    */
   async updateDocument(documentId, updates) {
     try {
-      const { data, error } = await supabase
-        .from('documents')
-        .update(updates)
-        .eq('id', documentId)
-        .select()
-        .single();
-
+      const { document, error } = await updateLegacyDocument(documentId, updates);
       if (error) {
         throw error;
       }
 
-      return data;
+      return document;
     } catch (error) {
       console.error('Erreur lors de la mise à jour du document:', error);
       throw error;
@@ -153,11 +126,7 @@ class DocumentService {
    */
   async deleteDocument(documentId) {
     try {
-      const { error } = await supabase
-        .from('documents')
-        .delete()
-        .eq('id', documentId);
-
+      const { error } = await deleteLegacyDocumentRecord(documentId);
       if (error) {
         throw error;
       }
@@ -174,10 +143,7 @@ class DocumentService {
    */
   async downloadFile(path) {
     try {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .download(path);
-
+      const { data, error } = await downloadStorageFile('documents', path);
       if (error) {
         throw error;
       }
@@ -199,23 +165,16 @@ class DocumentService {
    */
   async uploadFile(file, path) {
     try {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .upload(path, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
+      const { data, error } = await uploadStorageFile('documents', path, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
       if (error) {
         throw error;
       }
 
-      // Récupérer l'URL publique du fichier
-      const { data: urlData } = supabase.storage
-        .from('documents')
-        .getPublicUrl(path);
-
-      return { ...data, publicUrl: urlData.publicUrl };
+      const { publicUrl } = getPublicUrl('documents', path);
+      return { ...data, publicUrl };
     } catch (error) {
       console.error('Erreur lors de l\'upload du fichier:', error);
       throw error;

@@ -10,8 +10,7 @@ import {
   Alert,
 } from '@mui/material';
 
-// Correction du chemin d'importation de Supabase
-import { supabase } from '@/supabase';
+import { updatePassword } from '@/api/auth';
 
 /**
  * Page de réinitialisation de mot de passe
@@ -67,9 +66,7 @@ const ResetPasswordPage = () => {
       }
 
       // Mettre à jour le mot de passe
-      const { error } = await supabase.auth.updateUser({
-        password,
-      });
+      const { error } = await updatePassword(password);
 
       if (error) {
         throw error;

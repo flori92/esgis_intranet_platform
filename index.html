@@ -4,45 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Plateforme intranet pour l'ESGIS - Gestion des examens, cours, notes et emplois du temps" />
     <title>Intranet ESGIS</title>
-    <!-- Configuration des variables d'environnement pour Supabase -->
-    <script type="module" src="./env-config.js"></script>
-    <!-- Aider les navigateurs à trouver les ressources -->
-    <link rel="preconnect" href="https://flori92.github.io" />
-    <!-- Script pour gérer les routes SPA sur GitHub Pages -->
-    <script type="text/javascript">
-      // Vérifier si nous sommes sur GitHub Pages
-      const isGitHubPages = window.location.hostname.includes('github.io');
-      const baseUrl = isGitHubPages ? '/esgis_intranet_platform/' : '/';
-      
-      // Définir la base URL dynamiquement
-      document.write('<base href="' + baseUrl + '" />');
-      
-      // Gérer le routage SPA sur GitHub Pages
-      if (isGitHubPages) {
-        // Intercepter les informations de route dans l'URL
-        const query = window.location.search.substr(1);
-        if (query && !query.startsWith('?') && !query.startsWith('/')) {
-          // Reconstruire l'URL avec le routage correct
-          const path = query.split('?')[0];
-          const search = query.indexOf('?') !== -1 ? query.substr(query.indexOf('?')) : '';
-          const hash = window.location.hash;
-          
-          // Définir le chemin dans l'historique de navigation
-          if (path) {
-            window.history.replaceState(null, document.title, baseUrl + path + search + hash);
-          }
-        }
-      }
-    </script>
-    <!-- Configurez Supabase pour qu'il fonctionne sur GitHub Pages -->
-    <script>
-      window.SUPABASE_URL = "https://yipwzsjbvqwqxwipgktp.supabase.co";
-      // Notez que nous n'exposons pas la clé anon car elle est déjà dans le bundle JS
-    </script>
-    <!-- Script pour le routage SPA GitHub Pages -->
-    <script src="./spa-redirect.js"></script>
-</head>
+    <!-- Police Montserrat pour le thème -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="./src/main.jsx"></script>

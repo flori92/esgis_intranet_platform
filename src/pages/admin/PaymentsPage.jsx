@@ -22,7 +22,6 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import { getAllPaymentStatuses, recordPayment } from '@/api/payments';
 
 const MOCK_PAYMENTS = [
@@ -56,24 +55,25 @@ const PaymentsPage = () => {
   const [paymentForm, setPaymentForm] = useState({ montant: '', methode: 'Espèces', reference: '', date: new Date().toISOString().split('T')[0] });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const loadPayments = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await getAllPaymentStatuses();
-        if (!error && data && data.length > 0) {
-          setPayments(data);
-        } else {
-          setPayments(MOCK_PAYMENTS);
-        }
-      } catch {
+  const loadPayments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getAllPaymentStatuses();
+      if (!error && data && data.length > 0) {
+        setPayments(data);
+      } else {
         setPayments(MOCK_PAYMENTS);
-      } finally {
-        setLoading(false);
       }
-    };
-    loadPayments();
+    } catch {
+      setPayments(MOCK_PAYMENTS);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadPayments();
+  }, [loadPayments]);
 
   // Filtrage
   const filtered = payments.filter(p => {
@@ -111,28 +111,35 @@ const PaymentsPage = () => {
     return <Chip icon={c.icon} label={statut} size="small" color={c.color} />;
   };
 
-  const handleRecordPayment = () => {
+  const handleRecordPayment = async () => {
     if (!paymentForm.montant || parseFloat(paymentForm.montant) <= 0) { setError('Montant invalide'); return; }
     setSaving(true);
-    const amount = parseFloat(paymentForm.montant);
-    setPayments(prev => prev.map(p => {
-      if (p.id !== paymentDialog.id) return p;
-      const newPaye = p.montant_paye + amount;
-      const newSolde = Math.max(0, p.montant_du - newPaye);
-      return {
-        ...p,
-        montant_paye: newPaye,
-        solde: newSolde,
-        statut: newSolde === 0 ? 'payé' : 'partiel',
-        derniere_date: paymentForm.date,
+    try {
+      const amount = parseFloat(paymentForm.montant);
+      const { error: paymentError } = await recordPayment({
+        student_id: paymentDialog.student_id,
+        montant: amount,
         methode: paymentForm.methode,
-        reference: paymentForm.reference || `PAY-${Date.now()}`
-      };
-    }));
-    setPaymentDialog(null);
-    setPaymentForm({ montant: '', methode: 'Espèces', reference: '', date: new Date().toISOString().split('T')[0] });
-    setSaving(false);
-    setSuccessMessage(`Versement de ${formatMoney(amount)} enregistré.`);
+        reference: paymentForm.reference,
+        date: paymentForm.date,
+        academic_year: paymentDialog.annee_academique,
+        semester: paymentDialog.semester,
+        enregistre_par: authState.profile?.id || authState.user?.id || null,
+      });
+
+      if (paymentError) {
+        throw paymentError;
+      }
+
+      await loadPayments();
+      setPaymentDialog(null);
+      setPaymentForm({ montant: '', methode: 'Espèces', reference: '', date: new Date().toISOString().split('T')[0] });
+      setSuccessMessage(`Versement de ${formatMoney(amount)} enregistré.`);
+    } catch (err) {
+      setError(err.message || 'Impossible d’enregistrer le versement.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleExportCSV = () => {

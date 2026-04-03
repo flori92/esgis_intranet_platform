@@ -13,8 +13,8 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
-  // Ajout du slash final important pour les chemins relatifs
-  base: '/intranet-esgis/', 
+  // Base URL: '/' pour dev et Vercel, '/intranet-esgis/' pour GitHub Pages
+  base: process.env.GITHUB_PAGES ? '/intranet-esgis/' : '/',
   build: {
     // Configuration pour améliorer la stabilité du build
     outDir: 'dist',

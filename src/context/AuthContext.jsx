@@ -11,9 +11,13 @@ const defaultAuthState = {
   isAdmin: false,
   isProfessor: false,
   isStudent: false,
+  admin: null,
+  professor: null,
+  student: null,
   isAuthenticated: false,
   error: null,
-  loading: true
+  loading: true,
+  fullName: ''
 };
 
 /**
@@ -21,7 +25,22 @@ const defaultAuthState = {
  */
 export const AuthContext = createContext({
   authState: defaultAuthState,
+  user: null,
+  profile: null,
+  session: null,
+  admin: null,
+  professor: null,
+  student: null,
+  isAdmin: false,
+  isProfessor: false,
+  isStudent: false,
+  isAuthenticated: false,
+  loading: true,
+  error: null,
+  fullName: '',
   signIn: async () => ({ error: null }),
+  login: async () => ({ error: null }),
+  signUp: async () => ({ error: null, data: null }),
   signOut: async () => {},
   logout: async () => {},
   resetPassword: async () => ({ error: null }),
@@ -48,28 +67,7 @@ export const useAuth = () => {
  */
 export const AuthProvider = ({ children }) => {
   // Utiliser notre hook personnalisé
-  const {
-    authState,
-    signIn,
-    signOut,
-    resetPassword,
-    updateProfile,
-    createUserAccount
-  } = useSupabaseAuth();
-
-  // Définir l'alias logout pour signOut (pour maintenir la compatibilité)
-  const logout = signOut;
-
-  // Créer la valeur du contexte
-  const contextValue = {
-    authState,
-    signIn,
-    signOut,
-    logout,
-    resetPassword,
-    updateProfile,
-    createUserAccount
-  };
+  const contextValue = useSupabaseAuth();
 
   // Retourner le Provider avec les enfants
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

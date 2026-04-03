@@ -30,7 +30,6 @@ import {
   School as SchoolIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../supabase';
 import { format, parseISO, isBefore, isAfter, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { styled } from '@mui/material/styles';

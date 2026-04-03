@@ -36,8 +36,6 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 // Correction du chemin d'importation de Supabase
-import { supabase } from '@/supabase';
-import { getRecordsWithRelation as fetchRecords, insertRecord, updateRecord, deleteRecord } from '@/utils/supabase-helpers';
 
 const CoursesManagerPage = () => {
   const { authState } = useAuth();

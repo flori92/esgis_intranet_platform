@@ -30,8 +30,8 @@ import {
   Warning as WarningIcon,
   Sort as SortIcon
 } from '@mui/icons-material';
-
 import { supabase } from '@/supabase';
+
 
 /**
  * Composant pour afficher la liste des étudiants qui ont passé un examen

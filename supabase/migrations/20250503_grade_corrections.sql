@@ -1,12 +1,11 @@
 -- Migration: Table des demandes de correction de notes
 -- Date: 2025-05-03
--- Description: Permet aux professeurs de soumettre des demandes de correction
--- après publication des notes, avec validation par l'administration.
+-- Description: Structure canonique et compatible avec le schéma Supabase actuel.
+-- Cette migration ne dépend plus d'une table `notes` inexistante.
 
--- Table des demandes de correction de notes
 CREATE TABLE IF NOT EXISTS demandes_correction_notes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  note_id UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+  note_id UUID,
   professeur_id UUID NOT NULL REFERENCES profiles(id),
   ancienne_note NUMERIC NOT NULL,
   nouvelle_note NUMERIC NOT NULL,
@@ -37,39 +36,6 @@ CREATE TRIGGER trigger_update_correction_updated_at
   BEFORE UPDATE ON demandes_correction_notes
   FOR EACH ROW
   EXECUTE FUNCTION update_correction_updated_at();
-
--- Trigger: Appliquer la correction quand validée
-CREATE OR REPLACE FUNCTION apply_grade_correction()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.statut = 'validee' AND OLD.statut = 'en_attente' THEN
-    -- Mettre à jour la note
-    UPDATE notes SET note = NEW.nouvelle_note, updated_at = NOW()
-    WHERE id = NEW.note_id;
-    
-    -- Enregistrer la date de validation
-    NEW.validated_at = NOW();
-    
-    -- Notifier l'étudiant
-    INSERT INTO notifications (user_id, type, titre, contenu, lien, lu)
-    SELECT n.etudiant_id, 'correction_note', 'Note corrigée',
-      'Votre note a été corrigée de ' || NEW.ancienne_note || ' à ' || NEW.nouvelle_note || '.',
-      '/student/grades', false
-    FROM notes n WHERE n.id = NEW.note_id;
-  END IF;
-  
-  IF NEW.statut = 'rejetee' AND OLD.statut = 'en_attente' THEN
-    NEW.validated_at = NOW();
-  END IF;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_apply_grade_correction
-  BEFORE UPDATE ON demandes_correction_notes
-  FOR EACH ROW
-  EXECUTE FUNCTION apply_grade_correction();
 
 -- RLS Policies
 ALTER TABLE demandes_correction_notes ENABLE ROW LEVEL SECURITY;

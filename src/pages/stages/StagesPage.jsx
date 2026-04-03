@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -13,168 +13,21 @@ import {
   Add as AddIcon 
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-// Correction du chemin d'importation de Supabase
-import { supabase } from '@/supabase';
 import OffresList from './components/OffresList';
 import MesCandidatures from './components/MesCandidatures';
-import AjouterOffre from './components/AjouterOffre';
+import RouteLoader from '@/components/common/RouteLoader';
+import {
+  createStageApplication,
+  createStageOffer,
+  deleteStageApplication,
+  getStageOffers,
+  getStudentStageApplications,
+  getStudentStageInterviews,
+  updateStageApplication
+} from '@/api/stages';
 // Les types sont maintenant définis dans types.js avec JSDoc
 
-// Données mock pour les offres de stage
-const mockOffres = [
-  {
-    id: 1,
-    titre: "Stage développement frontend React",
-    description: "Nous recherchons un développeur frontend pour travailler sur notre application React.",
-    entreprise: {
-      id: 1,
-      nom: "TechSolutions",
-      secteur: "Informatique"
-    },
-    dateDebut: "2025-06-01",
-    dateFin: "2025-08-31",
-    lieu: "Paris",
-    typeStage: "temps_plein",
-    competencesRequises: ["React", "TypeScript", "CSS"],
-    remuneration: 800,
-    duree: 12,
-    professeurContact: "Dr. Martin Dubois",
-    datePublication: "2025-04-15",
-    departementId: 1,
-    niveauRequis: ["Licence 3", "Master 1"]
-  },
-  {
-    id: 2,
-    titre: "Stage développement backend Node.js",
-    description: "Stage de développement backend avec Node.js et Express.",
-    entreprise: {
-      id: 2,
-      nom: "WebInnovate",
-      secteur: "Développement Web"
-    },
-    dateDebut: "2025-07-01",
-    dateFin: "2025-09-30",
-    lieu: "Lyon",
-    typeStage: "temps_plein",
-    competencesRequises: ["Node.js", "Express", "MongoDB"],
-    remuneration: 900,
-    duree: 12,
-    professeurContact: "Mme. Sophie Laurent",
-    datePublication: "2025-04-20",
-    departementId: 1,
-    niveauRequis: ["Master 1", "Master 2"]
-  },
-  {
-    id: 3,
-    titre: "Stage en alternance - Développement mobile",
-    description: "Alternance en développement d'applications mobiles (iOS/Android).",
-    entreprise: {
-      id: 3,
-      nom: "MobileFirst",
-      secteur: "Développement Mobile"
-    },
-    dateDebut: "2025-09-01",
-    dateFin: "2026-08-31",
-    lieu: "Bordeaux",
-    typeStage: "alternance",
-    competencesRequises: ["Swift", "Kotlin", "Flutter"],
-    remuneration: 1200,
-    duree: 52,
-    professeurContact: "Prof. Thomas Moreau",
-    datePublication: "2025-04-25",
-    departementId: 2,
-    niveauRequis: ["Master 1", "Master 2"]
-  }
-];
-
-// Données mock pour les candidatures
-const mockCandidatures = [
-  {
-    id: 1,
-    offre_id: 1,
-    etudiant_id: "1",
-    date_candidature: "2025-04-20",
-    status: "pending",
-    lettreMotivation: "Je suis très intéressé par ce stage...",
-    cv_path: "/uploads/cv/etudiant1_cv.pdf",
-    commentaires: null,
-    note_entretien: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    offre: {
-      id: 1,
-      titre: "Stage développement frontend React",
-      description: "",
-      entreprise: {
-        id: 1,
-        nom: "TechSolutions",
-        secteur: "Informatique"
-      },
-      dateDebut: "",
-      dateFin: "",
-      lieu: "",
-      typeStage: "temps_plein",
-      competencesRequises: [],
-      remuneration: null,
-      duree: 0,
-      professeurContact: "",
-      datePublication: "",
-      departementId: 0,
-      niveauRequis: []
-    }
-  },
-  {
-    id: 2,
-    offre_id: 3,
-    etudiant_id: "1",
-    date_candidature: "2025-04-26",
-    status: "interview",
-    lettreMotivation: "Je souhaite postuler à cette alternance...",
-    cv_path: "/uploads/cv/etudiant1_cv.pdf",
-    commentaires: "Candidature intéressante, à convoquer pour un entretien",
-    note_entretien: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    offre: {
-      id: 3,
-      titre: "Stage en alternance - Développement mobile",
-      description: "",
-      entreprise: {
-        id: 3,
-        nom: "MobileFirst",
-        secteur: "Développement Mobile"
-      },
-      dateDebut: "",
-      dateFin: "",
-      lieu: "",
-      typeStage: "alternance",
-      competencesRequises: [],
-      remuneration: null,
-      duree: 0,
-      professeurContact: "",
-      datePublication: "",
-      departementId: 0,
-      niveauRequis: []
-    }
-  }
-];
-
-// Données mock pour les entretiens
-const mockEntretiens = [
-  {
-    id: 1,
-    candidatureId: 2,
-    date: "2025-05-10T14:00:00",
-    lieu: "Visioconférence Zoom",
-    type: "visioconference",
-    lien_visio: "https://zoom.us/j/123456789",
-    contact: "recrutement@mobilefirst.fr",
-    duree: 45,
-    notes: "",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-];
+const AjouterOffre = lazy(() => import('./components/AjouterOffre'));
 
 /**
  * Page de gestion des stages et des candidatures
@@ -193,22 +46,40 @@ const StagesPage = () => {
   // Charger les données au chargement de la page
   useEffect(() => {
     chargerDonnees();
-  }, [authState]);
+  }, [authState.isAuthenticated, authState.student?.id, authState.professor?.id]);
 
   /**
    * Charger les données des offres, candidatures et entretiens
    */
   const chargerDonnees = async () => {
     setLoading(true);
-    
+    setError(null);
+
     try {
-      // Pour l'instant, on utilise les données mock
-      setOffres(mockOffres);
-      
-      // Si l'utilisateur est connecté et est un étudiant, charger ses candidatures
+      const { data: offersData, error: offersError } = await getStageOffers();
+      if (offersError) {
+        throw offersError;
+      }
+
+      setOffres(offersData || []);
+
       if (authState.isAuthenticated && authState.student) {
-        setMesCandidatures(mockCandidatures.filter(c => c.etudiant_id === authState.user.id));
-        setEntretiens(mockEntretiens);
+        const [{ data: applicationsData, error: applicationsError }, { data: interviewsData, error: interviewsError }] =
+          await Promise.all([
+            getStudentStageApplications(authState.student.id),
+            getStudentStageInterviews(authState.student.id)
+          ]);
+
+        if (applicationsError) {
+          throw applicationsError;
+        }
+
+        if (interviewsError) {
+          throw interviewsError;
+        }
+
+        setMesCandidatures(applicationsData || []);
+        setEntretiens(interviewsData || []);
       } else {
         setMesCandidatures([]);
         setEntretiens([]);
@@ -246,29 +117,37 @@ const StagesPage = () => {
    */
   const handleAjouterOffre = async (nouvelleOffre) => {
     try {
-      // Vérifier que l'utilisateur est un professeur
       if (!authState.isAuthenticated || !authState.professor) {
         return {
           success: false,
           message: 'Vous devez être connecté en tant que professeur pour ajouter une offre'
         };
       }
-      
-      // Créer un ID pour la nouvelle offre
-      const newId = Math.max(...offres.map(o => o.id), 0) + 1;
-      
-      // Créer l'objet offre complet
-      const offreComplete = {
-        ...nouvelleOffre,
-        id: newId,
-        datePublication: new Date().toISOString(),
-        professeurContact: authState.user.full_name || 'Professeur',
-        departementId: authState.professor.department_id || 1
-      };
-      
-      // Ajouter l'offre à notre liste mock
-      setOffres([...offres, offreComplete]);
-      
+
+      const { data, error: createError } = await createStageOffer({
+        titre: nouvelleOffre.titre,
+        description: nouvelleOffre.description,
+        entrepriseId: nouvelleOffre.entreprise?.id,
+        dateDebut: nouvelleOffre.dateDebut,
+        dateFin: nouvelleOffre.dateFin,
+        lieu: nouvelleOffre.lieu,
+        typeStage: nouvelleOffre.typeStage,
+        competencesRequises: nouvelleOffre.competencesRequises,
+        remuneration: nouvelleOffre.remuneration,
+        duree: nouvelleOffre.duree,
+        professorId: authState.professor.id,
+        departementId: nouvelleOffre.departementId || authState.professor.department_id || authState.user.department_id || 1,
+        niveauRequis: nouvelleOffre.niveauRequis
+      });
+
+      if (createError) {
+        throw createError;
+      }
+
+      if (data) {
+        setOffres((prev) => [data, ...prev]);
+      }
+
       return {
         success: true,
         message: 'Offre de stage ajoutée avec succès'
@@ -291,7 +170,6 @@ const StagesPage = () => {
    */
   const handlePostuler = async (offreId, lettreMotivation, cvPath) => {
     try {
-      // Vérifier que l'utilisateur est un étudiant
       if (!authState.isAuthenticated || !authState.student) {
         return {
           success: false,
@@ -299,7 +177,6 @@ const StagesPage = () => {
         };
       }
       
-      // Vérifier que l'offre existe
       const offre = offres.find(o => o.id === offreId);
       if (!offre) {
         return {
@@ -308,7 +185,6 @@ const StagesPage = () => {
         };
       }
       
-      // Vérifier que l'étudiant n'a pas déjà postulé
       const candidatureExistante = mesCandidatures.find(c => c.offre_id === offreId);
       if (candidatureExistante) {
         return {
@@ -317,28 +193,21 @@ const StagesPage = () => {
         };
       }
       
-      // Créer un ID pour la nouvelle candidature
-      const newId = Math.max(...mockCandidatures.map(c => c.id), 0) + 1;
-      
-      // Créer l'objet candidature
-      const nouvelleCandidature = {
-        id: newId,
-        offre_id: offreId,
-        etudiant_id: authState.user.id,
-        date_candidature: new Date().toISOString(),
-        status: 'pending',
+      const { data, error: applyError } = await createStageApplication({
+        offreId,
+        studentId: authState.student.id,
         lettreMotivation,
-        cv_path: cvPath,
-        commentaires: null,
-        note_entretien: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        offre
-      };
-      
-      // Ajouter la candidature à notre liste mock
-      setMesCandidatures([...mesCandidatures, nouvelleCandidature]);
-      
+        cvPath
+      });
+
+      if (applyError) {
+        throw applyError;
+      }
+
+      if (data) {
+        setMesCandidatures((prev) => [data, ...prev]);
+      }
+
       return {
         success: true,
         message: 'Candidature envoyée avec succès'
@@ -359,7 +228,6 @@ const StagesPage = () => {
    */
   const handleAnnulerCandidature = async (candidatureId) => {
     try {
-      // Vérifier que la candidature existe
       const candidature = mesCandidatures.find(c => c.id === candidatureId);
       if (!candidature) {
         return {
@@ -368,9 +236,14 @@ const StagesPage = () => {
         };
       }
       
-      // Supprimer la candidature de notre liste mock
-      setMesCandidatures(mesCandidatures.filter(c => c.id !== candidatureId));
-      
+      const { error: deleteError } = await deleteStageApplication(candidatureId);
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      setMesCandidatures((prev) => prev.filter((c) => c.id !== candidatureId));
+      setEntretiens((prev) => prev.filter((entretien) => entretien.candidatureId !== candidatureId));
+
       return {
         success: true,
         message: 'Candidature annulée avec succès'
@@ -442,25 +315,19 @@ const StagesPage = () => {
    * @returns {Promise<void>} Promise
    */
   const modifierCandidature = async (id, lettreMotivation) => {
-    // Implémentation de modifierCandidature
     const candidature = mesCandidatures.find(c => c.id === id);
     if (!candidature) {
       return;
     }
-    
-    // Créer une copie mise à jour
-    const candidatureMiseAJour = {
-      ...candidature,
-      lettreMotivation,
-      updated_at: new Date().toISOString()
-    };
-    
-    // Mettre à jour la liste des candidatures
-    setMesCandidatures(prevCandidatures => 
-      prevCandidatures.map(c => c.id === id ? candidatureMiseAJour : c)
-    );
-    
-    return;
+
+    const { data, error: updateError } = await updateStageApplication(id, { lettreMotivation });
+    if (updateError) {
+      throw updateError;
+    }
+
+    if (data) {
+      setMesCandidatures((prev) => prev.map((item) => (item.id === id ? data : item)));
+    }
   };
 
   return (
@@ -552,10 +419,12 @@ const StagesPage = () => {
             aria-labelledby="tab-2"
           >
             {tabValue === 2 && (
-              <AjouterOffre 
-                onSubmit={handleAjouterOffre}
-                departementId={authState.professor?.department_id || 0}
-              />
+              <Suspense fallback={<RouteLoader label="Chargement du formulaire..." />}>
+                <AjouterOffre 
+                  onSubmit={handleAjouterOffre}
+                  departementId={authState.professor?.department_id || 0}
+                />
+              </Suspense>
             )}
           </div>
         </>

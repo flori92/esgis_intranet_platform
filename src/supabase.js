@@ -1,9 +1,16 @@
-// Initialisation de Supabase avec gestion des erreurs et retries
+// Initialisation de Supabase avec variables d'environnement
 import { createClient } from '@supabase/supabase-js';
 
-// Configuration
-const SUPABASE_URL = 'https://epnhnjkbxgciojevrwfq.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyMDY5MDYsImV4cCI6MjA2MTc4MjkwNn0.VeqmGA56qySH_f4rwk6bnsvPS6173BtoRA0iCjXnogM';
+// Configuration - utilise les variables d'environnement Vite
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error(
+    'Variables d\'environnement Supabase manquantes. ' +
+    'Vérifiez que VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY sont définies dans .env'
+  );
+}
 
 // Options de configuration avancées
 const supabaseOptions = {
@@ -11,11 +18,6 @@ const supabaseOptions = {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true
-  },
-  global: {
-    headers: {
-      'X-Client-Info': 'supabase-js/2.39.7',
-    },
   },
   db: {
     schema: 'public',
@@ -30,27 +32,32 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, supabaseOp
 
 /**
  * Fonction pour vérifier la connexion à Supabase
- * @returns {Promise<boolean>} Promesse résolue par true si la connexion est établie, false sinon
+ * @returns {Promise<boolean>} true si la connexion est établie
  */
 export const checkSupabaseConnection = async () => {
   try {
+    // Requête simple pour tester la connexion
     const { error } = await supabase
-      .from('active_students')
-      .select('*')
+      .from('profiles')
+      .select('id')
       .limit(1);
       
     if (error) {
-      console.error('Erreur lors de la vérification de la connexion Supabase:', error);
+      // Si la table n'existe pas encore, la connexion est quand même OK
+      if (error.code === '42P01') {
+        console.log('Connexion Supabase OK (tables non encore créées)');
+        return true;
+      }
+      console.error('Erreur de connexion Supabase:', error.message);
       return false;
     }
     
     console.log('Connexion à Supabase établie avec succès');
     return true;
   } catch (err) {
-    console.error('Exception lors de la vérification de la connexion Supabase:', err);
+    console.error('Exception lors de la vérification Supabase:', err);
     return false;
   }
 };
 
-// Export par défaut
 export default supabase;

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Typography,
   Paper,
@@ -28,7 +29,10 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
-  Chip
+  Chip,
+  CircularProgress,
+  Tab,
+  Tabs
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -37,8 +41,31 @@ import {
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
   Save as SaveIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  LibraryAdd as LibraryAddIcon
 } from '@mui/icons-material';
+import { useAuth } from '@/context/AuthContext';
+import { getProfessorQuestions, getSharedQuestions } from '@/api/questionBank';
+
+const QUESTION_TYPE_LABELS = {
+  qcm_single: 'QCM unique',
+  qcm_multiple: 'QCM multiple',
+  true_false: 'Vrai/Faux',
+  short_answer: 'Reponse courte',
+  long_answer: 'Reponse longue',
+  numeric: 'Numerique',
+  matching: 'Association',
+  ordering: 'Ordonnancement',
+  fill_blank: 'Texte a trous',
+  image_question: 'Question sur image'
+};
+
+const IMPORTABLE_TYPE_MAP = {
+  qcm_single: 'multiple_choice',
+  true_false: 'true_false',
+  short_answer: 'short_answer',
+  long_answer: 'essay'
+};
 
 /**
  * Composant pour la gestion des questions d'examen
@@ -70,6 +97,7 @@ const ExamQuestions = ({
   setTotalPoints,
   errors
 }) => {
+  const { authState } = useAuth();
   // État pour le formulaire d'édition de question
   const [editingQuestion, setEditingQuestion] = useState({
     question_text: '',
@@ -86,10 +114,74 @@ const ExamQuestions = ({
   
   // État pour les options de QCM
   const [options, setOptions] = useState(['', '', '', '']);
-  const [nextOptionId, setNextOptionId] = useState(1);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importTab, setImportTab] = useState(0);
+  const [bankQuestions, setBankQuestions] = useState([]);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [bankError, setBankError] = useState(null);
+  const [bankSearch, setBankSearch] = useState('');
   
   // Calcul du total de points actuel
   const currentTotalPoints = questions.reduce((sum, q) => sum + q.points, 0);
+
+  useEffect(() => {
+    if (!importDialogOpen) {
+      return;
+    }
+
+    let active = true;
+
+    const loadQuestionBank = async () => {
+      setBankLoading(true);
+      setBankError(null);
+
+      try {
+        const { data, error } = importTab === 0
+          ? await getProfessorQuestions(authState.profile?.id)
+          : await getSharedQuestions();
+
+        if (error) {
+          throw error;
+        }
+
+        if (active) {
+          setBankQuestions(data || []);
+        }
+      } catch (loadError) {
+        console.error('Erreur chargement banque de questions examen:', loadError);
+        if (active) {
+          setBankQuestions([]);
+          setBankError(loadError.message || 'Impossible de charger la banque de questions.');
+        }
+      } finally {
+        if (active) {
+          setBankLoading(false);
+        }
+      }
+    };
+
+    loadQuestionBank();
+
+    return () => {
+      active = false;
+    };
+  }, [authState.profile?.id, importDialogOpen, importTab]);
+
+  const filteredBankQuestions = useMemo(() => {
+    const query = bankSearch.trim().toLowerCase();
+
+    if (!query) {
+      return bankQuestions;
+    }
+
+    return bankQuestions.filter((question) => {
+      return (
+        String(question.question_text || question.text || '').toLowerCase().includes(query) ||
+        String(question.matiere || '').toLowerCase().includes(query) ||
+        String(question.theme || '').toLowerCase().includes(query)
+      );
+    });
+  }, [bankQuestions, bankSearch]);
   
   /**
    * Ouvrir le dialogue pour une nouvelle question
@@ -236,18 +328,17 @@ const ExamQuestions = ({
         : editingQuestion.correct_answer
     };
     
+    let nextQuestions = [];
+
     if (editingIndex !== null) {
-      // Mise à jour d'une question existante
-      const updatedQuestions = [...questions];
-      updatedQuestions[editingIndex] = question;
-      setQuestions(updatedQuestions);
+      nextQuestions = [...questions];
+      nextQuestions[editingIndex] = question;
     } else {
-      // Ajout d'une nouvelle question
-      setQuestions([...questions, question]);
+      nextQuestions = [...questions, question];
     }
-    
-    // Recalculer le total des points
-    setTotalPoints(questions.reduce((sum, q) => sum + q.points, 0) + (editingIndex === null ? question.points : 0));
+
+    setQuestions(nextQuestions);
+    setTotalPoints(nextQuestions.reduce((sum, item) => sum + Number(item.points || 0), 0));
     
     handleCloseDialog();
   };
@@ -336,6 +427,66 @@ const ExamQuestions = ({
         return type;
     }
   };
+
+  const isImportableQuestion = (question) => Boolean(IMPORTABLE_TYPE_MAP[question.question_type || question.type]);
+
+  const mapQuestionBankToExamQuestion = (question) => {
+    const sourceType = question.question_type || question.type;
+    const mappedType = IMPORTABLE_TYPE_MAP[sourceType];
+
+    if (!mappedType) {
+      return null;
+    }
+
+    const rawCorrectAnswer = question.correct_answer;
+    const optionsList = Array.isArray(question.options) ? question.options.filter(Boolean) : [];
+
+    let normalizedCorrectAnswer = '';
+
+    if (mappedType === 'multiple_choice') {
+      normalizedCorrectAnswer = Array.isArray(rawCorrectAnswer)
+        ? String(rawCorrectAnswer[0] || '')
+        : String(rawCorrectAnswer || optionsList[0] || '');
+    } else if (mappedType === 'true_false') {
+      normalizedCorrectAnswer = rawCorrectAnswer === true || String(rawCorrectAnswer).toLowerCase() === 'true'
+        ? 'true'
+        : 'false';
+    } else if (rawCorrectAnswer !== null && rawCorrectAnswer !== undefined) {
+      normalizedCorrectAnswer = Array.isArray(rawCorrectAnswer)
+        ? rawCorrectAnswer.join(', ')
+        : String(rawCorrectAnswer);
+    }
+
+    return {
+      question_number: questions.length + 1,
+      question_text: question.question_text || question.text || '',
+      question_type: mappedType,
+      points: Number(question.points || 1),
+      options: mappedType === 'multiple_choice' ? optionsList : undefined,
+      correct_answer: normalizedCorrectAnswer,
+      rubric: mappedType === 'essay' ? question.explanation || question.rubric || '' : question.rubric || '',
+      explanation: question.explanation || '',
+      source_question_bank_id: question.id
+    };
+  };
+
+  const handleImportQuestion = (question) => {
+    const importedQuestion = mapQuestionBankToExamQuestion(question);
+
+    if (!importedQuestion) {
+      setBankError("Ce type de question n'est pas encore compatible avec le createur d'examen.");
+      return;
+    }
+
+    const nextQuestions = [...questions, importedQuestion].map((item, index) => ({
+      ...item,
+      question_number: index + 1
+    }));
+
+    setQuestions(nextQuestions);
+    setTotalPoints(nextQuestions.reduce((sum, item) => sum + Number(item.points || 0), 0));
+    setBankError(null);
+  };
   
   /**
    * Réinitialiser le formulaire d'édition
@@ -366,14 +517,23 @@ const ExamQuestions = ({
             sx={{ ml: 2 }} 
           />
         </Typography>
-        <Button 
-          variant="contained" 
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleAddQuestion}
-        >
-          Ajouter une question
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button 
+            variant="contained" 
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleAddQuestion}
+          >
+            Ajouter une question
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<LibraryAddIcon />}
+            onClick={() => setImportDialogOpen(true)}
+          >
+            Importer depuis la banque
+          </Button>
+        </Box>
       </Box>
       
       {errors.questions && (
@@ -656,6 +816,85 @@ const ExamQuestions = ({
           >
             Enregistrer
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={importDialogOpen} onClose={() => setImportDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Importer depuis la banque de questions</DialogTitle>
+        <DialogContent>
+          <Tabs value={importTab} onChange={(_event, value) => setImportTab(value)} sx={{ mb: 2 }}>
+            <Tab label="Ma banque" />
+            <Tab label="Banque partagee" />
+          </Tabs>
+
+          <TextField
+            fullWidth
+            size="small"
+            label="Rechercher une question"
+            value={bankSearch}
+            onChange={(event) => setBankSearch(event.target.value)}
+            sx={{ mb: 2 }}
+          />
+
+          {bankError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {bankError}
+            </Alert>
+          )}
+
+          {bankLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
+            </Box>
+          ) : filteredBankQuestions.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+              Aucune question disponible.
+            </Typography>
+          ) : (
+            <List>
+              {filteredBankQuestions.map((question) => {
+                const importable = isImportableQuestion(question);
+                const sourceType = question.question_type || question.type;
+                return (
+                  <React.Fragment key={question.id}>
+                    <ListItem alignItems="flex-start">
+                      <ListItemText
+                        primary={question.question_text || question.text}
+                        secondary={
+                          <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                            <Chip size="small" label={QUESTION_TYPE_LABELS[sourceType] || sourceType} />
+                            {question.matiere && <Chip size="small" label={question.matiere} variant="outlined" />}
+                            {question.theme && <Chip size="small" label={question.theme} variant="outlined" />}
+                            {!importable && (
+                              <Chip
+                                size="small"
+                                color="warning"
+                                label="Type non compatible avec ce createur"
+                              />
+                            )}
+                          </Box>
+                        }
+                      />
+                      <ListItemSecondaryAction>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          disabled={!importable}
+                          onClick={() => handleImportQuestion(question)}
+                        >
+                          Importer
+                        </Button>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                    <Divider />
+                  </React.Fragment>
+                );
+              })}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportDialogOpen(false)}>Fermer</Button>
         </DialogActions>
       </Dialog>
     </Paper>

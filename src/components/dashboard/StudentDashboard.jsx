@@ -36,7 +36,6 @@ import {
   VerifiedUser as VerifiedUserIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import DashboardBase from './DashboardBase';
 import StatisticsCard from './StatisticsCard';
 import NewsCard from './NewsCard';

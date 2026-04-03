@@ -2,7 +2,7 @@
  * Service de gestion des départements
  * Centralise toutes les opérations liées aux départements académiques
  */
-import { supabase } from '../config/supabase';
+import { supabase } from '../supabase';
 
 /**
  * Types pour les départements - remplacés par des commentaires JSDoc

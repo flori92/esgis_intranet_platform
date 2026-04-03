@@ -21,7 +21,6 @@ import {
   Check as CheckIcon,
   Save as SaveIcon 
 } from '@mui/icons-material';
-// Correction du chemin d'importation de Supabase
 import { supabase } from '@/supabase';
 
 /**
@@ -53,11 +52,15 @@ import { supabase } from '@/supabase';
  * @param {StudentAnswer|null} props.studentAnswer Réponse de l'étudiant
  * @param {Function} props.onGraded Fonction appelée après notation
  */
-const GradeQuestionItem = ({ 
-  question, 
-  studentAnswer, 
-  onGraded 
+const GradeQuestionItem = ({
+  question,
+  studentAnswer,
+  answer,
+  gradedBy,
+  onGraded
 }) => {
+  const currentAnswer = studentAnswer || answer || null;
+
   // États
   const [grade, setGrade] = useState(0);
   const [feedback, setFeedback] = useState('');
@@ -75,10 +78,10 @@ const GradeQuestionItem = ({
   
   // Initialiser les valeurs lors du montage ou lors d'un changement de réponse
   useEffect(() => {
-    if (studentAnswer) {
-      const currentGrade = typeof studentAnswer.grade === 'number' ? studentAnswer.grade : 0;
-      const currentFeedback = studentAnswer.feedback || '';
-      const currentIsCorrect = studentAnswer.is_correct === true;
+    if (currentAnswer) {
+      const currentGrade = typeof currentAnswer.grade === 'number' ? currentAnswer.grade : 0;
+      const currentFeedback = currentAnswer.feedback || '';
+      const currentIsCorrect = currentAnswer.is_correct === true;
       
       setGrade(currentGrade);
       setFeedback(currentFeedback);
@@ -92,11 +95,11 @@ const GradeQuestionItem = ({
       
       setEdited(false);
     }
-  }, [studentAnswer]);
+  }, [currentAnswer]);
   
   // Vérifier si des modifications ont été apportées
   useEffect(() => {
-    if (studentAnswer && initialValuesRef.current) {
+    if (currentAnswer && initialValuesRef.current) {
       const isChanged = 
         grade !== initialValuesRef.current.grade ||
         feedback !== initialValuesRef.current.feedback ||
@@ -104,29 +107,36 @@ const GradeQuestionItem = ({
       
       setEdited(isChanged);
     }
-  }, [grade, feedback, isCorrect, studentAnswer]);
+  }, [grade, feedback, isCorrect, currentAnswer]);
   
   /**
    * Sauvegarder les modifications
    */
   const handleSaveGrading = async () => {
-    if (!studentAnswer) return;
+    if (!currentAnswer || !gradedBy) return;
     
     setSaving(true);
     setError(null);
     
     try {
-      // Mettre à jour dans la base de données
-      const { error } = await supabase
-        .from('student_answers')
-        .update({
-          grade,
+      const { data, error } = await supabase
+        .from('exam_grades')
+        .upsert({
+          id: currentAnswer.grade_record_id || undefined,
+          student_exam_id: currentAnswer.student_exam_id,
+          question_id: currentAnswer.question_id,
+          points_earned: grade,
           feedback,
-          is_correct: isCorrect
+          graded_by: gradedBy
+        }, {
+          onConflict: 'student_exam_id,question_id'
         })
-        .eq('id', studentAnswer.id);
-      
-      if (error) throw error;
+        .select('id')
+        .single();
+
+      if (error) {
+        throw error;
+      }
       
       // Mettre à jour les valeurs initiales
       initialValuesRef.current = {
@@ -138,7 +148,7 @@ const GradeQuestionItem = ({
       setEdited(false);
       
       // Notifier le composant parent
-      onGraded(studentAnswer.id, grade, feedback, isCorrect);
+      onGraded(currentAnswer.question_id, grade, feedback, isCorrect, data?.id || currentAnswer.grade_record_id || null);
     } catch (err) {
       console.error('Erreur lors de la sauvegarde de la notation:', err);
       setError(err.message || 'Une erreur est survenue lors de la sauvegarde');
@@ -157,7 +167,7 @@ const GradeQuestionItem = ({
         color="primary"
         startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
         onClick={handleSaveGrading}
-        disabled={saving || !edited || !studentAnswer}
+        disabled={saving || !edited || !currentAnswer}
         sx={{ mt: 'auto', alignSelf: 'flex-end' }}
       >
         Enregistrer la notation
@@ -169,14 +179,13 @@ const GradeQuestionItem = ({
    * Formater la réponse de l'étudiant pour l'affichage
    */
   const renderStudentAnswer = () => {
-    if (!studentAnswer) {
+    if (!currentAnswer) {
       return <Typography variant="body2" color="text.secondary">Pas de réponse</Typography>;
     }
     
     if (question.question_type === 'multiple_choice' && question.options && question.options.length > 0) {
-      const selectedOption = question.options.find(
-        opt => opt.text === studentAnswer.answer_value
-      );
+      const optionValues = question.options.map((opt) => typeof opt === 'string' ? { text: opt, value: opt } : { text: opt.text, value: opt.id ?? opt.text });
+      const selectedOption = optionValues.find((opt) => opt.value === currentAnswer.answer_value || opt.text === currentAnswer.answer_value);
       
       if (selectedOption) {
         return <Typography variant="body1">{selectedOption.text}</Typography>;
@@ -185,13 +194,13 @@ const GradeQuestionItem = ({
     
     if (question.question_type === 'true_false') {
       const boolValue = 
-        studentAnswer.answer_value === true || 
-        studentAnswer.answer_value === 'true';
+        currentAnswer.answer_value === true || 
+        currentAnswer.answer_value === 'true';
       
       return <Typography variant="body1">{boolValue ? 'Vrai' : 'Faux'}</Typography>;
     }
     
-    return <Typography variant="body1">{String(studentAnswer.answer_value || '')}</Typography>;
+    return <Typography variant="body1">{String(currentAnswer.answer_value || '')}</Typography>;
   };
   
   /**
@@ -199,8 +208,9 @@ const GradeQuestionItem = ({
    */
   const renderCorrectAnswer = () => {
     if (question.question_type === 'multiple_choice' && question.options && question.options.length > 0) {
-      const correctOption = question.options.find(
-        opt => opt.text === question.correct_answer
+      const optionValues = question.options.map((opt) => typeof opt === 'string' ? { text: opt, value: opt } : { text: opt.text, value: opt.id ?? opt.text });
+      const correctOption = optionValues.find(
+        (opt) => opt.value === question.correct_answer || opt.text === question.correct_answer
       );
       
       if (correctOption) {

@@ -38,11 +38,11 @@ const Login = () => {
     if (authState.user) {
       // Rediriger selon le rôle
       if (authState.isAdmin) {
-        navigate('/admin/dashboard');
+        navigate('/admin');
       } else if (authState.isProfessor) {
-        navigate('/professor/dashboard');
+        navigate('/professor');
       } else if (authState.isStudent) {
-        navigate('/student/dashboard');
+        navigate('/student');
       }
     }
   }, [authState, navigate]);

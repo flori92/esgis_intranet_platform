@@ -1,7 +1,7 @@
 /**
  * Service d'authentification - Gestion de toutes les opérations liées à l'auth
  */
-import { supabase } from '../config/supabase';
+import { supabase } from '../supabase';
 
 /**
  * Types exportés en TypeScript, remplacés par des commentaires JSDoc
@@ -199,6 +199,31 @@ export const getCurrentProfile = async () => {
  * @param {Object} profileData - Données à mettre à jour
  * @returns {Promise<Object>} Résultat contenant le profil mis à jour et une erreur éventuelle
  */
+// ============================================================
+// AUTH SDK WRAPPERS
+// Permettent aux hooks/pages de ne plus importer supabase directement
+// ============================================================
+
+/**
+ * Souscrit aux changements d'état d'authentification
+ * @param {Function} callback - (_event, session) => void
+ * @returns {{ data: { subscription: Object } }}
+ */
+export const onAuthStateChange = (callback) =>
+  supabase.auth.onAuthStateChange(callback);
+
+/**
+ * Récupère la session courante
+ * @returns {Promise<{ data: { session: Object|null }, error: Error|null }>}
+ */
+export const getSession = () => supabase.auth.getSession();
+
+/**
+ * Récupère l'utilisateur courant depuis le serveur Auth
+ * @returns {Promise<{ data: { user: Object|null }, error: Error|null }>}
+ */
+export const getUser = () => supabase.auth.getUser();
+
 export const updateProfile = async (profileData) => {
   try {
     const { data: session } = await supabase.auth.getSession();

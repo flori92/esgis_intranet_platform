@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Paper, Grid, CircularProgress, Alert, Button,
   TextField, Chip, Card, CardContent, Divider, IconButton, Tooltip,
@@ -29,52 +29,13 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
-import { getStudentCourses, getCourseChaptersAndResources, recordResourceInteraction, getUserFavorites } from '@/api/courses';
-
-const MOCK_COURSES = [
-  {
-    id: 'c1', code: 'INFO-345', name: 'Développement Web Frontend', professor: 'Prof. MENSAH',
-    semester: 'S1', credits: 4, resources_count: 12, new_count: 2,
-    chapters: [
-      { id: 'ch1', name: 'Introduction au HTML/CSS', resources: [
-        { id: 'r1', title: 'Cours HTML5 — Les bases', type: 'pdf', size: 2400000, date: '2026-03-15', downloads: 42, status: 'read', professor: 'Prof. MENSAH' },
-        { id: 'r2', title: 'TP1 — Créer une page web', type: 'pdf', size: 850000, date: '2026-03-18', downloads: 38, status: 'new', professor: 'Prof. MENSAH' },
-        { id: 'r3', title: 'Vidéo — Flexbox en 30 min', type: 'video', size: 45000000, date: '2026-03-20', downloads: 55, status: 'downloaded', professor: 'Prof. MENSAH' },
-      ]},
-      { id: 'ch2', name: 'JavaScript ES6+', resources: [
-        { id: 'r4', title: 'Cours JS — Variables et fonctions', type: 'pdf', size: 3100000, date: '2026-03-25', downloads: 35, status: 'new', professor: 'Prof. MENSAH' },
-        { id: 'r5', title: 'TD2 — Manipulation du DOM', type: 'pdf', size: 1200000, date: '2026-03-28', downloads: 30, status: 'read', professor: 'Prof. MENSAH' },
-      ]},
-      { id: 'ch3', name: 'React.js', resources: [
-        { id: 'r6', title: 'Introduction à React — Composants', type: 'presentation', size: 5400000, date: '2026-04-01', downloads: 28, status: 'read', professor: 'Prof. MENSAH' },
-        { id: 'r7', title: 'TP3 — Hooks React (useEffect, useState)', type: 'archive', size: 8500000, date: '2026-04-02', downloads: 22, status: 'new', professor: 'Prof. MENSAH' },
-      ]},
-    ]
-  },
-  {
-    id: 'c2', code: 'INFO-221', name: 'Algorithmique Avancée', professor: 'Prof. DOSSEH',
-    semester: 'S1', credits: 3, resources_count: 8, new_count: 0,
-    chapters: [
-      { id: 'ch4', name: 'Complexité algorithmique', resources: [
-        { id: 'r8', title: 'Cours — Notation Big-O', type: 'pdf', size: 1800000, date: '2026-02-10', downloads: 60, status: 'read', professor: 'Prof. DOSSEH' },
-      ]},
-      { id: 'ch5', name: 'Algorithmes de tri', resources: [
-        { id: 'r9', title: 'Cours — QuickSort et MergeSort', type: 'pdf', size: 2200000, date: '2026-02-20', downloads: 48, status: 'downloaded', professor: 'Prof. DOSSEH' },
-        { id: 'r10', title: 'Corrigé — Exercices tri', type: 'pdf', size: 900000, date: '2026-03-01', downloads: 52, status: 'read', professor: 'Prof. DOSSEH' },
-      ]},
-    ]
-  },
-  {
-    id: 'c3', code: 'INFO-234', name: 'Base de Données Relationnelles', professor: 'Prof. AGBEKO',
-    semester: 'S2', credits: 4, resources_count: 6, new_count: 1,
-    chapters: [
-      { id: 'ch6', name: 'Modélisation', resources: [
-        { id: 'r11', title: 'Cours — Modèle Entité-Association', type: 'pdf', size: 3500000, date: '2026-03-10', downloads: 40, status: 'read', professor: 'Prof. AGBEKO' },
-      ]},
-    ]
-  },
-];
+import {
+  getStudentCourses,
+  getCourseChaptersAndResources,
+  recordResourceInteraction,
+  removeResourceInteraction,
+  getUserFavorites
+} from '@/api/courses';
 
 const FILE_ICONS = {
   pdf: <PdfIcon color="error" />,
@@ -105,6 +66,7 @@ const StudentCoursesPage = () => {
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [search, setSearch] = useState('');
   const [filterSemester, setFilterSemester] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -114,6 +76,7 @@ const StudentCoursesPage = () => {
   useEffect(() => {
     const loadCourses = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const { data, error } = await getStudentCourses(authState.user?.id);
         if (!error && data && data.length > 0) {
@@ -124,7 +87,7 @@ const StudentCoursesPage = () => {
             return {
               id: c.id, code: c.code, name: c.name, credits: c.credits,
               professor: c.professeur?.full_name || '-',
-              semester: c.niveau?.code?.startsWith('L') ? 'S1' : 'S2',
+              semester: c.semester === 1 ? 'S1' : c.semester === 2 ? 'S2' : '-',
               resources_count: allResources.length,
               new_count: allResources.filter(r => {
                 const d = new Date(r.created_at);
@@ -144,14 +107,15 @@ const StudentCoursesPage = () => {
           }));
           setCourses(formatted);
         } else {
-          setCourses(MOCK_COURSES);
+          setCourses([]);
         }
         // Charger les favoris
         const { data: favs } = await getUserFavorites(authState.user?.id);
         if (favs) setFavorites(new Set(favs));
       } catch (err) {
         console.error('Erreur chargement cours:', err);
-        setCourses(MOCK_COURSES);
+        setLoadError('Impossible de charger vos cours pour le moment.');
+        setCourses([]);
       } finally {
         setLoading(false);
       }
@@ -160,13 +124,19 @@ const StudentCoursesPage = () => {
   }, [authState.user?.id]);
 
   const toggleFavorite = async (resourceId) => {
+    const isCurrentlyFavorite = favorites.has(resourceId);
+
     setFavorites(prev => {
       const next = new Set(prev);
       if (next.has(resourceId)) next.delete(resourceId); else next.add(resourceId);
       return next;
     });
-    // Persister en base
-    await recordResourceInteraction(resourceId, authState.user?.id, 'favorite').catch(() => {});
+
+    if (isCurrentlyFavorite) {
+      await removeResourceInteraction(resourceId, authState.user?.id, 'favorite').catch(() => {});
+    } else {
+      await recordResourceInteraction(resourceId, authState.user?.id, 'favorite').catch(() => {});
+    }
   };
 
   const setReaction = async (resourceId, reaction) => {
@@ -216,6 +186,11 @@ const StudentCoursesPage = () => {
 
   return (
     <Box sx={{ p: { xs: 1, md: 2 } }}>
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {loadError}
+        </Alert>
+      )}
       {!selectedCourse ? (
         <>
           {/* === LISTE DES COURS === */}
@@ -258,37 +233,45 @@ const StudentCoursesPage = () => {
           </Paper>
 
           {/* Grille des cours */}
-          <Grid container spacing={2}>
-            {filteredCourses.map(course => (
-              <Grid item xs={12} md={6} lg={4} key={course.id}>
-                <Card elevation={2} sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 }, height: '100%' }}
-                  onClick={() => setSelectedCourse(course)}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <Box>
-                        <Typography variant="h6" fontWeight="bold">{course.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {course.code} — {course.professor}
-                        </Typography>
+          {filteredCourses.length > 0 ? (
+            <Grid container spacing={2}>
+              {filteredCourses.map(course => (
+                <Grid item xs={12} md={6} lg={4} key={course.id}>
+                  <Card elevation={2} sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 }, height: '100%' }}
+                    onClick={() => setSelectedCourse(course)}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Box>
+                          <Typography variant="h6" fontWeight="bold">{course.name}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {course.code} — {course.professor}
+                          </Typography>
+                        </Box>
+                        {course.new_count > 0 && (
+                          <Badge badgeContent={course.new_count} color="error">
+                            <BookIcon color="action" />
+                          </Badge>
+                        )}
                       </Box>
-                      {course.new_count > 0 && (
-                        <Badge badgeContent={course.new_count} color="error">
-                          <BookIcon color="action" />
-                        </Badge>
-                      )}
-                    </Box>
-                    <Divider sx={{ my: 1 }} />
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      <Chip label={course.semester} size="small" variant="outlined" />
-                      <Chip label={`${course.credits} crédits`} size="small" variant="outlined" />
-                      <Chip label={`${course.resources_count} ressources`} size="small" color="primary" variant="outlined" />
-                      <Chip label={`${(course.chapters || []).length} chapitres`} size="small" variant="outlined" />
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+                      <Divider sx={{ my: 1 }} />
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip label={course.semester} size="small" variant="outlined" />
+                        <Chip label={`${course.credits} crédits`} size="small" variant="outlined" />
+                        <Chip label={`${course.resources_count} ressources`} size="small" color="primary" variant="outlined" />
+                        <Chip label={`${(course.chapters || []).length} chapitres`} size="small" variant="outlined" />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Paper elevation={1} sx={{ p: 4, textAlign: 'center' }}>
+              <Typography variant="body1" color="text.secondary">
+                Aucun cours ou aucune ressource pédagogique n'est disponible pour le moment.
+              </Typography>
+            </Paper>
+          )}
         </>
       ) : (
         <>
@@ -385,7 +368,20 @@ const StudentCoursesPage = () => {
                                 </IconButton>
                               </Tooltip>
                               <Tooltip title="Télécharger">
-                                <IconButton size="small" color="primary">
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  component="a"
+                                  href={resource.file_url || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  disabled={!resource.file_url}
+                                  onClick={() => {
+                                    if (resource.file_url) {
+                                      recordResourceInteraction(resource.id, authState.user?.id, 'download').catch(() => {});
+                                    }
+                                  }}
+                                >
                                   <DownloadIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>

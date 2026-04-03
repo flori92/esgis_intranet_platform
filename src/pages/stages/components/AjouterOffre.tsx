@@ -14,15 +14,10 @@ import {
   Chip,
   FormHelperText,
   Alert,
-  Autocomplete,
   InputAdornment,
   SelectChangeEvent
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { fr } from 'date-fns/locale';
 import { Offre } from '../types';
 import { supabase } from '@/services/supabase';
 
@@ -49,8 +44,8 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
   const [titre, setTitre] = useState('');
   const [description, setDescription] = useState('');
   const [entrepriseId, setEntrepriseId] = useState<number | null>(null);
-  const [dateDebut, setDateDebut] = useState<Date | null>(null);
-  const [dateFin, setDateFin] = useState<Date | null>(null);
+  const [dateDebut, setDateDebut] = useState('');
+  const [dateFin, setDateFin] = useState('');
   const [lieu, setLieu] = useState('');
   const [typeStage, setTypeStage] = useState<TypeStage>('stage_etude');
   const [competencesRequises, setCompetencesRequises] = useState<string[]>([]);
@@ -121,8 +116,9 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
     setDescription(event.target.value);
   };
 
-  const handleEntrepriseChange = (_: unknown, newValue: Entreprise | null) => {
-    setEntrepriseId(newValue ? newValue.id : null);
+  const handleEntrepriseChange = (event: SelectChangeEvent<number | string>) => {
+    const nextEntrepriseId = Number(event.target.value);
+    setEntrepriseId(Number.isNaN(nextEntrepriseId) ? null : nextEntrepriseId);
   };
 
   const handleLieuChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -246,8 +242,8 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
           nom: entrepriseSelectionnee.nom,
           secteur: entrepriseSelectionnee.secteur
         },
-        dateDebut: dateDebut.toISOString().split('T')[0],
-        dateFin: dateFin.toISOString().split('T')[0],
+        dateDebut,
+        dateFin,
         lieu,
         typeStage,
         competencesRequises,
@@ -269,8 +265,8 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
         setTitre('');
         setDescription('');
         setEntrepriseId(null);
-        setDateDebut(null);
-        setDateFin(null);
+        setDateDebut('');
+        setDateFin('');
         setLieu('');
         setTypeStage('stage_etude');
         setCompetencesRequises([]);
@@ -289,7 +285,6 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
       <Paper sx={{ p: 3 }}>
         <Typography variant="h5" gutterBottom>
           Publier une nouvelle offre de stage
@@ -337,52 +332,49 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
             
             <Grid item xs={12}>
               <FormControl fullWidth error={!!errors.entrepriseId} required>
-                <Autocomplete
-                  options={entreprises}
-                  getOptionLabel={(option) => option.nom}
-                  value={entreprises.find(e => e.id === entrepriseId) || null}
+                <InputLabel>Entreprise</InputLabel>
+                <Select
+                  value={entrepriseId ?? ''}
                   onChange={handleEntrepriseChange}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Entreprise"
-                      error={!!errors.entrepriseId}
-                      helperText={errors.entrepriseId}
-                    />
-                  )}
-                />
+                  label="Entreprise"
+                >
+                  {entreprises.map((entreprise) => (
+                    <MenuItem key={entreprise.id} value={entreprise.id}>
+                      {entreprise.nom}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.entrepriseId && (
+                  <FormHelperText>{errors.entrepriseId}</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <DatePicker
+              <TextField
                 label="Date de début"
+                type="date"
                 value={dateDebut}
-                onChange={(newValue) => setDateDebut(newValue)}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    required: true,
-                    error: !!errors.dateDebut,
-                    helperText: errors.dateDebut
-                  }
-                }}
+                onChange={(event) => setDateDebut(event.target.value)}
+                fullWidth
+                required
+                error={!!errors.dateDebut}
+                helperText={errors.dateDebut}
+                InputLabelProps={{ shrink: true }}
               />
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <DatePicker
+              <TextField
                 label="Date de fin"
+                type="date"
                 value={dateFin}
-                onChange={(newValue) => setDateFin(newValue)}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    required: true,
-                    error: !!errors.dateFin,
-                    helperText: errors.dateFin
-                  }
-                }}
+                onChange={(event) => setDateFin(event.target.value)}
+                fullWidth
+                required
+                error={!!errors.dateFin}
+                helperText={errors.dateFin}
+                InputLabelProps={{ shrink: true }}
               />
             </Grid>
             
@@ -518,7 +510,6 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
           </Grid>
         </Box>
       </Paper>
-    </LocalizationProvider>
   );
 };
 

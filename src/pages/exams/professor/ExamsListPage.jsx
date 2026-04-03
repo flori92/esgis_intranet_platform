@@ -48,7 +48,6 @@ import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 // Import unique Supabase – toute référence doit passer par '@/services/supabase'
-import { supabase } from '@/services/supabase';
 
 /**
  * Page de liste des examens pour les professeurs

@@ -3,22 +3,106 @@
  */
 import { supabase } from '../supabase';
 
+const getAccessibleCourseIds = async (userId, role) => {
+  if (!userId) return [];
+
+  if (role === 'student') {
+    const { data: student, error } = await supabase
+      .from('students')
+      .select('id')
+      .eq('profile_id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!student) return [];
+
+    const { data: enrollments, error: enrollmentError } = await supabase
+      .from('student_courses')
+      .select('course_id')
+      .eq('student_id', student.id);
+
+    if (enrollmentError) throw enrollmentError;
+    return [...new Set((enrollments || []).map((item) => item.course_id).filter(Boolean))];
+  }
+
+  if (role === 'professor') {
+    const { data: professor, error } = await supabase
+      .from('professors')
+      .select('id')
+      .eq('profile_id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!professor) return [];
+
+    const { data: assignments, error: assignmentError } = await supabase
+      .from('professor_courses')
+      .select('course_id')
+      .eq('professor_id', professor.id);
+
+    if (assignmentError) throw assignmentError;
+    return [...new Set((assignments || []).map((item) => item.course_id).filter(Boolean))];
+  }
+
+  return [];
+};
+
 /** Récupère les forums accessibles à un utilisateur */
 export const getForums = async (userId, role) => {
   try {
+    const accessibleCourseIds = await getAccessibleCourseIds(userId, role);
+    if ((role === 'student' || role === 'professor') && accessibleCourseIds.length === 0) {
+      return { data: [], error: null };
+    }
+
     let query = supabase
       .from('forums')
-      .select(`
-        id, created_at,
-        cours:cours_id(
-          id, code, name,
-          professeur:professeur_id(id, full_name),
-          niveau:niveau_id(id, code, name)
-        )
-      `);
+      .select('id, created_at, course_id');
+
+    if (accessibleCourseIds.length) {
+      query = query.in('course_id', accessibleCourseIds);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
+
+    const courseIds = [...new Set((data || []).map((forum) => forum.course_id).filter(Boolean))];
+    const [{ data: courses, error: coursesError }, { data: assignments, error: assignmentsError }] = await Promise.all([
+      courseIds.length
+        ? supabase
+            .from('courses')
+            .select('id, code, name, level')
+            .in('id', courseIds)
+        : Promise.resolve({ data: [], error: null }),
+      courseIds.length
+        ? supabase
+            .from('professor_courses')
+            .select(`
+              course_id,
+              is_principal,
+              professors:professor_id(
+                id,
+                profile_id,
+                profiles:profile_id(
+                  full_name
+                )
+              )
+            `)
+            .in('course_id', courseIds)
+            .order('is_principal', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (coursesError) throw coursesError;
+    if (assignmentsError) throw assignmentsError;
+
+    const courseMap = new Map((courses || []).map((course) => [course.id, course]));
+    const professorByCourse = new Map();
+    (assignments || []).forEach((assignment) => {
+      if (!professorByCourse.has(assignment.course_id)) {
+        professorByCourse.set(assignment.course_id, assignment.professors?.profiles?.full_name || '-');
+      }
+    });
 
     // Enrichir avec le nombre de posts et les non-lus
     const enriched = await Promise.all((data || []).map(async (forum) => {
@@ -35,8 +119,21 @@ export const getForums = async (userId, role) => {
         .limit(1)
         .single();
 
+      const course = courseMap.get(forum.course_id);
       return {
         ...forum,
+        cours: course ? {
+          id: course.id,
+          code: course.code,
+          name: course.name,
+          professeur: {
+            full_name: professorByCourse.get(course.id) || '-',
+          },
+          niveau: {
+            code: course.level,
+            name: course.level,
+          },
+        } : null,
         posts_count: postsCount || 0,
         last_activity: lastPost?.created_at || forum.created_at,
       };

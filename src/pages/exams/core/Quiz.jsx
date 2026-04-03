@@ -18,6 +18,9 @@ const Quiz = () => {
     currentQuestionIndex, 
     quizStatus,
     timer,
+    examData,
+    loading,
+    error,
     startQuiz, 
     reportCheatingAttempt 
   } = useQuiz();
@@ -174,8 +177,19 @@ const Quiz = () => {
     return <QuizResults />;
   }
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
+        <div className="max-w-xl bg-white rounded-lg shadow-md p-8 text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Examen indisponible</h1>
+          <p className="text-gray-700">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   // État de chargement pendant l'initialisation du quiz
-  if (questions.length === 0) {
+  if (loading || questions.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
@@ -203,7 +217,7 @@ const Quiz = () => {
         <header className="mb-8">
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-800">
-              Quiz: Virtualization Cloud & Datacenter
+              {examData?.title || 'Examen en ligne'}
             </h1>
             <div className="flex items-center gap-4">
               <div className={`text-lg font-semibold ${

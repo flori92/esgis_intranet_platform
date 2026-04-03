@@ -40,7 +40,6 @@ import {
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../../hooks/useAuth';
-import { supabase } from '@/supabase';
 import { useNavigate } from 'react-router-dom';
 import { triggerDownload } from '@/utils/DownloadLinkUtil';
 
@@ -249,7 +248,7 @@ const StudentsListPage = () => {
 
   // Naviguer vers la page de création d'un nouvel étudiant
   const handleAddStudent = () => {
-    navigate('/admin/students/new');
+    navigate('/admin/students/create');
   };
 
   // Naviguer vers la page de détails d'un étudiant

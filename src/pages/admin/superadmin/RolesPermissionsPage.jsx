@@ -22,7 +22,6 @@ import {
   Shield as ShieldIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import { getRoles, createRole as apiCreateRole, updateRole as apiUpdateRole, deleteRole as apiDeleteRole } from '@/api/admin';
 
 /**

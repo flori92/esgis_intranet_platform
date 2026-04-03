@@ -44,7 +44,15 @@ import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
+import { getDepartments } from '@/api/departments';
+import {
+  createUser,
+  deleteUser,
+  getUsers,
+  importUsers,
+  toggleUserActive,
+  updateUser
+} from '@/api/users';
 import Papa from 'papaparse';
 import { triggerDownload } from '@/utils/DownloadLinkUtil';
 
@@ -138,32 +146,13 @@ const UserManagementPage = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      // Récupérer les utilisateurs avec les informations du département
-      let { data: usersData, error } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          created_at,
-          full_name,
-          email,
-          role,
-          department_id,
-          status,
-          departments(name)
-        `)
-        .order('created_at', { ascending: false });
+      const { users: userRows, error } = await getUsers({ page: 1, pageSize: 5000 });
 
       if (error) {
         throw error;
       }
 
-      // Formater les données des utilisateurs
-      const formattedUsers = usersData.map(user => ({
-        ...user,
-        department_name: user.departments ? user.departments.name : 'Non assigné'
-      }));
-
-      setUsers(formattedUsers);
+      setUsers(userRows);
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs:', error);
       showSnackbar('Erreur lors du chargement des utilisateurs', 'error');
@@ -174,15 +163,12 @@ const UserManagementPage = () => {
 
   const fetchDepartments = async () => {
     try {
-      const { data, error } = await supabase
-        .from('departments')
-        .select('*')
-        .order('name');
+      const { departments: departmentRows, error } = await getDepartments();
 
       if (error) {
         throw error;
       }
-      setDepartments(data);
+      setDepartments(departmentRows);
     } catch (error) {
       console.error('Erreur lors du chargement des départements:', error);
       showSnackbar('Erreur lors du chargement des départements', 'error');
@@ -240,90 +226,28 @@ const UserManagementPage = () => {
   const handleSubmit = async () => {
     try {
       if (isEditMode) {
-        // Mise à jour de l'utilisateur existant
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            full_name: currentUser.full_name,
-            email: currentUser.email,
-            role: currentUser.role,
-            department_id: currentUser.department_id || null,
-            status: currentUser.status
-          })
-          .eq('id', currentUser.id);
+        const { error } = await updateUser(currentUser.id, {
+          full_name: currentUser.full_name,
+          role: currentUser.role,
+          department_id: currentUser.department_id || null,
+          status: currentUser.status
+        });
 
         if (error) {
           throw error;
         }
         showSnackbar('Utilisateur mis à jour avec succès', 'success');
       } else {
-        // Création d'un nouvel utilisateur
-        // Pour un nouvel utilisateur, nous devons également créer un enregistrement d'authentification
-        // Note: Dans une application réelle, cela nécessiterait un endpoint API sécurisé
-
-        // 1. Créer un mot de passe temporaire
-        const tempPassword = Math.random().toString(36).slice(-8);
-
-        // 2. Créer un utilisateur dans auth
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        const { error } = await createUser({
+          full_name: currentUser.full_name,
           email: currentUser.email,
-          password: tempPassword,
+          role: currentUser.role,
+          department_id: currentUser.department_id || null,
+          status: currentUser.status
         });
 
-        if (authError) {
-          throw authError;
-        }
-
-        // 3. Créer un profil pour l'utilisateur
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: authData.user.id,
-              full_name: currentUser.full_name,
-              email: currentUser.email,
-              role: currentUser.role,
-              department_id: currentUser.department_id || null,
-              status: currentUser.status
-            }
-          ]);
-
-        if (profileError) {
-          throw profileError;
-        }
-
-        // 4. Créer un enregistrement dans la table students ou professors selon le rôle
-        if (currentUser.role === 'student') {
-          const { error: studentError } = await supabase
-            .from('students')
-            .insert([
-              {
-                user_id: authData.user.id,
-                full_name: currentUser.full_name,
-                email: currentUser.email,
-                department_id: currentUser.department_id || null,
-                academic_year: new Date().getFullYear().toString()
-              }
-            ]);
-
-          if (studentError) {
-            throw studentError;
-          }
-        } else if (currentUser.role === 'professor') {
-          const { error: professorError } = await supabase
-            .from('professors')
-            .insert([
-              {
-                user_id: authData.user.id,
-                full_name: currentUser.full_name,
-                email: currentUser.email,
-                department_id: currentUser.department_id || null
-              }
-            ]);
-
-          if (professorError) {
-            throw professorError;
-          }
+        if (error) {
+          throw error;
         }
 
         showSnackbar(`Utilisateur créé avec succès. Un email a été envoyé à ${currentUser.email}`, 'success');
@@ -368,22 +292,14 @@ const UserManagementPage = () => {
       const { action, userId, newStatus } = confirmDialog;
 
       if (action === 'delete') {
-        // Supprimer l'utilisateur
-        const { error } = await supabase
-          .from('profiles')
-          .delete()
-          .eq('id', userId);
+        const { error } = await deleteUser(userId);
 
         if (error) {
           throw error;
         }
         showSnackbar('Utilisateur supprimé avec succès', 'success');
       } else if (action === 'toggleStatus') {
-        // Changer le statut de l'utilisateur
-        const { error } = await supabase
-          .from('profiles')
-          .update({ status: newStatus })
-          .eq('id', userId);
+        const { error } = await toggleUserActive(userId, newStatus === 'active');
 
         if (error) {
           throw error;
@@ -422,119 +338,38 @@ const UserManagementPage = () => {
       try {
         setImporting(true);
         const csv = e.target.result;
-        
-        // Analyser le CSV
-        Papa.parse(csv, {
-          header: true,
-          complete: async (results) => {
-            const { data } = results;
-            
-            // Validation des données
-            if (!data || data.length === 0) {
-              throw new Error('Le fichier CSV est vide ou mal formaté');
-            }
 
-            const requiredFields = ['full_name', 'email', 'role'];
-            const firstRow = data[0];
-            const missingFields = requiredFields.filter(field => !(field in firstRow));
-            
-            if (missingFields.length > 0) {
-              throw new Error(`Champs requis manquants: ${missingFields.join(', ')}`);
-            }
-
-            // Créer les utilisateurs
-            let successful = 0;
-            let failed = 0;
-            
-            for (const row of data) {
-              try {
-                // Valider le rôle
-                const role = row.role ? row.role.toLowerCase() : 'student';
-                if (!['student', 'professor', 'admin'].includes(role)) {
-                  throw new Error(`Rôle invalide: ${row.role}`);
-                }
-                
-                // 1. Créer un mot de passe temporaire
-                const tempPassword = Math.random().toString(36).slice(-8);
-                
-                // 2. Créer un utilisateur dans auth
-                const { data: authData, error: authError } = await supabase.auth.signUp({
-                  email: row.email,
-                  password: tempPassword,
-                });
-                
-                if (authError) {
-                  throw authError;
-                }
-                
-                // 3. Récupérer l'ID du département si fourni
-                let departmentId = null;
-                if (row.department) {
-                  const { data: deptData } = await supabase
-                    .from('departments')
-                    .select('id')
-                    .eq('name', row.department)
-                    .single();
-                  
-                  if (deptData) {
-                    departmentId = deptData.id;
-                  }
-                }
-                
-                // 4. Créer un profil pour l'utilisateur
-                await supabase
-                  .from('profiles')
-                  .insert([
-                    {
-                      id: authData.user.id,
-                      full_name: row.full_name,
-                      email: row.email,
-                      role,
-                      department_id: departmentId,
-                      status: 'active'
-                    }
-                  ]);
-                
-                // 5. Créer un enregistrement dans la table students ou professors selon le rôle
-                if (role === 'student') {
-                  await supabase
-                    .from('students')
-                    .insert([
-                      {
-                        user_id: authData.user.id,
-                        full_name: row.full_name,
-                        email: row.email,
-                        department_id: departmentId,
-                        academic_year: row.academic_year || new Date().getFullYear().toString()
-                      }
-                    ]);
-                } else if (role === 'professor') {
-                  await supabase
-                    .from('professors')
-                    .insert([
-                      {
-                        user_id: authData.user.id,
-                        full_name: row.full_name,
-                        email: row.email,
-                        department_id: departmentId
-                      }
-                    ]);
-                }
-                
-                successful++;
-              } catch (error) {
-                console.error(`Erreur pour l'utilisateur ${row.email}:`, error);
-                failed++;
-              }
-            }
-            
-            showSnackbar(`Importation terminée: ${successful} utilisateurs créés, ${failed} échecs`, 'info');
-            fetchUsers();
-          },
-          error: (error) => {
-            throw new Error(`Erreur d'analyse CSV: ${error.message}`);
-          }
+        const results = await new Promise((resolve, reject) => {
+          Papa.parse(csv, {
+            header: true,
+            complete: resolve,
+            error: reject
+          });
         });
+
+        const { data } = results;
+
+        if (!data || data.length === 0) {
+          throw new Error('Le fichier CSV est vide ou mal formaté');
+        }
+
+        const requiredFields = ['full_name', 'email', 'role'];
+        const firstRow = data[0];
+        const missingFields = requiredFields.filter(field => !(field in firstRow));
+
+        if (missingFields.length > 0) {
+          throw new Error(`Champs requis manquants: ${missingFields.join(', ')}`);
+        }
+
+        const filteredRows = data.filter((row) => row?.full_name && row?.email);
+        const { successful, failed, errors } = await importUsers(filteredRows);
+
+        errors.forEach(({ email, error }) => {
+          console.error(`Erreur pour l'utilisateur ${email}:`, error);
+        });
+
+        showSnackbar(`Importation terminée: ${successful} utilisateurs créés, ${failed} échecs`, 'info');
+        fetchUsers();
       } catch (error) {
         console.error('Erreur lors de l\'importation:', error);
         showSnackbar(`Erreur: ${error.message}`, 'error');

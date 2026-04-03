@@ -29,8 +29,7 @@ import {
   FormControlLabel,
   Checkbox,
   Tab,
-  Tabs,
-  Autocomplete
+  Tabs
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -43,73 +42,7 @@ import {
   Settings as SettingsIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '@/supabase';
-
-// Créer des fonctions utilitaires pour remplacer les imports manquants
-const getRecordsWithRelation = async (table, options = {}) => {
-  try {
-    let query = supabase.from(table).select(options.select || '*');
-    
-    if (options.filters) {
-      options.filters.forEach(filter => {
-        query = query[filter.operator](filter.column, filter.value);
-      });
-    }
-    
-    if (options.orderBy) {
-      query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending });
-    }
-    
-    if (options.limit) {
-      query = query.limit(options.limit);
-    }
-    
-    const { data, error } = await query;
-    
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error(`Erreur lors de la récupération des données de ${table}:`, error);
-    throw error;
-  }
-};
-
-const insertRecord = async (table, data) => {
-  try {
-    const { data: result, error } = await supabase.from(table).insert(data).select();
-    if (error) throw error;
-    return result[0];
-  } catch (error) {
-    console.error(`Erreur lors de l'insertion dans ${table}:`, error);
-    throw error;
-  }
-};
-
-const updateRecord = async (table, id, data) => {
-  try {
-    const { data: result, error } = await supabase
-      .from(table)
-      .update(data)
-      .eq('id', id)
-      .select();
-    if (error) throw error;
-    return result[0];
-  } catch (error) {
-    console.error(`Erreur lors de la mise à jour dans ${table}:`, error);
-    throw error;
-  }
-};
-
-const deleteRecord = async (table, id) => {
-  try {
-    const { error } = await supabase.from(table).delete().eq('id', id);
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error(`Erreur lors de la suppression dans ${table}:`, error);
-    throw error;
-  }
-};
+import { getRecordsWithRelation, insertRecord, updateRecord, deleteRecord } from '@/api/helpers';
 
 // Composant pour les onglets
 function TabPanel(props) {
@@ -739,32 +672,56 @@ const ProfessorRolesPage = () => {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Autocomplete
-              multiple
-              options={roles}
-              getOptionLabel={(option) => option.name}
-              value={selectedRoles}
-              onChange={(_event, newValue) => {
-                setSelectedRoles(newValue);
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  variant="outlined"
-                  label="Rôles"
-                  placeholder="Sélectionner des rôles"
-                />
-              )}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => (
-                  <Chip 
-                    label={option.name} 
-                    {...getTagProps({ index })} 
-                    color="primary"
-                  />
-                ))
-              }
-            />
+            <FormControl fullWidth>
+              <InputLabel id="assign-roles-label">Rôles</InputLabel>
+              <Select
+                labelId="assign-roles-label"
+                multiple
+                value={selectedRoles.map((role) => role.id)}
+                onChange={(event) => {
+                  const nextRoleIds = Array.isArray(event.target.value)
+                    ? event.target.value
+                    : String(event.target.value).split(',');
+
+                  setSelectedRoles(
+                    roles.filter(
+                      (role) =>
+                        nextRoleIds.includes(role.id) ||
+                        nextRoleIds.includes(String(role.id))
+                    )
+                  );
+                }}
+                label="Rôles"
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((roleId) => {
+                      const role = roles.find(
+                        (item) => item.id === roleId || String(item.id) === String(roleId)
+                      );
+
+                      if (!role) {
+                        return null;
+                      }
+
+                      return (
+                        <Chip
+                          key={role.id}
+                          label={role.name}
+                          color="primary"
+                          size="small"
+                        />
+                      );
+                    })}
+                  </Box>
+                )}
+              >
+                {roles.map((role) => (
+                  <MenuItem key={role.id} value={role.id}>
+                    {role.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             
             {selectedRoles.length > 0 && (
               <Box sx={{ mt: 3 }}>

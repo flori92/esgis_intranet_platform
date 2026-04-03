@@ -32,7 +32,6 @@ import {
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import DashboardBase from './DashboardBase';
 import StatisticsCard from './StatisticsCard';
 import NewsCard from './NewsCard';

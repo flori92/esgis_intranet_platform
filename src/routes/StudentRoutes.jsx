@@ -1,19 +1,21 @@
-import React from 'react';
+import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import StudentDashboard from '../pages/student/DashboardPage';
-import StudentExamsList from '../pages/exams/student/StudentExamsList';
-import TakeExamPage from '../pages/exams/student/TakeExamPage';
-import ExamResultsPage from '../pages/exams/student/ExamResultsPage';
-import StudentSchedulePage from '../pages/student/SchedulePage';
-import StudentGradesPage from '../pages/student/GradesPage';
-import StudentDocumentsPage from '../pages/student/DocumentsPage';
-import StudentMessagesPage from '../pages/student/MessagesPage';
-import StudentInternshipsPage from '../pages/student/InternshipsPage';
-import StudentGroupsPage from '../pages/student/GroupsPage';
-import StudentCertificatePage from '../pages/student/CertificatePage';
-import StudentCoursesPage from '../pages/student/CoursesPage';
-import PracticeQuizPage from '../pages/exams/student/PracticeQuizPage';
+import RouteLoader from '../components/common/RouteLoader';
+
+const StudentDashboard = lazy(() => import('../pages/student/DashboardPage'));
+const StudentExamsList = lazy(() => import('../pages/exams/student/StudentExamsList'));
+const TakeExamPage = lazy(() => import('../pages/exams/student/TakeExamPage'));
+const ExamResultsPage = lazy(() => import('../pages/exams/student/ExamResultsPage'));
+const StudentSchedulePage = lazy(() => import('../pages/student/SchedulePage'));
+const StudentGradesPage = lazy(() => import('../pages/student/GradesPage'));
+const StudentDocumentsPage = lazy(() => import('../pages/student/DocumentsPage'));
+const StudentMessagesPage = lazy(() => import('../pages/student/MessagesPage'));
+const StudentInternshipsPage = lazy(() => import('../pages/student/InternshipsPage'));
+const StudentGroupsPage = lazy(() => import('../pages/student/GroupsPage'));
+const StudentCertificatePage = lazy(() => import('../pages/student/CertificatePage'));
+const StudentCoursesPage = lazy(() => import('../pages/student/CoursesPage'));
+const PracticeQuizPage = lazy(() => import('../pages/exams/student/PracticeQuizPage'));
 
 /**
  * Routes pour les étudiants
@@ -28,58 +30,60 @@ const StudentRoutes = () => {
   }
   
   return (
-    <Routes>
-      <Route index element={<StudentDashboard />} />
-      
-      {/* Routes pour les examens */}
-      <Route path="exams">
-        <Route index element={<StudentExamsList />} />
-        <Route path=":id/take" element={<TakeExamPage />} />
-        <Route
-          path=":id/results"
-          element={
-            <ExamResultsPage
-              examResult={{
-                id: 0,
-                exam_id: 0,
-                student_id: '',
-                score: 0,
-                status: 'completed',
-                submitted_at: new Date().toISOString(),
-                answers: []
-              }}
-            />
-          }
-        />
-      </Route>
-      
-      {/* Routes pour l'emploi du temps */}
-      <Route path="schedule" element={<StudentSchedulePage />} />
-      
-      {/* Routes pour les notes */}
-      <Route path="grades" element={<StudentGradesPage />} />
-      
-      {/* Routes pour les documents */}
-      <Route path="documents" element={<StudentDocumentsPage />} />
-      
-      {/* Routes pour les messages */}
-      <Route path="messages" element={<StudentMessagesPage />} />
-      
-      {/* Routes pour les stages */}
-      <Route path="internships" element={<StudentInternshipsPage />} />
-      
-      {/* Routes pour les groupes */}
-      <Route path="groups" element={<StudentGroupsPage />} />
-      
-      {/* Route pour le certificat de scolarité */}
-      <Route path="certificate" element={<StudentCertificatePage />} />
-      
-      {/* Espace Cours & Ressources */}
-      <Route path="courses" element={<StudentCoursesPage />} />
-      
-      {/* Quiz d'entraînement */}
-      <Route path="practice" element={<PracticeQuizPage />} />
-    </Routes>
+    <Suspense fallback={<RouteLoader />}>
+      <Routes>
+        <Route index element={<StudentDashboard />} />
+        
+        {/* Routes pour les examens */}
+        <Route path="exams">
+          <Route index element={<StudentExamsList />} />
+          <Route path=":id/take" element={<TakeExamPage />} />
+          <Route
+            path=":id/results"
+            element={
+              <ExamResultsPage
+                examResult={{
+                  id: 0,
+                  exam_id: 0,
+                  student_id: '',
+                  score: 0,
+                  status: 'completed',
+                  submitted_at: new Date().toISOString(),
+                  answers: []
+                }}
+              />
+            }
+          />
+        </Route>
+        
+        {/* Routes pour l'emploi du temps */}
+        <Route path="schedule" element={<StudentSchedulePage />} />
+        
+        {/* Routes pour les notes */}
+        <Route path="grades" element={<StudentGradesPage />} />
+        
+        {/* Routes pour les documents */}
+        <Route path="documents" element={<StudentDocumentsPage />} />
+        
+        {/* Routes pour les messages */}
+        <Route path="messages" element={<StudentMessagesPage />} />
+        
+        {/* Routes pour les stages */}
+        <Route path="internships" element={<StudentInternshipsPage />} />
+        
+        {/* Routes pour les groupes */}
+        <Route path="groups" element={<StudentGroupsPage />} />
+        
+        {/* Route pour le certificat de scolarité */}
+        <Route path="certificate" element={<StudentCertificatePage />} />
+        
+        {/* Espace Cours & Ressources */}
+        <Route path="courses" element={<StudentCoursesPage />} />
+        
+        {/* Quiz d'entraînement */}
+        <Route path="practice" element={<PracticeQuizPage />} />
+      </Routes>
+    </Suspense>
   );
 };
 

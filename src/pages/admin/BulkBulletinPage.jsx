@@ -17,7 +17,6 @@ import {
   Group as GroupIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import { getStudentsForBulletins, saveBulletin } from '@/api/admin';
 
 const MOCK_FILIERES = [

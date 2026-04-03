@@ -10,11 +10,6 @@ import {
   Select,
   Paper
 } from '@mui/material';
-// Import des modules date-pickers
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { fr } from 'date-fns/locale';
 import { parseISO } from 'date-fns';
 
 /**
@@ -45,6 +40,23 @@ const ExamScheduling = ({
   onLateSubmissionChange
 }) => {
   const [errors, setErrors] = useState({});
+
+  const toDateTimeLocalValue = (dateString) => {
+    if (!dateString) return '';
+
+    const parsedDate = parseDateString(dateString);
+    if (!parsedDate) return '';
+
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${parsedDate.getFullYear()}-${pad(parsedDate.getMonth() + 1)}-${pad(parsedDate.getDate())}T${pad(parsedDate.getHours())}:${pad(parsedDate.getMinutes())}`;
+  };
+
+  const toIsoString = (value) => {
+    if (!value) return '';
+
+    const parsedDate = new Date(value);
+    return Number.isNaN(parsedDate.getTime()) ? '' : parsedDate.toISOString();
+  };
   
   /**
    * Convertir les chaînes de date en objets Date
@@ -135,23 +147,19 @@ const ExamScheduling = ({
       
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
-          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-            <DateTimePicker
-              label="Date et heure de l'examen"
-              value={parseDateString(examDate)}
-              onChange={(date) => {
-                onExamDateChange(date ? date.toISOString() : '');
-              }}
-              slotProps={{
-                textField: {
-                  variant: 'outlined',
-                  fullWidth: true,
-                  error: !!errors.examDate,
-                  helperText: errors.examDate
-                }
-              }}
-            />
-          </LocalizationProvider>
+          <TextField
+            label="Date et heure de l'examen"
+            type="datetime-local"
+            value={toDateTimeLocalValue(examDate)}
+            onChange={(event) => {
+              onExamDateChange(toIsoString(event.target.value));
+            }}
+            variant="outlined"
+            fullWidth
+            error={!!errors.examDate}
+            helperText={errors.examDate}
+            InputLabelProps={{ shrink: true }}
+          />
         </Grid>
         
         <Grid item xs={12} md={6}>
@@ -178,41 +186,33 @@ const ExamScheduling = ({
         </Grid>
         
         <Grid item xs={12} md={6}>
-          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-            <DateTimePicker
-              label="Début de la période"
-              value={parseDateString(timeframeStart)}
-              onChange={(date) => {
-                onTimeframeStartChange(date ? date.toISOString() : '');
-              }}
-              slotProps={{
-                textField: {
-                  variant: 'outlined',
-                  fullWidth: true
-                }
-              }}
-            />
-          </LocalizationProvider>
+          <TextField
+            label="Début de la période"
+            type="datetime-local"
+            value={toDateTimeLocalValue(timeframeStart)}
+            onChange={(event) => {
+              onTimeframeStartChange(toIsoString(event.target.value));
+            }}
+            variant="outlined"
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
         </Grid>
         
         <Grid item xs={12} md={6}>
-          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-            <DateTimePicker
-              label="Fin de la période"
-              value={parseDateString(timeframeEnd)}
-              onChange={(date) => {
-                onTimeframeEndChange(date ? date.toISOString() : '');
-              }}
-              slotProps={{
-                textField: {
-                  variant: 'outlined',
-                  fullWidth: true,
-                  error: !!errors.timeframe,
-                  helperText: errors.timeframe
-                }
-              }}
-            />
-          </LocalizationProvider>
+          <TextField
+            label="Fin de la période"
+            type="datetime-local"
+            value={toDateTimeLocalValue(timeframeEnd)}
+            onChange={(event) => {
+              onTimeframeEndChange(toIsoString(event.target.value));
+            }}
+            variant="outlined"
+            fullWidth
+            error={!!errors.timeframe}
+            helperText={errors.timeframe}
+            InputLabelProps={{ shrink: true }}
+          />
         </Grid>
         
         <Grid item xs={12}>

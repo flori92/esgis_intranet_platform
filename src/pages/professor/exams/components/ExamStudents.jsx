@@ -38,7 +38,6 @@ import {
   Clear as ClearIcon,
   FilterList as FilterListIcon
 } from '@mui/icons-material';
-// Correction du chemin d'importation de Supabase
 import { supabase } from '@/supabase';
 
 /**
@@ -122,20 +121,20 @@ const ExamStudents = ({
           .from('student_courses')
           .select(`
             student_id,
+            academic_year,
+            status,
             students:student_id(
               id,
               profile_id,
-              profiles:profile_id(full_name, email),
+              profiles:profile_id(full_name, email, department_id, departments:department_id(name)),
               student_number,
-              department_id,
-              departments:department_id(name),
               level,
-              academic_year,
+              entry_year,
               status
             )
           `)
           .eq('course_id', courseId)
-          .eq('is_active', true);
+          .eq('status', 'enrolled');
         
         if (error) throw error;
         
@@ -143,13 +142,13 @@ const ExamStudents = ({
           const students = data.map(item => ({
             id: item.students.id,
             profile_id: item.students.profile_id,
-            full_name: item.students.profiles.full_name,
-            email: item.students.profiles.email,
+            full_name: item.students.profiles?.full_name || 'Nom inconnu',
+            email: item.students.profiles?.email || '',
             student_number: item.students.student_number,
-            department_id: item.students.department_id,
-            department_name: item.students.departments?.name || 'N/A',
+            department_id: item.students.profiles?.department_id || null,
+            department_name: item.students.profiles?.departments?.name || 'N/A',
             level: item.students.level,
-            academic_year: item.students.academic_year,
+            academic_year: item.academic_year || '',
             status: item.students.status
           }));
           
@@ -215,12 +214,10 @@ const ExamStudents = ({
         .select(`
           id,
           profile_id,
-          profiles:profile_id(full_name, email),
+          profiles:profile_id(full_name, email, department_id, departments:department_id(name)),
           student_number,
-          department_id,
-          departments:department_id(name),
           level,
-          academic_year,
+          entry_year,
           status
         `)
         .eq('status', 'active')
@@ -232,13 +229,13 @@ const ExamStudents = ({
         const students = data.map(item => ({
           id: item.id,
           profile_id: item.profile_id,
-          full_name: item.profiles.full_name,
-          email: item.profiles.email,
+          full_name: item.profiles?.full_name || 'Nom inconnu',
+          email: item.profiles?.email || '',
           student_number: item.student_number,
-          department_id: item.department_id,
-          department_name: item.departments?.name || 'N/A',
+          department_id: item.profiles?.department_id || null,
+          department_name: item.profiles?.departments?.name || 'N/A',
           level: item.level,
-          academic_year: item.academic_year,
+          academic_year: item.entry_year ? `${item.entry_year}-${item.entry_year + 1}` : '',
           status: item.status
         }));
         
@@ -345,16 +342,18 @@ const ExamStudents = ({
    * Assigner les étudiants sélectionnés à l'examen
    */
   const handleAssignStudents = () => {
-    if (selectedStudents.length === 0 || !examId) return;
+    if (selectedStudents.length === 0) return;
     
     const newAssignments = selectedStudents.map(studentId => ({
-      exam_id: examId,
+      exam_id: examId || 0,
       student_id: studentId,
+      course_id: courseId || null,
+      grade: null,
+      status: 'pending',
       seat_number: null,
-      attendance_status: null,
-      attempt_status: 'not_started',
-      has_incidents: false,
-      notes: null
+      attendance: null,
+      comments: null,
+      answers: null
     }));
     
     // Filtrer pour ne pas ajouter de doublons
@@ -379,11 +378,13 @@ const ExamStudents = ({
     const newAssignments = selectedStudents.map(studentId => ({
       exam_id: examId || 0, // Si examId est undefined (création), utiliser 0 temporairement
       student_id: studentId,
+      course_id: courseId || null,
+      grade: null,
+      status: 'pending',
       seat_number: null,
-      attendance_status: null,
-      attempt_status: 'not_started',
-      has_incidents: false,
-      notes: null
+      attendance: null,
+      comments: null,
+      answers: null
     }));
     
     // Filtrer pour ne pas ajouter de doublons
@@ -409,7 +410,7 @@ const ExamStudents = ({
    * Assigner tous les étudiants du cours
    */
   const handleAssignAllCourseStudents = () => {
-    if (!courseStudents.length || !examId) return;
+    if (!courseStudents.length) return;
     
     // Filtrer pour ne pas ajouter de doublons
     const currentStudentIds = assignedStudents.map(a => a.student_id);
@@ -418,13 +419,15 @@ const ExamStudents = ({
     );
     
     const newAssignments = newStudents.map(student => ({
-      exam_id: examId,
+      exam_id: examId || 0,
       student_id: student.id,
+      course_id: courseId || null,
+      grade: null,
+      status: 'pending',
       seat_number: null,
-      attendance_status: null,
-      attempt_status: 'not_started',
-      has_incidents: false,
-      notes: null
+      attendance: null,
+      comments: null,
+      answers: null
     }));
     
     setAssignedStudents([...assignedStudents, ...newAssignments]);
@@ -468,6 +471,25 @@ const ExamStudents = ({
     
     return student;
   };
+
+  const assignedStudentRows = assignedStudents
+    .map((assignment) => ({
+      assignment,
+      student: findStudentById(assignment.student_id)
+    }))
+    .filter(({ student }) => !!student)
+    .filter(({ student }) => {
+      if (!searchTerm.trim()) {
+        return true;
+      }
+
+      const normalizedSearch = searchTerm.toLowerCase();
+      return (
+        student.full_name.toLowerCase().includes(normalizedSearch) ||
+        student.email.toLowerCase().includes(normalizedSearch) ||
+        student.student_number.toLowerCase().includes(normalizedSearch)
+      );
+    });
   
   return (
     <Paper sx={{ p: 3 }}>
@@ -506,9 +528,9 @@ const ExamStudents = ({
         </Box>
       </Box>
       
-      {errors.students && (
+      {(errors.students || errors.general) && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {errors.students}
+          {errors.students || errors.general}
         </Alert>
       )}
       
@@ -581,45 +603,39 @@ const ExamStudents = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredStudents
+                {assignedStudentRows
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((student) => {
-                    const assignedStudent = assignedStudents.find(
-                      a => a.student_id === student.id
-                    );
-                    
-                    return assignedStudent ? (
-                      <TableRow key={student.id}>
-                        <TableCell>{student.student_number}</TableCell>
-                        <TableCell>{student.full_name}</TableCell>
-                        <TableCell>{student.email}</TableCell>
-                        <TableCell>{student.department_name}</TableCell>
-                        <TableCell>{assignedStudent.seat_number || '-'}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={assignedStudent.attempt_status || 'Non commencé'} 
-                            color={assignedStudent.attempt_status === 'submitted' ? 'success' : 'default'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <IconButton 
-                            color="error" 
-                            onClick={() => handleRemoveStudent(student.id)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ) : null;
-                  })}
+                  .map(({ student, assignment }) => (
+                    <TableRow key={student.id}>
+                      <TableCell>{student.student_number}</TableCell>
+                      <TableCell>{student.full_name}</TableCell>
+                      <TableCell>{student.email}</TableCell>
+                      <TableCell>{student.department_name}</TableCell>
+                      <TableCell>{assignment.seat_number || '-'}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={assignment.status || 'pending'}
+                          color={assignment.status === 'passed' ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton
+                          color="error"
+                          onClick={() => handleRemoveStudent(student.id)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           </TableContainer>
           
           <TablePagination
             component="div"
-            count={filteredStudents.length}
+            count={assignedStudentRows.length}
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handleChangePage}

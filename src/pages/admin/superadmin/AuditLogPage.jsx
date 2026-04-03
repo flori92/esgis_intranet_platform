@@ -23,7 +23,6 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import { getAuditLogs } from '@/api/admin';
 
 /**

@@ -19,7 +19,6 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
 import { getForums, getForumPosts, createForumPost, createForumReply, toggleLike, togglePin, deleteForumPost } from '@/api/forums';
 
 const MOCK_FORUMS = [

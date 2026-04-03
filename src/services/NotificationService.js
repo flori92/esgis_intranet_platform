@@ -9,8 +9,14 @@
  *
  * Chaque utilisateur peut configurer ses préférences dans son profil.
  */
-
-import { supabase } from '../supabase';
+import {
+  createNotification,
+  createNotificationsBulk,
+  getNotifications,
+  markAllNotificationsAsRead,
+  markNotificationAsRead,
+  subscribeToNotifications
+} from '../api/notifications';
 
 /**
  * Types de notifications
@@ -74,17 +80,14 @@ class NotificationService {
    */
   async sendInApp({ userId, type, titre, contenu, lien }) {
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          type,
-          titre,
-          contenu,
-          lien: lien || null,
-          lu: false,
-        })
-        .select();
+      const priority = NOTIFICATION_TYPES[type?.toUpperCase()]?.priority || 'medium';
+      const { data, error } = await createNotification({
+        recipient_id: userId,
+        title: titre,
+        content: contenu,
+        priority,
+        read: false,
+      });
 
       if (error) throw error;
       return { success: true, data };
@@ -102,19 +105,16 @@ class NotificationService {
    */
   async sendInAppBulk(userIds, { type, titre, contenu, lien }) {
     try {
+      const priority = NOTIFICATION_TYPES[type?.toUpperCase()]?.priority || 'medium';
       const notifications = userIds.map(userId => ({
-        user_id: userId,
-        type,
-        titre,
-        contenu,
-        lien: lien || null,
-        lu: false,
+        recipient_id: userId,
+        title: titre,
+        content: contenu,
+        priority,
+        read: false,
       }));
 
-      const { data, error } = await supabase
-        .from('notifications')
-        .insert(notifications)
-        .select();
+      const { data, error } = await createNotificationsBulk(notifications);
 
       if (error) throw error;
       return { success: true, count: notifications.length, data };
@@ -167,13 +167,7 @@ class NotificationService {
    */
   async getUnread(userId) {
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('lu', false)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const { data, error } = await getNotifications(userId, null, { unreadOnly: true, limit: 50 });
 
       if (error) throw error;
       return { data, count: data?.length || 0, error: null };
@@ -191,18 +185,12 @@ class NotificationService {
    */
   async getAll(userId, page = 1, perPage = 20) {
     try {
-      const from = (page - 1) * perPage;
-      const to = from + perPage - 1;
-
-      const { data, error, count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact' })
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      const limit = page * perPage;
+      const { data, error } = await getNotifications(userId, null, { limit });
 
       if (error) throw error;
-      return { data, total: count, error: null };
+      const paged = (data || []).slice((page - 1) * perPage, page * perPage);
+      return { data: paged, total: data?.length || 0, error: null };
     } catch (error) {
       return { data: null, total: 0, error };
     }
@@ -214,10 +202,7 @@ class NotificationService {
    */
   async markAsRead(notificationId) {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ lu: true })
-        .eq('id', notificationId);
+      const { error } = await markNotificationAsRead(notificationId);
 
       if (error) throw error;
       return { success: true };
@@ -232,11 +217,7 @@ class NotificationService {
    */
   async markAllAsRead(userId) {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ lu: true })
-        .eq('user_id', userId)
-        .eq('lu', false);
+      const { error } = await markAllNotificationsAsRead(userId, null);
 
       if (error) throw error;
       return { success: true };
@@ -252,33 +233,17 @@ class NotificationService {
    * @returns {Object} Subscription (appeler .unsubscribe() pour arrêter)
    */
   subscribeRealtime(userId, callback) {
-    const subscription = supabase
-      .channel(`notifications:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const notification = payload.new;
-          callback(notification);
+    return subscribeToNotifications(userId, (payload) => {
+      const notification = payload?.new;
+      callback(notification);
 
-          // Envoyer aussi une notification push si autorisé
-          if (this.pushPermission === 'granted') {
-            this.sendPush(notification.titre, {
-              body: notification.contenu,
-              url: notification.lien,
-              type: notification.type,
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return subscription;
+      if (this.pushPermission === 'granted' && notification) {
+        this.sendPush(notification.title, {
+          body: notification.content,
+          type: notification.priority,
+        });
+      }
+    });
   }
 
   /**

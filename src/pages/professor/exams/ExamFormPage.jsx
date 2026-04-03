@@ -28,9 +28,8 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-
-// Correction du chemin d'importation de Supabase
 import { supabase } from '@/supabase';
+import { incrementUsedCount } from '@/api/questionBank';
 
 // Composants du formulaire
 import ExamBasicInfo from './components/ExamBasicInfo';
@@ -261,7 +260,7 @@ const ExamFormPage = () => {
         .from('exam_questions')
         .select('*')
         .eq('exam_id', examId)
-        .order('order');
+        .order('question_number');
       
       if (questionsError) {
         throw questionsError;
@@ -316,22 +315,22 @@ const ExamFormPage = () => {
         }
         
         if (!exam.course_id) {
-          errors.course_id = 'Le cours est obligatoire';
+          errors.courseId = 'Le cours est obligatoire';
           isValid = false;
         }
         
         if (!exam.type) {
-          errors.type = 'Le type d\'examen est obligatoire';
+          errors.examType = 'Le type d\'examen est obligatoire';
           isValid = false;
         }
         
         if (exam.total_points <= 0) {
-          errors.total_points = 'Le total des points doit être supérieur à 0';
+          errors.totalPoints = 'Le total des points doit être supérieur à 0';
           isValid = false;
         }
         
         if (exam.passing_grade <= 0 || exam.passing_grade > exam.total_points) {
-          errors.passing_grade = 'La note de passage doit être comprise entre 1 et le total des points';
+          errors.passingGrade = 'La note de passage doit être comprise entre 1 et le total des points';
           isValid = false;
         }
         break;
@@ -348,7 +347,12 @@ const ExamFormPage = () => {
         }
         
         if (!exam.exam_session_id) {
-          errors.exam_session_id = 'La session d\'examen est obligatoire';
+          errors.sessionId = 'La session d\'examen est obligatoire';
+          isValid = false;
+        }
+
+        if (!exam.exam_center_id) {
+          errors.centerId = 'Le centre d\'examen est obligatoire';
           isValid = false;
         }
         break;
@@ -465,10 +469,14 @@ const ExamFormPage = () => {
         
         // Ajouter les questions
         const questionsToInsert = questions.map((q, index) => ({
-          ...q,
           exam_id: examId,
-          order: index,
-          id: undefined // Forcer la création de nouveaux IDs
+          question_number: index + 1,
+          question_text: q.question_text,
+          question_type: q.question_type,
+          points: q.points,
+          options: q.options || null,
+          correct_answer: q.correct_answer || null,
+          rubric: q.rubric || null
         }));
         
         const { error: insertQuestionsError } = await supabase
@@ -477,6 +485,21 @@ const ExamFormPage = () => {
         
         if (insertQuestionsError) {
           throw insertQuestionsError;
+        }
+
+        const importedQuestionIds = [
+          ...new Set(
+            questions
+              .map((question) => question.source_question_bank_id)
+              .filter(Boolean)
+          )
+        ];
+
+        if (importedQuestionIds.length > 0) {
+          const { error: usageError } = await incrementUsedCount(importedQuestionIds);
+          if (usageError) {
+            console.error('Erreur mise a jour utilisation banque de questions:', usageError);
+          }
         }
       }
       
@@ -495,10 +518,16 @@ const ExamFormPage = () => {
         }
         
         // Ajouter les assignations
-        const studentsToInsert = assignedStudents.map(s => ({
-          ...s,
+        const studentsToInsert = assignedStudents.map((studentAssignment) => ({
           exam_id: examId,
-          id: undefined // Forcer la création de nouveaux IDs
+          student_id: studentAssignment.student_id,
+          course_id: exam.course_id,
+          grade: studentAssignment.grade ?? null,
+          status: studentAssignment.status || 'pending',
+          seat_number: studentAssignment.seat_number || null,
+          attendance: studentAssignment.attendance || null,
+          comments: studentAssignment.comments || studentAssignment.notes || null,
+          answers: studentAssignment.answers || null
         }));
         
         const { error: insertStudentsError } = await supabase
@@ -606,20 +635,37 @@ const ExamFormPage = () => {
         <Box>
           {activeStep === 0 && (
             <ExamBasicInfo
-              examData={exam}
+              title={exam.title}
+              setTitle={(value) => handleExamChange('title', value)}
+              description={exam.description}
+              setDescription={(value) => handleExamChange('description', value)}
+              courseId={exam.course_id}
+              setCourseId={(value) => handleExamChange('course_id', value)}
+              examType={exam.type}
+              setExamType={(value) => handleExamChange('type', value)}
+              totalPoints={exam.total_points}
+              setTotalPoints={(value) => handleExamChange('total_points', value)}
+              passingGrade={exam.passing_grade}
+              setPassingGrade={(value) => handleExamChange('passing_grade', value)}
               courses={courses}
-              onExamChange={handleExamChange}
               errors={validationErrors[0] || {}}
             />
           )}
           
           {activeStep === 1 && (
             <ExamScheduling
-              examData={exam}
+              date={exam.date ? new Date(exam.date) : null}
+              setDate={setExamDate}
+              duration={exam.duration}
+              setDuration={(value) => handleExamChange('duration', value)}
+              sessionId={exam.exam_session_id}
+              setSessionId={(value) => handleExamChange('exam_session_id', value)}
+              centerId={exam.exam_center_id}
+              setCenterId={(value) => handleExamChange('exam_center_id', value)}
+              room={exam.room}
+              setRoom={(value) => handleExamChange('room', value)}
               sessions={sessions}
               centers={centers}
-              onExamChange={handleExamChange}
-              onDateChange={setExamDate}
               errors={validationErrors[1] || {}}
             />
           )}
@@ -627,16 +673,20 @@ const ExamFormPage = () => {
           {activeStep === 2 && (
             <ExamQuestions
               questions={questions}
-              onQuestionsChange={handleQuestionsChange}
+              setQuestions={handleQuestionsChange}
               totalPoints={exam.total_points}
+              setTotalPoints={(value) => handleExamChange('total_points', value)}
+              errors={validationErrors[2] || {}}
             />
           )}
           
           {activeStep === 3 && (
             <ExamStudents
+              examId={exam.id}
               courseId={exam.course_id}
               assignedStudents={assignedStudents}
-              onStudentsChange={handleStudentsChange}
+              setAssignedStudents={handleStudentsChange}
+              errors={validationErrors[3] || {}}
             />
           )}
           

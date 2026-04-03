@@ -26,9 +26,7 @@ import {
   TablePagination,
   Chip,
   FormControlLabel,
-  Checkbox,
-  TextField,
-  Autocomplete
+  Checkbox
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -40,7 +38,6 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 // Correction du chemin d'importation de Supabase
-import { supabase } from '@/supabase';
 
 const ProfessorCoursesPage = () => {
   const { authState } = useAuth();
@@ -580,38 +577,56 @@ const ProfessorCoursesPage = () => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
-              <Autocomplete
-                value={selectedProfessor}
-                onChange={(_event, newValue) => setSelectedProfessor(newValue)}
-                options={professors}
-                getOptionLabel={(option) => `${option.full_name} (${option.employee_number})`}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Professeur" 
-                    required
-                    error={!!formErrors.professor}
-                    helperText={formErrors.professor}
-                  />
+              <FormControl fullWidth error={!!formErrors.professor} required>
+                <InputLabel>Professeur</InputLabel>
+                <Select
+                  value={selectedProfessor?.id || ''}
+                  onChange={(event) => {
+                    const professor = professors.find(
+                      (item) => String(item.id) === String(event.target.value)
+                    ) || null;
+                    setSelectedProfessor(professor);
+                  }}
+                  label="Professeur"
+                >
+                  {professors.map((professor) => (
+                    <MenuItem key={professor.id} value={professor.id}>
+                      {`${professor.full_name} (${professor.employee_number})`}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {formErrors.professor && (
+                  <Typography color="error" variant="caption">
+                    {formErrors.professor}
+                  </Typography>
                 )}
-              />
+              </FormControl>
             </Grid>
             <Grid item xs={12}>
-              <Autocomplete
-                value={selectedCourse}
-                onChange={(_event, newValue) => setSelectedCourse(newValue)}
-                options={courses}
-                getOptionLabel={(option) => `${option.name} (${option.code}) - ${option.level}`}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Cours" 
-                    required
-                    error={!!formErrors.course}
-                    helperText={formErrors.course}
-                  />
+              <FormControl fullWidth error={!!formErrors.course} required>
+                <InputLabel>Cours</InputLabel>
+                <Select
+                  value={selectedCourse?.id || ''}
+                  onChange={(event) => {
+                    const course = courses.find(
+                      (item) => String(item.id) === String(event.target.value)
+                    ) || null;
+                    setSelectedCourse(course);
+                  }}
+                  label="Cours"
+                >
+                  {courses.map((course) => (
+                    <MenuItem key={course.id} value={course.id}>
+                      {`${course.name} (${course.code}) - ${course.level}`}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {formErrors.course && (
+                  <Typography color="error" variant="caption">
+                    {formErrors.course}
+                  </Typography>
                 )}
-              />
+              </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth error={!!formErrors.academicYear} required>

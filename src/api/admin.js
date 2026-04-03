@@ -4,6 +4,101 @@
  */
 import { supabase } from '../supabase';
 
+const LEVEL_BY_UI_ID = {
+  n1: 'L1',
+  n2: 'L2',
+  n3: 'L3',
+  n4: 'M1',
+  n5: 'M2',
+};
+
+const normalizeLevel = (value) => LEVEL_BY_UI_ID[value] || value || null;
+
+const countQuery = (table, filter) => {
+  let query = supabase.from(table).select('*', { count: 'exact', head: true });
+
+  if (typeof filter === 'function') {
+    query = filter(query);
+  }
+
+  return query;
+};
+
+// ============================================================
+// DASHBOARD ADMIN
+// ============================================================
+
+/** Récupère les métriques et flux récents du dashboard admin */
+export const getAdminDashboardData = async (adminProfileId) => {
+  try {
+    const notificationScope = [
+      adminProfileId ? `recipient_id.eq.${adminProfileId}` : null,
+      'recipient_role.eq.admin',
+      'recipient_role.eq.all'
+    ].filter(Boolean).join(',');
+
+    const statsQueries = [
+      countQuery('profiles', (query) => query.eq('role', 'student')),
+      countQuery('profiles', (query) => query.eq('role', 'professor')),
+      countQuery('courses'),
+      countQuery('departments'),
+      countQuery('profiles', (query) => query.eq('is_active', true)),
+      countQuery('requests', (query) => query.eq('status', 'pending')),
+    ];
+
+    const notificationsQuery = supabase
+      .from('notifications')
+      .select('id, title, content, priority, read, recipient_id, recipient_role, created_at')
+      .or(notificationScope)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    const eventsQuery = supabase
+      .from('events')
+      .select('id, title, description, start_date, end_date, location, type, created_at')
+      .gte('start_date', new Date().toISOString())
+      .order('start_date', { ascending: true })
+      .limit(20);
+
+    const [
+      { count: totalStudents },
+      { count: totalProfessors },
+      { count: totalCourses },
+      { count: totalDepartments },
+      { count: activeUsers },
+      { count: pendingRequests },
+      { data: notifications, error: notificationsError },
+      { data: events, error: eventsError }
+    ] = await Promise.all([
+      ...statsQueries,
+      notificationsQuery,
+      eventsQuery
+    ]);
+
+    if (notificationsError) throw notificationsError;
+    if (eventsError) throw eventsError;
+
+    return {
+      data: {
+        stats: {
+          totalStudents: totalStudents || 0,
+          totalProfessors: totalProfessors || 0,
+          totalCourses: totalCourses || 0,
+          totalDepartments: totalDepartments || 0,
+          activeUsers: activeUsers || 0,
+          pendingRequests: pendingRequests || 0,
+        },
+        notifications: notifications || [],
+        events: events || [],
+      },
+      error: null
+    };
+  } catch (error) {
+    console.error('getAdminDashboardData:', error);
+    return { data: null, error };
+  }
+};
+
 // ============================================================
 // AUDIT LOG
 // ============================================================
@@ -173,59 +268,105 @@ export const saveAllConfig = async (configObject, updatedBy) => {
 /** Récupère les étudiants d'un niveau avec leurs moyennes */
 export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademique) => {
   try {
-    const { data: inscriptions, error: inscErr } = await supabase
-      .from('inscriptions')
+    const normalizedLevel = normalizeLevel(niveauId);
+    if (!normalizedLevel) {
+      return { data: [], error: null };
+    }
+
+    const semesterNumber = Number(String(semestre || 'S1').replace('S', '')) || 1;
+
+    const { data: students, error: studentsError } = await supabase
+      .from('students')
       .select(`
         id,
-        etudiant:etudiant_id(id, first_name, last_name, full_name)
+        level,
+        profile:profile_id(
+          id,
+          full_name
+        )
       `)
-      .eq('niveau_id', niveauId)
-      .eq('annee_academique', anneeAcademique)
-      .eq('statut', 'en cours');
-    if (inscErr) throw inscErr;
+      .eq('level', normalizedLevel)
+      .eq('status', 'active');
 
-    // Pour chaque étudiant, calculer la moyenne
-    const studentsWithGrades = await Promise.all((inscriptions || []).map(async (insc, idx) => {
-      const studentId = insc.etudiant?.id;
-      if (!studentId) return null;
+    if (studentsError) throw studentsError;
+    if (!students?.length) {
+      return { data: [], error: null };
+    }
 
-      const { data: notes } = await supabase
-        .from('notes')
-        .select('note, coefficient, cours:cours_id(credits)')
-        .eq('etudiant_id', studentId);
+    const studentIds = students.map((student) => student.id);
+    const { data: results, error: resultsError } = await supabase
+      .from('exam_results')
+      .select(`
+        id,
+        student_id,
+        grade,
+        exams:exam_id(
+          id,
+          weight,
+          courses:course_id(
+            id,
+            credits,
+            semester
+          )
+        )
+      `)
+      .in('student_id', studentIds);
 
-      let totalWeighted = 0, totalCoef = 0, totalCredits = 0;
-      (notes || []).forEach(n => {
-        totalWeighted += (n.note || 0) * (n.coefficient || 1);
-        totalCoef += (n.coefficient || 1);
-        totalCredits += (n.note >= 10 ? (n.cours?.credits || 0) : 0);
+    if (resultsError) throw resultsError;
+
+    const getMention = (avg) => {
+      if (avg >= 16) return 'Très Bien';
+      if (avg >= 14) return 'Bien';
+      if (avg >= 12) return 'Assez Bien';
+      if (avg >= 10) return 'Passable';
+      return 'Insuffisant';
+    };
+
+    const getStatut = (avg) => {
+      if (avg >= 10) return 'admis';
+      if (avg >= 9) return 'compensation';
+      if (avg >= 8) return 'rattrapage';
+      return 'ajourné';
+    };
+
+    const studentsWithGrades = (students || []).map((student) => {
+      const studentResults = (results || []).filter((result) => {
+        const resultSemester = result.exams?.courses?.semester;
+        return result.student_id === student.id && resultSemester === semesterNumber;
+      });
+
+      let totalWeighted = 0;
+      let totalCoef = 0;
+      const validatedCourses = new Set();
+
+      studentResults.forEach((result) => {
+        const weight = Number(result.exams?.weight || 1);
+        totalWeighted += Number(result.grade || 0) * weight;
+        totalCoef += weight;
+
+        if (Number(result.grade || 0) >= 10 && result.exams?.courses?.id) {
+          validatedCourses.add(`${result.exams.courses.id}:${result.exams.courses.credits || 0}`);
+        }
       });
 
       const moyenne = totalCoef > 0 ? Math.round((totalWeighted / totalCoef) * 100) / 100 : 0;
-      const getMention = (avg) => {
-        if (avg >= 16) return 'Très Bien';
-        if (avg >= 14) return 'Bien';
-        if (avg >= 12) return 'Assez Bien';
-        if (avg >= 10) return 'Passable';
-        return 'Insuffisant';
-      };
-      const getStatut = (avg) => {
-        if (avg >= 10) return 'admis';
-        if (avg >= 9) return 'compensation';
-        if (avg >= 8) return 'rattrapage';
-        return 'ajourné';
-      };
+      const credits = [...validatedCourses].reduce((sum, entry) => {
+        const [, creditValue] = entry.split(':');
+        return sum + Number(creditValue || 0);
+      }, 0);
 
       return {
-        id: studentId,
-        name: insc.etudiant?.full_name || `${insc.etudiant?.last_name} ${insc.etudiant?.first_name}`,
+        id: student.id,
+        name: student.profile?.full_name || '-',
         moyenne,
-        credits: totalCredits,
+        credits,
         rang: 0,
         mention: getMention(moyenne),
         statut: getStatut(moyenne),
+        annee_academique: anneeAcademique,
+        semestre,
       };
-    }));
+    });
 
     // Calculer les rangs
     const valid = studentsWithGrades.filter(Boolean).sort((a, b) => b.moyenne - a.moyenne);
@@ -241,7 +382,19 @@ export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademiqu
 /** Enregistre un bulletin généré */
 export const saveBulletin = async (bulletinData) => {
   try {
-    const { data, error } = await supabase.from('bulletins').insert(bulletinData).select();
+    const { data, error } = await supabase
+      .from('generated_documents')
+      .insert({
+        template_id: bulletinData.template_id,
+        student_id: bulletinData.student_id,
+        file_path: bulletinData.file_path,
+        status: bulletinData.status || 'draft',
+        generated_by: bulletinData.generated_by || null,
+        approved_by: bulletinData.approved_by || null,
+        approval_date: bulletinData.approval_date || null,
+      })
+      .select();
+
     if (error) throw error;
     return { data: data?.[0], error: null };
   } catch (error) {
@@ -256,35 +409,51 @@ export const saveBulletin = async (bulletinData) => {
 /** Récupère les quiz d'entraînement accessibles à un étudiant */
 export const getPracticeQuizzes = async (studentId) => {
   try {
-    // D'abord récupérer les cours de l'étudiant
-    const { data: inscriptions } = await supabase
-      .from('inscriptions')
-      .select('niveau_id')
-      .eq('etudiant_id', studentId)
-      .eq('statut', 'en cours');
+    const { data: student, error: studentError } = await supabase
+      .from('students')
+      .select('id')
+      .eq('profile_id', studentId)
+      .maybeSingle();
 
-    const niveauIds = (inscriptions || []).map(i => i.niveau_id);
+    if (studentError) throw studentError;
+    if (!student) {
+      return { data: [], error: null };
+    }
+
+    const { data: studentCourses, error: courseError } = await supabase
+      .from('student_courses')
+      .select('course_id')
+      .eq('student_id', student.id);
+
+    if (courseError) throw courseError;
+
+    const courseIds = [...new Set((studentCourses || []).map((item) => item.course_id).filter(Boolean))];
+    if (!courseIds.length) {
+      return { data: [], error: null };
+    }
 
     let query = supabase
       .from('practice_quizzes')
       .select(`
-        id, title, description, duration_minutes, difficulty, created_at,
-        cours:cours_id(id, name, code, niveau_id),
+        id,
+        title,
+        description,
+        questions,
+        duration_minutes,
+        difficulty,
+        created_at,
+        course:course_id(id, name, code, level, semester),
         professeur:professeur_id(id, full_name)
       `)
       .eq('is_active', true)
+      .in('course_id', courseIds)
       .order('created_at', { ascending: false });
 
     const { data: quizzes, error } = await query;
     if (error) throw error;
 
-    // Filtrer par niveau de l'étudiant
-    const filtered = (quizzes || []).filter(q =>
-      !q.cours?.niveau_id || niveauIds.includes(q.cours.niveau_id)
-    );
-
     // Enrichir avec les tentatives de l'étudiant
-    const enriched = await Promise.all(filtered.map(async (quiz) => {
+    const enriched = await Promise.all((quizzes || []).map(async (quiz) => {
       const { data: attempts } = await supabase
         .from('practice_quiz_attempts')
         .select('score, max_score, percentage, completed_at')
@@ -296,6 +465,7 @@ export const getPracticeQuizzes = async (studentId) => {
 
       return {
         ...quiz,
+        cours: quiz.course,
         questions_count: Array.isArray(questionsArray) ? questionsArray.length : 0,
         attempts: attempts?.length || 0,
         best_score: attempts?.[0]?.percentage || null,
@@ -327,9 +497,16 @@ export const getPracticeQuizQuestions = async (quizId) => {
 /** Enregistre une tentative de quiz */
 export const savePracticeQuizAttempt = async (attemptData) => {
   try {
+    const payload = {
+      ...attemptData,
+      student_id: attemptData.student_id,
+      answers: attemptData.answers || {},
+      completed_at: attemptData.completed_at || new Date().toISOString(),
+    };
+
     const { data, error } = await supabase
       .from('practice_quiz_attempts')
-      .insert(attemptData)
+      .insert(payload)
       .select();
     if (error) throw error;
     return { data: data?.[0], error: null };

@@ -25,7 +25,7 @@ import AuthLayout from '../../components/layout/AuthLayout';
 import StyledLoginForm from '../../components/auth/StyledLoginForm';
 import { getTestAccountsInfo } from '../../utils/initTestAccounts';
 import { initializeTestAccounts } from '../../utils/initTestAccounts';
-import toast from 'react-hot-toast'; // Importer la bibliothèque de notifications
+import { useSnackbar } from 'notistack';
 
 /**
  * Page de connexion à l'intranet ESGIS
@@ -34,7 +34,8 @@ import toast from 'react-hot-toast'; // Importer la bibliothèque de notificatio
  */
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { signIn, authState, handleQuickLogin } = useAuth();
+  const { signIn, authState } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
   
   // États
   const [testAccounts, setTestAccounts] = useState([]);
@@ -52,11 +53,11 @@ const LoginPage = () => {
     if (authState.user && !authState.loading) {
       // Rediriger vers le tableau de bord approprié selon le rôle
       if (authState.isAdmin) {
-        navigate('/admin/dashboard');
+        navigate('/admin');
       } else if (authState.isProfessor) {
-        navigate('/professor/dashboard');
+        navigate('/professor');
       } else {
-        navigate('/student/dashboard');
+        navigate('/student');
       }
     }
   }, [authState, navigate]);
@@ -65,8 +66,18 @@ const LoginPage = () => {
    * Connexion rapide avec un compte de test
    * @param {Object} account - Compte de test
    */
-  const handleTestLogin = (account) => {
-    handleQuickLogin(account.email, account.password);
+  const handleTestLogin = async (account) => {
+    try {
+      const { error } = await signIn(account.email, account.password);
+      if (error) {
+        enqueueSnackbar(
+          `Erreur de connexion: ${typeof error === 'string' ? error : error.message}`,
+          { variant: 'error' }
+        );
+      }
+    } catch (err) {
+      enqueueSnackbar(`Erreur: ${err.message}`, { variant: 'error' });
+    }
   };
 
   /**
@@ -82,7 +93,7 @@ const LoginPage = () => {
       
       // Afficher les résultats
       if (result.success.length > 0) {
-        toast.success(`Comptes initialisés avec succès: ${result.success.join(', ')}`);
+        enqueueSnackbar(`Comptes initialisés avec succès: ${result.success.join(', ')}`, { variant: 'success' });
       }
       
       if (result.errors.length > 0) {
@@ -91,13 +102,13 @@ const LoginPage = () => {
           success: result.success.length > 0 ? result.success : [],
           errors: result.errors
         });
-        toast.error(`Initialisation partielle des comptes de test\nErreurs: ${errorMessages}`);
+        enqueueSnackbar(`Initialisation partielle: ${errorMessages}`, { variant: 'warning' });
       } else if (result.success.length === 0) {
-        toast.error('Aucun compte n\'a été initialisé');
+        enqueueSnackbar('Aucun compte n\'a été initialisé', { variant: 'error' });
       }
     } catch (error) {
       console.error('Erreur lors de l\'initialisation des comptes de test:', error);
-      toast.error(`Erreur: ${error.message}`);
+      enqueueSnackbar(`Erreur: ${error.message}`, { variant: 'error' });
       setInitializationResult({
         success: [],
         errors: [{ role: 'global', error: error.message }]

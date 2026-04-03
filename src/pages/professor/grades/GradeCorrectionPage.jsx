@@ -1,9 +1,34 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Typography, Paper, Grid, CircularProgress, Alert, Button,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TextField, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
-  Card, CardContent, Divider, Snackbar, IconButton, Tooltip
+  Box,
+  Typography,
+  Paper,
+  Grid,
+  CircularProgress,
+  Alert,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Card,
+  CardContent,
+  Divider,
+  Snackbar,
+  IconButton,
+  Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -12,89 +37,32 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   HourglassEmpty as PendingIcon,
-  Grading as GradingIcon,
   Info as InfoIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/supabase';
-import { getProfessorCorrections, submitGradeCorrection } from '@/api/grades';
+import {
+  getProfessorCorrections,
+  getProfessorPublishedGrades,
+  submitGradeCorrection
+} from '@/api/grades';
 
 /**
- * Données mock pour les demandes de correction
- */
-const MOCK_CORRECTIONS = [
-  {
-    id: 'cor1',
-    note_id: 'n1',
-    ancienne_note: 8.5,
-    nouvelle_note: 12,
-    justification: 'Erreur de saisie lors de la correction du CC1. La note réelle est 12/20.',
-    statut: 'en_attente',
-    created_at: '2025-05-01T10:30:00Z',
-    note: {
-      id: 'n1',
-      note: 8.5,
-      type_evaluation: 'cc1',
-      date_evaluation: '2025-04-15',
-      etudiant: { id: 's1', first_name: 'Kofi', last_name: 'AGBEKO' },
-      cours: { id: 'c1', name: 'Développement Web Frontend', code: 'INFO-345' }
-    }
-  },
-  {
-    id: 'cor2',
-    note_id: 'n2',
-    ancienne_note: 14,
-    nouvelle_note: 15.5,
-    justification: 'Question bonus non prise en compte initialement.',
-    statut: 'validee',
-    created_at: '2025-04-20T14:00:00Z',
-    validated_at: '2025-04-21T09:00:00Z',
-    note: {
-      id: 'n2',
-      note: 15.5,
-      type_evaluation: 'examen',
-      date_evaluation: '2025-04-10',
-      etudiant: { id: 's2', first_name: 'Ama', last_name: 'DOSSEH' },
-      cours: { id: 'c2', name: 'Algorithmique Avancée', code: 'INFO-221' }
-    }
-  },
-  {
-    id: 'cor3',
-    note_id: 'n3',
-    ancienne_note: 6,
-    nouvelle_note: 11,
-    justification: 'Copie attribuée au mauvais étudiant.',
-    statut: 'rejetee',
-    created_at: '2025-04-18T08:00:00Z',
-    validated_at: '2025-04-19T16:30:00Z',
-    commentaire_admin: 'Veuillez fournir une preuve supplémentaire (copie scannée).',
-    note: {
-      id: 'n3',
-      note: 6,
-      type_evaluation: 'cc2',
-      date_evaluation: '2025-04-05',
-      etudiant: { id: 's3', first_name: 'Yao', last_name: 'KPOMASSE' },
-      cours: { id: 'c1', name: 'Développement Web Frontend', code: 'INFO-345' }
-    }
-  },
-];
-
-/**
- * Page de gestion des demandes de correction de notes
- * Permet au professeur de soumettre et suivre ses demandes de correction
+ * Page de gestion des demandes de correction de notes.
+ * Le flux est désormais relié à de vraies notes publiées.
  */
 const GradeCorrectionPage = () => {
   const { authState } = useAuth();
+  const currentProfileId = authState.profile?.id || authState.user?.id || '';
 
-  // États
   const [corrections, setCorrections] = useState([]);
+  const [availableGrades, setAvailableGrades] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingGrades, setLoadingGrades] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Dialog nouvelle demande
   const [newCorrectionDialog, setNewCorrectionDialog] = useState(false);
   const [correctionForm, setCorrectionForm] = useState({
     noteId: '',
@@ -106,39 +74,66 @@ const GradeCorrectionPage = () => {
     justification: ''
   });
   const [submitting, setSubmitting] = useState(false);
-
-  // Dialog détails
   const [detailDialog, setDetailDialog] = useState(null);
 
-  /**
-   * Charger les demandes de correction
-   */
+  const resetCorrectionForm = () => {
+    setCorrectionForm({
+      noteId: '',
+      studentName: '',
+      courseName: '',
+      evalType: '',
+      oldGrade: '',
+      newGrade: '',
+      justification: ''
+    });
+  };
+
   const loadCorrections = useCallback(async () => {
+    if (!currentProfileId) {
+      setCorrections([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const { data, error } = await getProfessorCorrections(authState.user?.id);
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        setCorrections(data);
-      } else {
-        setCorrections(MOCK_CORRECTIONS);
-      }
+      const { data, error: requestError } = await getProfessorCorrections(currentProfileId);
+      if (requestError) throw requestError;
+      setCorrections(data || []);
     } catch (err) {
       console.error('Erreur chargement corrections:', err);
-      setCorrections(MOCK_CORRECTIONS);
+      setError(err.message || 'Erreur lors du chargement des demandes de correction.');
+      setCorrections([]);
     } finally {
       setLoading(false);
     }
-  }, [authState.user?.id]);
+  }, [currentProfileId]);
+
+  const loadAvailableGrades = useCallback(async () => {
+    if (!currentProfileId) {
+      setAvailableGrades([]);
+      setLoadingGrades(false);
+      return;
+    }
+
+    setLoadingGrades(true);
+    try {
+      const { data, error: requestError } = await getProfessorPublishedGrades(currentProfileId);
+      if (requestError) throw requestError;
+      setAvailableGrades(data || []);
+    } catch (err) {
+      console.error('Erreur chargement notes publiées:', err);
+      setAvailableGrades([]);
+    } finally {
+      setLoadingGrades(false);
+    }
+  }, [currentProfileId]);
 
   useEffect(() => {
     loadCorrections();
-  }, [loadCorrections]);
+    loadAvailableGrades();
+  }, [loadCorrections, loadAvailableGrades]);
 
-  /**
-   * Obtenir le chip de statut
-   */
   const getStatusChip = (statut) => {
     switch (statut) {
       case 'en_attente':
@@ -148,13 +143,10 @@ const GradeCorrectionPage = () => {
       case 'rejetee':
         return <Chip icon={<CancelIcon />} label="Rejetée" color="error" size="small" />;
       default:
-        return <Chip label={statut} size="small" />;
+        return <Chip label={statut || '-'} size="small" />;
     }
   };
 
-  /**
-   * Formater une date
-   */
   const formatDate = (dateString) => {
     try {
       return format(new Date(dateString), 'dd MMM yyyy à HH:mm', { locale: fr });
@@ -163,68 +155,79 @@ const GradeCorrectionPage = () => {
     }
   };
 
-  /**
-   * Soumettre une nouvelle demande de correction
-   */
+  const handleOpenNewCorrectionDialog = async () => {
+    setError(null);
+    resetCorrectionForm();
+    await loadAvailableGrades();
+    setNewCorrectionDialog(true);
+  };
+
+  const handleSelectGrade = (gradeId) => {
+    const selectedGrade = availableGrades.find((grade) => grade.id === gradeId);
+
+    if (!selectedGrade) {
+      resetCorrectionForm();
+      return;
+    }
+
+    setCorrectionForm({
+      noteId: selectedGrade.id,
+      studentName: `${selectedGrade.etudiant?.last_name || ''} ${selectedGrade.etudiant?.first_name || ''}`.trim(),
+      courseName: selectedGrade.cours?.name || '',
+      evalType: selectedGrade.type_evaluation || '',
+      oldGrade: String(selectedGrade.note ?? ''),
+      newGrade: '',
+      justification: ''
+    });
+  };
+
+  const handleCloseNewCorrectionDialog = () => {
+    setNewCorrectionDialog(false);
+    resetCorrectionForm();
+  };
+
   const handleSubmitCorrection = async () => {
+    if (!correctionForm.noteId) {
+      setError('Sélectionnez une note publiée à corriger.');
+      return;
+    }
+
     if (!correctionForm.newGrade || !correctionForm.justification) {
       setError('Veuillez remplir tous les champs obligatoires.');
       return;
     }
 
     setSubmitting(true);
+    setError(null);
+
     try {
-      const { error } = await submitGradeCorrection({
+      const { error: requestError } = await submitGradeCorrection({
         noteId: correctionForm.noteId,
-        professorId: authState.user?.id,
+        professorId: currentProfileId,
         oldGrade: parseFloat(correctionForm.oldGrade),
         newGrade: parseFloat(correctionForm.newGrade),
         justification: correctionForm.justification
       });
 
-      if (error) throw error;
+      if (requestError) throw requestError;
 
       setSuccessMessage('Demande de correction soumise avec succès.');
-      setNewCorrectionDialog(false);
-      setCorrectionForm({ noteId: '', studentName: '', courseName: '', evalType: '', oldGrade: '', newGrade: '', justification: '' });
+      handleCloseNewCorrectionDialog();
       await loadCorrections();
     } catch (err) {
       console.error('Erreur soumission correction:', err);
-      // En mode mock, simuler le succès
-      const newCorrection = {
-        id: `cor${Date.now()}`,
-        note_id: correctionForm.noteId || `n${Date.now()}`,
-        ancienne_note: parseFloat(correctionForm.oldGrade),
-        nouvelle_note: parseFloat(correctionForm.newGrade),
-        justification: correctionForm.justification,
-        statut: 'en_attente',
-        created_at: new Date().toISOString(),
-        note: {
-          id: correctionForm.noteId || `n${Date.now()}`,
-          note: parseFloat(correctionForm.oldGrade),
-          type_evaluation: correctionForm.evalType,
-          date_evaluation: new Date().toISOString().split('T')[0],
-          etudiant: { id: 'mock', first_name: correctionForm.studentName.split(' ')[0] || 'Étudiant', last_name: correctionForm.studentName.split(' ').slice(1).join(' ') || 'Inconnu' },
-          cours: { id: 'mock', name: correctionForm.courseName || 'Cours', code: '-' }
-        }
-      };
-      setCorrections(prev => [newCorrection, ...prev]);
-      setSuccessMessage('Demande de correction soumise avec succès.');
-      setNewCorrectionDialog(false);
-      setCorrectionForm({ noteId: '', studentName: '', courseName: '', evalType: '', oldGrade: '', newGrade: '', justification: '' });
+      setError(err.message || 'Erreur lors de la soumission de la demande de correction.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Statistiques
-  const pendingCount = corrections.filter(c => c.statut === 'en_attente').length;
-  const approvedCount = corrections.filter(c => c.statut === 'validee').length;
-  const rejectedCount = corrections.filter(c => c.statut === 'rejetee').length;
+  const pendingCount = corrections.filter((correction) => correction.statut === 'en_attente').length;
+  const approvedCount = corrections.filter((correction) => correction.statut === 'validee').length;
+  const rejectedCount = corrections.filter((correction) => correction.statut === 'rejetee').length;
 
   return (
     <Box sx={{ p: { xs: 1, md: 2 } }}>
-      {/* En-tête */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <HistoryIcon sx={{ mr: 1, color: 'primary.main', fontSize: 32 }} />
@@ -235,13 +238,12 @@ const GradeCorrectionPage = () => {
         <Button
           variant="contained"
           startIcon={<EditIcon />}
-          onClick={() => setNewCorrectionDialog(true)}
+          onClick={handleOpenNewCorrectionDialog}
         >
           Nouvelle demande
         </Button>
       </Box>
 
-      {/* Statistiques rapides */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={4}>
           <Card elevation={2} sx={{ borderLeft: '4px solid', borderColor: 'warning.main' }}>
@@ -269,11 +271,9 @@ const GradeCorrectionPage = () => {
         </Grid>
       </Grid>
 
-      {/* Messages */}
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       <Snackbar open={!!successMessage} autoHideDuration={4000} onClose={() => setSuccessMessage('')} message={successMessage} />
 
-      {/* Tableau des demandes */}
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
@@ -285,7 +285,7 @@ const GradeCorrectionPage = () => {
             Aucune demande de correction
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Vous pouvez soumettre une demande si une erreur est détectée après la publication des notes.
+            Les demandes soumises apparaîtront ici avec leur statut de traitement.
           </Typography>
         </Paper>
       ) : (
@@ -315,11 +315,11 @@ const GradeCorrectionPage = () => {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2">{correction.note?.cours?.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">{correction.note?.cours?.code}</Typography>
+                    <Typography variant="body2">{correction.note?.cours?.name || '-'}</Typography>
+                    <Typography variant="caption" color="text.secondary">{correction.note?.cours?.code || ''}</Typography>
                   </TableCell>
                   <TableCell>
-                    <Chip label={correction.note?.type_evaluation} size="small" variant="outlined" />
+                    <Chip label={correction.note?.type_evaluation || '-'} size="small" variant="outlined" />
                   </TableCell>
                   <TableCell align="center">
                     <Typography variant="body2" color="error.main" fontWeight="bold">
@@ -346,8 +346,7 @@ const GradeCorrectionPage = () => {
         </TableContainer>
       )}
 
-      {/* Dialog: Nouvelle demande de correction */}
-      <Dialog open={newCorrectionDialog} onClose={() => setNewCorrectionDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog open={newCorrectionDialog} onClose={handleCloseNewCorrectionDialog} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <EditIcon color="primary" />
           Nouvelle demande de correction
@@ -356,27 +355,50 @@ const GradeCorrectionPage = () => {
           <Alert severity="info" sx={{ mb: 2 }}>
             La demande sera envoyée à l'administration pour validation. La modification ne sera effective qu'après approbation.
           </Alert>
+          <FormControl fullWidth sx={{ mt: 1 }}>
+            <InputLabel>Note publiée concernée</InputLabel>
+            <Select
+              value={correctionForm.noteId}
+              onChange={(event) => handleSelectGrade(event.target.value)}
+              label="Note publiée concernée"
+            >
+              {availableGrades.map((grade) => (
+                <MenuItem key={grade.id} value={grade.id}>
+                  {grade.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {loadingGrades && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
+          {!loadingGrades && availableGrades.length === 0 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Aucune note publiée n'est disponible pour une demande de correction.
+            </Alert>
+          )}
           <TextField
             label="Nom de l'étudiant"
             fullWidth
-            sx={{ mt: 1 }}
+            sx={{ mt: 2 }}
             value={correctionForm.studentName}
-            onChange={(e) => setCorrectionForm(prev => ({ ...prev, studentName: e.target.value }))}
+            InputProps={{ readOnly: true }}
           />
           <TextField
             label="Cours concerné"
             fullWidth
             sx={{ mt: 2 }}
             value={correctionForm.courseName}
-            onChange={(e) => setCorrectionForm(prev => ({ ...prev, courseName: e.target.value }))}
+            InputProps={{ readOnly: true }}
           />
           <TextField
             label="Type d'évaluation"
             fullWidth
             sx={{ mt: 2 }}
             value={correctionForm.evalType}
-            onChange={(e) => setCorrectionForm(prev => ({ ...prev, evalType: e.target.value }))}
-            placeholder="Ex: CC1, Examen Final, TP..."
+            InputProps={{ readOnly: true }}
           />
           <Grid container spacing={2} sx={{ mt: 0 }}>
             <Grid item xs={6}>
@@ -385,7 +407,7 @@ const GradeCorrectionPage = () => {
                 type="number"
                 fullWidth
                 value={correctionForm.oldGrade}
-                onChange={(e) => setCorrectionForm(prev => ({ ...prev, oldGrade: e.target.value }))}
+                InputProps={{ readOnly: true }}
                 inputProps={{ min: 0, max: 20, step: 0.25 }}
               />
             </Grid>
@@ -395,7 +417,7 @@ const GradeCorrectionPage = () => {
                 type="number"
                 fullWidth
                 value={correctionForm.newGrade}
-                onChange={(e) => setCorrectionForm(prev => ({ ...prev, newGrade: e.target.value }))}
+                onChange={(event) => setCorrectionForm((prev) => ({ ...prev, newGrade: event.target.value }))}
                 inputProps={{ min: 0, max: 20, step: 0.25 }}
               />
             </Grid>
@@ -407,25 +429,24 @@ const GradeCorrectionPage = () => {
             rows={3}
             sx={{ mt: 2 }}
             value={correctionForm.justification}
-            onChange={(e) => setCorrectionForm(prev => ({ ...prev, justification: e.target.value }))}
-            placeholder="Expliquez la raison de la correction..."
+            onChange={(event) => setCorrectionForm((prev) => ({ ...prev, justification: event.target.value }))}
+            placeholder="Expliquez précisément la raison de la correction..."
             required
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setNewCorrectionDialog(false)}>Annuler</Button>
+          <Button onClick={handleCloseNewCorrectionDialog}>Annuler</Button>
           <Button
             variant="contained"
             startIcon={<SendIcon />}
             onClick={handleSubmitCorrection}
-            disabled={submitting || !correctionForm.justification || !correctionForm.newGrade}
+            disabled={submitting || !correctionForm.noteId || !correctionForm.justification || !correctionForm.newGrade}
           >
             {submitting ? 'Envoi...' : 'Soumettre'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Dialog: Détails d'une correction */}
       <Dialog open={!!detailDialog} onClose={() => setDetailDialog(null)} maxWidth="sm" fullWidth>
         {detailDialog && (
           <>
@@ -446,7 +467,7 @@ const GradeCorrectionPage = () => {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="text.secondary">Cours</Typography>
-                    <Typography variant="body1">{detailDialog.note?.cours?.name}</Typography>
+                    <Typography variant="body1">{detailDialog.note?.cours?.name || '-'}</Typography>
                   </Grid>
                 </Grid>
                 <Grid container spacing={2}>

@@ -1,294 +1,483 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  List, 
-  ListItem, 
-  ListItemText, 
-  TextField, 
-  IconButton,
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
-  CircularProgress
+  FormControl,
+  Grid,
+  InputLabel,
+  List,
+  ListItemAvatar,
+  ListItemButton,
+  ListItemText,
+  MenuItem,
+  Paper,
+  Select,
+  Snackbar,
+  Tab,
+  Tabs,
+  TextField,
+  Typography
 } from '@mui/material';
-import SendIcon from '@mui/icons-material/Send';
-// Correction du chemin d'importation de Supabase
-import { supabase } from '@/supabase';
-/**
- * @typedef {Object} Profile
- * @property {string} id - ID du profil utilisateur
- * @property {string} full_name - Nom complet de l'utilisateur
- */
+import {
+  Add as AddIcon,
+  Reply as ReplyIcon,
+  Send as SendIcon
+} from '@mui/icons-material';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
-/**
- * @typedef {Object} Message
- * @property {number|string} id - ID du message
- * @property {string} content - Contenu du message
- * @property {number|string} conversation_id - ID de la conversation
- * @property {string} sender_id - ID de l'expéditeur
- * @property {boolean} read - Statut de lecture du message
- * @property {string} created_at - Date de création du message
- */
+import { useAuth } from '@/context/AuthContext';
+import { getContacts as fetchContactsApi, getMessages as fetchMessagesApi, markMessageAsRead, sendMessage } from '@/api/messages';
 
-/**
- * @typedef {Object} Conversation
- * @property {number|string} id - ID de la conversation
- * @property {string} title - Titre de la conversation
- * @property {string[]} participant_ids - IDs des participants
- * @property {number|string} last_message_id - ID du dernier message
- * @property {string} created_at - Date de création
- * @property {string} updated_at - Date de mise à jour
- */
+const defaultDraft = {
+  recipient_id: '',
+  subject: '',
+  content: ''
+};
 
-/**
- * @typedef {Object} ExtendedConversation
- * @property {number|string} id - ID de la conversation
- * @property {string} title - Titre de la conversation
- * @property {string[]} participant_ids - IDs des participants
- * @property {Profile[]} participants - Profils des participants
- * @property {string} [last_message] - Dernier message
- * @property {number} last_message_id - ID du dernier message
- * @property {string} [last_message_date] - Date du dernier message
- * @property {string} created_at - Date de création
- * @property {string} updated_at - Date de mise à jour
- */
-
-/**
- * Page de messagerie permettant de voir et d'envoyer des messages
- * @returns {JSX.Element} Composant de la page de messagerie
- */
 const MessagesPage = () => {
-  const [conversations, setConversations] = useState([]);
-  const [selectedConversation, setSelectedConversation] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
+  const { authState } = useAuth();
+  const currentProfileId = authState.profile?.id || authState.user?.id || '';
+
   const [loading, setLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [tabValue, setTabValue] = useState(0);
+  const [messages, setMessages] = useState([]);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [draft, setDraft] = useState(defaultDraft);
 
-  /**
-   * Récupère les conversations de l'utilisateur connecté
-   */
-  const fetchConversations = async () => {
+  const filteredContacts = useMemo(() => {
+    if (!authState.profile?.role) {
+      return contacts;
+    }
+
+    if (authState.isStudent) {
+      return contacts.filter((contact) => ['professor', 'admin'].includes(contact.role));
+    }
+
+    if (authState.isProfessor) {
+      return contacts.filter((contact) => ['student', 'admin'].includes(contact.role));
+    }
+
+    return contacts;
+  }, [authState.isProfessor, authState.isStudent, authState.profile?.role, contacts]);
+
+  const formatDate = (dateString) => {
+    if (!dateString) {
+      return 'Date inconnue';
+    }
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('Utilisateur non authentifié');
-        return;
-      }
-      
-      setCurrentUserId(user.id);
-      
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*, participants:user_profiles(id, full_name)');
-        
-      if (error) {
-        throw error;
-      }
-      
-      // Transformation des données pour correspondre à l'interface ExtendedConversation
-      const formattedData = data.map((conv) => ({
-        ...conv,
-        participants: conv.participants || [],
-        participant_ids: conv.participant_ids || [],
-        last_message: 'Chargement...',
-        last_message_id: conv.last_message_id,
-        last_message_date: conv.updated_at
-      }));
-      
-      setConversations(formattedData);
-      setLoading(false);
-    } catch (error) {
-      console.error('Erreur lors du chargement des conversations:', error);
-      setLoading(false);
+      return format(new Date(dateString), 'dd MMM yyyy HH:mm', { locale: fr });
+    } catch (_error) {
+      return dateString;
     }
   };
 
-  /**
-   * Envoie un nouveau message
-   * @param {React.FormEvent<HTMLFormElement>} e - Événement de soumission du formulaire
-   */
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    
-    if (!selectedConversation || !newMessage.trim()) {
+  const getCounterparty = (message) => {
+    if (!message) {
+      return null;
+    }
+
+    return tabValue === 0 ? message.sender : message.recipient;
+  };
+
+  const fetchContacts = async () => {
+    if (!currentProfileId) {
       return;
     }
 
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .insert({
-          content: newMessage,
-          conversation_id: typeof selectedConversation.id === 'string' 
-            ? parseInt(selectedConversation.id, 10) 
-            : selectedConversation.id,
-          sender_id: currentUserId,
-          read: false
-        });
-        
-      if (error) {
-        throw error;
+      let roleFilter;
+      if (authState.isStudent) {
+        roleFilter = ['professor', 'admin'];
+      } else if (authState.isProfessor) {
+        roleFilter = ['student', 'admin'];
       }
-      
-      setNewMessage('');
-      fetchMessages();
-    } catch (error) {
-      console.error('Error sending message:', error);
+
+      const { contacts: data, error: contactsError } = await fetchContactsApi(currentProfileId, { roleFilter });
+
+      if (contactsError) {
+        throw contactsError;
+      }
+
+      setContacts(data);
+    } catch (contactsError) {
+      console.error('Erreur lors du chargement des contacts:', contactsError);
+      setContacts([]);
     }
   };
 
-  /**
-   * Gère la touche Entrée pour envoyer le message
-   * @param {React.KeyboardEvent} e - Événement clavier
-   */
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      const formEvent = { preventDefault: () => {} };
-      handleSendMessage(formEvent);
-    }
-  };
-
-  /**
-   * Récupère les messages de la conversation sélectionnée
-   */
   const fetchMessages = async () => {
-    if (!selectedConversation) {
+    if (!currentProfileId) {
+      setError('Utilisateur non connecté');
+      setLoading(false);
       return;
     }
-      
+
+    setLoading(true);
+    setError(null);
+
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', typeof selectedConversation.id === 'string' 
-          ? parseInt(selectedConversation.id, 10) 
-          : selectedConversation.id)
-        .order('created_at', { ascending: true });
-          
-      if (error) {
-        throw error;
+      const direction = tabValue === 0 ? 'received' : 'sent';
+      const { messages: data, error: messagesError } = await fetchMessagesApi(currentProfileId, direction);
+
+      if (messagesError) {
+        throw messagesError;
       }
-      
-      if (data && data.length > 0) {
-        setMessages(data);
-      } else {
-        setMessages([]);
+
+      const nextMessages = data;
+      setMessages(nextMessages);
+
+      if (selectedMessage) {
+        const refreshedSelection = nextMessages.find((message) => message.id === selectedMessage.id) || null;
+        setSelectedMessage(refreshedSelection);
       }
-    } catch (error) {
-      console.error('Erreur lors du chargement des messages:', error);
+    } catch (messagesError) {
+      console.error('Erreur lors du chargement des messages:', messagesError);
+      setMessages([]);
+      setSelectedMessage(null);
+      setError(messagesError.message || 'Impossible de charger la messagerie');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchConversations();
-  }, []);
+    fetchContacts();
+  }, [currentProfileId]);
 
   useEffect(() => {
-    if (selectedConversation) {
-      fetchMessages();
+    fetchMessages();
+  }, [currentProfileId, tabValue]);
+
+  const handleSelectMessage = async (message) => {
+    setSelectedMessage(message);
+
+    if (tabValue !== 0 || message.read || message.recipient_id !== currentProfileId) {
+      return;
     }
-  }, [selectedConversation]);
+
+    try {
+      const { error: updateError } = await markMessageAsRead(message.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setMessages((prevMessages) => prevMessages.map((item) => (
+        item.id === message.id
+          ? { ...item, read: true }
+          : item
+      )));
+      setSelectedMessage((prevMessage) => (
+        prevMessage?.id === message.id
+          ? { ...prevMessage, read: true }
+          : prevMessage
+      ));
+    } catch (updateError) {
+      console.error('Erreur lors du marquage du message comme lu:', updateError);
+    }
+  };
+
+  const openCompose = (prefill = {}) => {
+    setDraft({
+      recipient_id: prefill.recipient_id || '',
+      subject: prefill.subject || '',
+      content: prefill.content || ''
+    });
+    setComposeOpen(true);
+  };
+
+  const closeCompose = () => {
+    setComposeOpen(false);
+    setDraft(defaultDraft);
+  };
+
+  const handleReply = () => {
+    if (!selectedMessage) {
+      return;
+    }
+
+    const recipientId = tabValue === 0 ? selectedMessage.sender_id : selectedMessage.recipient_id;
+    const subject = selectedMessage.subject?.startsWith('Re: ')
+      ? selectedMessage.subject
+      : `Re: ${selectedMessage.subject || 'Sans objet'}`;
+
+    openCompose({
+      recipient_id: recipientId,
+      subject,
+      content: ''
+    });
+  };
+
+  const handleSendMessage = async () => {
+    if (!currentProfileId) {
+      setError('Utilisateur non connecté');
+      return;
+    }
+
+    if (!draft.recipient_id || !draft.subject.trim() || !draft.content.trim()) {
+      setError('Destinataire, objet et contenu sont obligatoires');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const { error: insertError } = await sendMessage({
+        sender_id: currentProfileId,
+        recipient_id: draft.recipient_id,
+        subject: draft.subject.trim(),
+        content: draft.content.trim()
+      });
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      closeCompose();
+      setSuccessMessage('Message envoyé');
+
+      if (tabValue !== 1) {
+        setTabValue(1);
+      } else {
+        fetchMessages();
+      }
+    } catch (insertError) {
+      console.error('Erreur lors de l’envoi du message:', insertError);
+      setError(insertError.message || 'Impossible d’envoyer le message');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
-      {/* Liste des conversations */}
-      <Box sx={{ width: 300, borderRight: '1px solid #e0e0e0', p: 2, overflowY: 'auto' }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Conversations</Typography>
-        
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <List>
-            {conversations.map((conv) => (
-              <ListItem 
-                button 
-                key={conv.id}
-                onClick={() => setSelectedConversation(conv)}
-                selected={selectedConversation?.id === conv.id}
-                sx={{ 
-                  mb: 1, 
-                  borderRadius: 1,
-                  bgcolor: selectedConversation?.id === conv.id ? 'rgba(0, 0, 0, 0.08)' : 'transparent'
-                }}
-              >
-                <ListItemText 
-                  primary={conv.title || 'Sans titre'} 
-                  secondary={conv.last_message || 'Aucun message'}
-                  primaryTypographyProps={{ fontWeight: 'medium' }}
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
+    <Box sx={{ py: 4, px: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">
+          Messagerie
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => openCompose()}
+        >
+          Nouveau message
+        </Button>
       </Box>
-      
-      {/* Zone de chat */}
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 2 }}>
-        {selectedConversation ? (
-          <>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              {selectedConversation.title || 'Sans titre'}
-            </Typography>
-            
-            <Divider sx={{ mb: 2 }} />
-            
-            {/* Messages */}
-            <Box sx={{ flexGrow: 1, overflowY: 'auto', mb: 2 }}>
-              {messages.map((message) => (
-                <Box 
-                  key={message.id}
-                  sx={{ 
-                    display: 'flex',
-                    justifyContent: message.sender_id === currentUserId ? 'flex-end' : 'flex-start',
-                    mb: 1
-                  }}
-                >
-                  <Box 
-                    sx={{ 
-                      maxWidth: '70%',
-                      p: 1.5,
-                      borderRadius: 2,
-                      bgcolor: message.sender_id === currentUserId ? 'primary.main' : 'grey.200',
-                      color: message.sender_id === currentUserId ? 'white' : 'text.primary'
-                    }}
-                  >
-                    <Typography variant="body1">{message.content}</Typography>
-                    <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                      {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ height: '72vh', display: 'flex', flexDirection: 'column' }}>
+            <Tabs
+              value={tabValue}
+              onChange={(_event, newValue) => setTabValue(newValue)}
+              variant="fullWidth"
+            >
+              <Tab label="Reçus" />
+              <Tab label="Envoyés" />
+            </Tabs>
+            <Divider />
+
+            <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                  <CircularProgress />
+                </Box>
+              ) : messages.length === 0 ? (
+                <Box sx={{ p: 3 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Aucun message dans cette boîte.
+                  </Typography>
+                </Box>
+              ) : (
+                <List disablePadding>
+                  {messages.map((message) => {
+                    const counterparty = getCounterparty(message);
+
+                    return (
+                      <ListItemButton
+                        key={message.id}
+                        selected={selectedMessage?.id === message.id}
+                        onClick={() => handleSelectMessage(message)}
+                        divider
+                        sx={{
+                          alignItems: 'flex-start',
+                          backgroundColor: tabValue === 0 && !message.read ? 'action.hover' : 'inherit'
+                        }}
+                      >
+                        <ListItemAvatar>
+                          <Avatar src={counterparty?.avatar_url || undefined}>
+                            {counterparty?.full_name?.charAt(0) || '?'}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={(
+                            <Typography
+                              variant="subtitle2"
+                              sx={{ fontWeight: tabValue === 0 && !message.read ? 700 : 500 }}
+                            >
+                              {message.subject || 'Sans objet'}
+                            </Typography>
+                          )}
+                          secondary={(
+                            <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
+                              <Typography component="span" variant="body2" color="text.secondary">
+                                {counterparty?.full_name || counterparty?.email || 'Utilisateur inconnu'}
+                              </Typography>
+                              <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block' }}>
+                                {message.content?.slice(0, 90) || 'Aucun contenu'}
+                              </Typography>
+                              <Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                {formatDate(message.created_at)}
+                              </Typography>
+                            </Box>
+                          )}
+                        />
+                      </ListItemButton>
+                    );
+                  })}
+                </List>
+              )}
+            </Box>
+          </Paper>
+        </Grid>
+
+        <Grid item xs={12} md={8}>
+          <Paper sx={{ height: '72vh', p: 3, display: 'flex', flexDirection: 'column' }}>
+            {selectedMessage ? (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+                  <Box>
+                    <Typography variant="h5">
+                      {selectedMessage.subject || 'Sans objet'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {tabValue === 0 ? 'De' : 'À'} {getCounterparty(selectedMessage)?.full_name || getCounterparty(selectedMessage)?.email || 'Utilisateur inconnu'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatDate(selectedMessage.created_at)}
                     </Typography>
                   </Box>
+                  <Box>
+                    <Button
+                      variant="outlined"
+                      startIcon={<ReplyIcon />}
+                      onClick={handleReply}
+                    >
+                      Répondre
+                    </Button>
+                  </Box>
                 </Box>
+
+                <Divider sx={{ mb: 3 }} />
+
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedMessage.content}
+                </Typography>
+              </>
+            ) : (
+              <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <Typography variant="body1" color="text.secondary">
+                  Sélectionnez un message pour l’afficher.
+                </Typography>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
+
+      <Dialog
+        open={composeOpen}
+        onClose={closeCompose}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nouveau message</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mt: 1, mb: 2 }}>
+            <InputLabel id="recipient-label">Destinataire</InputLabel>
+            <Select
+              labelId="recipient-label"
+              label="Destinataire"
+              value={draft.recipient_id}
+              onChange={(event) => setDraft((prev) => ({ ...prev, recipient_id: event.target.value }))}
+            >
+              {filteredContacts.map((contact) => (
+                <MenuItem key={contact.id} value={contact.id}>
+                  {contact.full_name} ({contact.role})
+                </MenuItem>
               ))}
-            </Box>
-            
-            {/* Formulaire d'envoi */}
-            <Box component="form" onSubmit={handleSendMessage} sx={{ display: 'flex' }}>
-              <TextField
-                fullWidth
-                variant="outlined"
-                placeholder="Écrivez votre message..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={handleKeyPress}
-                size="small"
-                sx={{ mr: 1 }}
-              />
-              <IconButton type="submit" color="primary" disabled={!newMessage.trim()}>
-                <SendIcon />
-              </IconButton>
-            </Box>
-          </>
-        ) : (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-            <Typography variant="body1" color="text.secondary">
-              Sélectionnez une conversation pour commencer à discuter
-            </Typography>
-          </Box>
-        )}
-      </Box>
+            </Select>
+          </FormControl>
+
+          <TextField
+            label="Objet"
+            fullWidth
+            value={draft.subject}
+            onChange={(event) => setDraft((prev) => ({ ...prev, subject: event.target.value }))}
+            sx={{ mb: 2 }}
+          />
+
+          <TextField
+            label="Message"
+            fullWidth
+            multiline
+            minRows={6}
+            value={draft.content}
+            onChange={(event) => setDraft((prev) => ({ ...prev, content: event.target.value }))}
+          />
+
+          {filteredContacts.length === 0 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Aucun destinataire disponible pour le moment.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeCompose}>
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSendMessage}
+            startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : <SendIcon />}
+            disabled={submitting || filteredContacts.length === 0}
+          >
+            Envoyer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={4000}
+        onClose={() => setSuccessMessage(null)}
+      >
+        <Alert onClose={() => setSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

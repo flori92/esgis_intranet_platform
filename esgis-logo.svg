@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80">
+  <defs>
+    <!-- Gold gradients -->
+    <linearGradient id="gCapTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5d96b"/>
+      <stop offset="50%" stop-color="#e2b830"/>
+      <stop offset="100%" stop-color="#c89e24"/>
+    </linearGradient>
+    <linearGradient id="gCapFront" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#e2b830"/>
+      <stop offset="100%" stop-color="#b08218"/>
+    </linearGradient>
+    <linearGradient id="gCapSide" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d4a826"/>
+      <stop offset="100%" stop-color="#9a7014"/>
+    </linearGradient>
+    <linearGradient id="gDiploma" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f0d050"/>
+      <stop offset="40%" stop-color="#d4a830"/>
+      <stop offset="100%" stop-color="#b89020"/>
+    </linearGradient>
+    <linearGradient id="gDiplomaEnd" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#d4a830"/>
+      <stop offset="50%" stop-color="#b08218"/>
+      <stop offset="100%" stop-color="#c49828"/>
+    </linearGradient>
+    <linearGradient id="gTassel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e2b830"/>
+      <stop offset="100%" stop-color="#c49828"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ========== "esgis" text: wide extended bold ========== -->
+  <text x="10" y="56"
+        font-family="'Arial Black','Impact','Helvetica Neue',sans-serif"
+        font-size="52"
+        font-weight="900"
+        fill="#cc2229"
+        textLength="218"
+        lengthAdjust="spacingAndGlyphs">esgis</text>
+
+  <!-- ========== Cap + Diploma icon group ========== -->
+  <!-- Positioned so cap overlaps slightly with end of "esgis" -->
+  <g transform="translate(225, 3)">
+
+    <!-- ===== GRADUATION CAP (mortarboard) ===== -->
+    <!-- Board/top - a flattened diamond viewed from angle -->
+    <polygon points="48,0 96,16 48,32 0,16"
+             fill="url(#gCapTop)"/>
+    <!-- Board edge highlight -->
+    <line x1="0" y1="16" x2="48" y2="32" stroke="#c89e24" stroke-width="0.5" opacity="0.6"/>
+    <line x1="48" y1="32" x2="96" y2="16" stroke="#c89e24" stroke-width="0.5" opacity="0.6"/>
+
+    <!-- Crown/base below board -->
+    <path d="M18,16 L18,28 Q48,40 78,28 L78,16 Z"
+          fill="url(#gCapFront)"/>
+    <!-- Crown left side -->
+    <path d="M18,16 L0,16 L0,16 L18,28 Z" fill="url(#gCapSide)" opacity="0.3"/>
+    <!-- Crown base line -->
+    <path d="M18,28 Q48,40 78,28" fill="none" stroke="#a07818" stroke-width="0.8"/>
+
+    <!-- Button on top -->
+    <circle cx="48" cy="16" r="3" fill="#f5d96b" stroke="#c89e24" stroke-width="0.8"/>
+
+    <!-- Tassel cord from button -->
+    <path d="M51,18 C58,22 68,26 74,40"
+          fill="none" stroke="#d4a830" stroke-width="2" stroke-linecap="round"/>
+    <!-- Tassel knot -->
+    <ellipse cx="74" cy="40" rx="2.5" ry="2" fill="#c49828" stroke="#a07818" stroke-width="0.5"/>
+    <!-- Tassel strands -->
+    <path d="M71,42 L70,54" fill="none" stroke="#d4a830" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M72.5,42 L72,55" fill="none" stroke="#c49828" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M74,42 L74,56" fill="none" stroke="#d4a830" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M75.5,42 L76,55" fill="none" stroke="#c49828" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M77,42 L78,54" fill="none" stroke="#d4a830" stroke-width="1.2" stroke-linecap="round"/>
+
+    <!-- ===== DIPLOMA SCROLL ===== -->
+    <g transform="translate(4,38) rotate(-22)">
+      <!-- Main cylinder body -->
+      <rect x="4" y="2" width="56" height="14" rx="2" fill="url(#gDiploma)"/>
+
+      <!-- Left rolled end -->
+      <ellipse cx="6" cy="9" rx="6" ry="8" fill="url(#gDiplomaEnd)"/>
+      <ellipse cx="6" cy="9" rx="3.5" ry="6" fill="url(#gDiploma)" opacity="0.5"/>
+      <ellipse cx="6" cy="9" rx="1.5" ry="4" fill="#a07818" opacity="0.2"/>
+
+      <!-- Right rolled end -->
+      <ellipse cx="58" cy="9" rx="6" ry="8" fill="url(#gDiplomaEnd)"/>
+      <ellipse cx="58" cy="9" rx="3.5" ry="6" fill="url(#gDiploma)" opacity="0.5"/>
+      <ellipse cx="58" cy="9" rx="1.5" ry="4" fill="#a07818" opacity="0.2"/>
+
+      <!-- Red ribbon band -->
+      <rect x="26" y="0" width="12" height="18" rx="1.5" fill="#cc2229" opacity="0.9"/>
+      <!-- Ribbon highlight -->
+      <rect x="29" y="0" width="3" height="18" rx="1" fill="#e63946" opacity="0.3"/>
+
+      <!-- Ribbon bow -->
+      <path d="M28,0 Q32,-6 32,0" fill="none" stroke="#cc2229" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M36,0 Q32,-6 32,0" fill="none" stroke="#cc2229" stroke-width="1.8" stroke-linecap="round"/>
+      <!-- Bow center knot -->
+      <circle cx="32" cy="0" r="1.2" fill="#a01020"/>
+
+      <!-- Ribbon tails -->
+      <path d="M29,18 Q27,24 25,26" fill="none" stroke="#cc2229" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M35,18 Q37,24 39,26" fill="none" stroke="#cc2229" stroke-width="1.6" stroke-linecap="round"/>
+      <!-- Tail tips (V-cut) -->
+      <path d="M24,25 L25,26 L26,24.5" fill="none" stroke="#cc2229" stroke-width="0.8"/>
+      <path d="M38,24.5 L39,26 L40,25" fill="none" stroke="#cc2229" stroke-width="0.8"/>
+    </g>
+  </g>
+</svg>

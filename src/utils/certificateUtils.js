@@ -3,10 +3,12 @@
  * @module utils/certificateUtils
  */
 
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { supabase } from '../supabase';
+import { getUser } from '../api/auth';
+import { getProfileById } from '../api/profile';
+import { getRoleEntities } from '../api/users';
+import { loadPdfLib } from './pdfLib';
 
 /**
  * Génère un certificat de scolarité pour un étudiant
@@ -24,6 +26,8 @@ import { supabase } from '../supabase';
  */
 export const generateCertificate = async (studentData) => {
   try {
+    const { PDFDocument, rgb, StandardFonts } = await loadPdfLib();
+
     // Création d'un nouveau document PDF
     const pdfDoc = await PDFDocument.create();
     
@@ -195,26 +199,59 @@ export const generateCertificate = async (studentData) => {
  */
 export const getStudentData = async (userId) => {
   try {
-    // Récupération des données utilisateur depuis Supabase Auth (plus fiable)
-    const { data: authData, error: authError } = await supabase.auth.getUser();
+    const { data: authData, error: authError } = await getUser();
     
     if (authError) {
       console.error("Erreur lors de la récupération des données d'authentification:", authError);
       throw authError;
     }
 
-    // Extraction des métadonnées utilisateur
     const userMetadata = authData.user?.user_metadata || {};
     const profileBackup = userMetadata.profile_backup || {};
-    
-    // Essayer d'abord de récupérer depuis la table profiles
+
     try {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
+      const [{ profile: profileData, error: profileError }, { studentEntity: studentData }] = await Promise.all([
+        getProfileById(userId),
+        getRoleEntities(userId)
+      ]);
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      if (!studentData) {
+        throw new Error('Enregistrement étudiant introuvable');
+      }
+
+      if (profileData && studentData) {
+        const fullName = profileData.full_name || `${userMetadata.firstName || ''} ${userMetadata.lastName || ''}`.trim() || 'Étudiant ESGIS';
+        const nameParts = fullName.split(' ').filter(Boolean);
+        const firstName = nameParts.slice(0, -1).join(' ') || nameParts[0] || 'Étudiant';
+        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : 'ESGIS';
+        const currentYear = new Date().getFullYear();
+        const academicYear = `${currentYear - 1}-${currentYear}`;
+
+        return {
+          id: profileData.id || userId,
+          studentRecordId: studentData.id,
+          firstName,
+          lastName,
+          email: profileData.email || authData.user?.email || profileBackup.email || '',
+          studentId: studentData.student_number || userMetadata.studentId || profileBackup.student_id || userId.substring(0, 8).toUpperCase(),
+          metadata: {
+            program: userMetadata.program || profileBackup.program || 'Informatique',
+            level: studentData.level || userMetadata.level || profileBackup.level || 'Licence',
+            academicYear: userMetadata.academicYear || profileBackup.academic_year || academicYear
+          }
+        };
+      }
+    } catch (profileLookupError) {
+      console.warn("Erreur de récupération des données canoniques étudiant, fallback sur les métadonnées:", profileLookupError);
+    }
+
+    try {
+      const { profile: profileData, error: profileError } = await getProfileById(userId);
+
       if (!profileError && profileData) {
         // Si les données profiles sont complètes, les utiliser
         return {
@@ -232,10 +269,8 @@ export const getStudentData = async (userId) => {
       }
     } catch (profileError) {
       console.warn("Erreur de récupération profile, utilisation des métadonnées utilisateur:", profileError);
-      // Continuer avec la méthode de secours
     }
     
-    // Méthode de secours : utiliser uniquement les métadonnées utilisateur
     return {
       id: userId,
       firstName: userMetadata.firstName || profileBackup.first_name || 'Étudiant',

@@ -32,11 +32,6 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { supabase } from '@/supabase';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
-import { fr } from 'date-fns/locale';
-import { format, parseISO } from 'date-fns';
 
 const StudentFormPage = () => {
   const { authState } = useAuth();
@@ -183,13 +178,12 @@ const StudentFormPage = () => {
   };
   
   // Gestion du changement de date de naissance
-  const handleDateChange = (date) => {
-    // Convertir la date en format ISO ou null si pas de date
-    const isoDate = date ? date.toISOString() : null;
-    
+  const handleDateChange = (event) => {
+    const { value } = event.target;
+
     setStudent({
       ...student,
-      date_of_birth: isoDate
+      date_of_birth: value || null
     });
     
     // Supprimer l'erreur pour ce champ si elle existe
@@ -476,21 +470,16 @@ const StudentFormPage = () => {
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-                <DatePicker
-                  label="Date de naissance"
-                  value={student.date_of_birth ? new Date(student.date_of_birth) : null}
-                  onChange={handleDateChange}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      fullWidth
-                      error={!!formErrors.date_of_birth}
-                      helperText={formErrors.date_of_birth}
-                    />
-                  )}
-                />
-              </LocalizationProvider>
+              <TextField
+                fullWidth
+                type="date"
+                label="Date de naissance"
+                value={student.date_of_birth ? String(student.date_of_birth).slice(0, 10) : ''}
+                onChange={handleDateChange}
+                error={!!formErrors.date_of_birth}
+                helperText={formErrors.date_of_birth}
+                InputLabelProps={{ shrink: true }}
+              />
             </Grid>
             
             <Grid item xs={12} md={6}>

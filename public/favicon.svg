@@ -1,7 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg">
-  <g fill="#3f51b5">
-    <path d="M6,4 L26,4 C27.1046,4 28,4.89543 28,6 L28,26 C28,27.1046 27.1046,28 26,28 L6,28 C4.89543,28 4,27.1046 4,26 L4,6 C4,4.89543 4.89543,4 6,4 Z M8,8 L8,24 L24,24 L24,8 L8,8 Z" />
-    <path d="M12,12 L20,12 L20,14 L14,14 L14,16 L18,16 L18,18 L14,18 L14,20 L20,20 L20,22 L12,22 L12,12 Z" />
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="capG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5d96b"/>
+      <stop offset="50%" stop-color="#e2b830"/>
+      <stop offset="100%" stop-color="#c89e24"/>
+    </linearGradient>
+  </defs>
+  <!-- Red rounded background -->
+  <rect width="32" height="32" rx="6" fill="#cc2229"/>
+  <!-- "esgis" text in white, bold -->
+  <text x="3" y="22.5"
+        font-family="'Arial Black','Impact','Helvetica Neue',sans-serif"
+        font-size="14"
+        font-weight="900"
+        fill="white"
+        textLength="26"
+        lengthAdjust="spacingAndGlyphs">esgis</text>
+  <!-- Golden graduation cap on "e" -->
+  <g transform="translate(1, 5) scale(0.42)">
+    <polygon points="12,0 24,6 12,12 0,6" fill="url(#capG)"/>
+    <path d="M4,6 L4,10 Q12,14 20,10 L20,6 Z" fill="#c89e24"/>
+    <circle cx="12" cy="6" r="1" fill="#f5d96b"/>
+    <path d="M13,7 Q16,9 18,12" fill="none" stroke="#d4a830" stroke-width="0.8" stroke-linecap="round"/>
+    <ellipse cx="18" cy="12.5" rx="0.8" ry="1.2" fill="#d4a830"/>
   </g>
 </svg>

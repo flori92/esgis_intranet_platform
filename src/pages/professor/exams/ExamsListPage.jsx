@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -33,6 +33,7 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
+  Analytics as AnalyticsIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Visibility as VisibilityIcon,
@@ -49,7 +50,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { fetchRecords, insertRecord, updateRecord, deleteRecord } from '../../../utils/supabase-helpers';
 import { supabase } from '@/supabase';
 
 /**
@@ -136,9 +136,6 @@ const ExamsListPage = () => {
     { value: 'cancelled', label: 'Annulé', color: 'error' }
   ];
   
-  // Référence pour éviter les recréations de fonctions
-  const fetchDataRef = useRef();
-  
   /**
    * Récupération des données (examens, cours, sessions, centres)
    */
@@ -147,137 +144,92 @@ const ExamsListPage = () => {
     setError(null);
     
     try {
-      // Récupérer l'ID du professeur connecté
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      
-      if (userError) {
-        throw userError;
+      const professorId = authState.professor?.id;
+
+      if (!professorId) {
+        throw new Error('Profil professeur indisponible');
       }
-      
-      if (!userData || !userData.user) {
-        throw new Error('Utilisateur non authentifié');
-      }
-      
-      // Récupérer le profil du professeur
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userData.user.id)
-        .eq('role', 'professor')
-        .single();
-      
-      if (profileError) {
-        throw profileError;
-      }
-      
-      if (!profiles) {
-        throw new Error('Profil de professeur non trouvé');
-      }
-      
-      const professorId = profiles.id;
-      
-      // Récupérer les cours du professeur
-      const { data: professorCourses, error: coursesError } = await supabase
-        .from('professor_courses')
-        .select('course_id')
-        .eq('professor_id', professorId);
-      
-      if (coursesError) {
-        throw coursesError;
-      }
-      
-      const courseIds = professorCourses.map(pc => pc.course_id);
-      
-      // Si aucun cours, retourner une liste vide
-      if (courseIds.length === 0) {
-        setExams([]);
-        setFilteredExams([]);
-        setCourses([]);
-        setSessions([]);
-        setCenters([]);
-        setLoading(false);
-        return;
-      }
-      
-      // Récupérer les cours du professeur
-      const { data: coursesData, error: coursesFetchError } = await supabase
-        .from('courses')
-        .select('*')
-        .in('id', courseIds);
-      
-      if (coursesFetchError) {
-        throw coursesFetchError;
-      }
-      
-      setCourses(coursesData || []);
-      
-      // Récupérer les examens pour les cours du professeur
-      const { data: examsData, error: examsError } = await supabase
-        .from('exams')
-        .select('*')
-        .in('course_id', courseIds);
-      
+
+      const [
+        { data: examsData, error: examsError },
+        { data: coursesData, error: coursesError },
+        { data: sessionsData, error: sessionsError },
+        { data: centersData, error: centersError }
+      ] = await Promise.all([
+        supabase
+          .from('exams')
+          .select('id, title, description, course_id, exam_session_id, exam_center_id, professor_id, date, duration, type, total_points, passing_grade, status, room, created_at, updated_at')
+          .eq('professor_id', professorId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('courses')
+          .select('id, name, code')
+          .order('name'),
+        supabase
+          .from('exam_sessions')
+          .select('*')
+          .order('academic_year', { ascending: false })
+          .order('semester', { ascending: true }),
+        supabase
+          .from('exam_centers')
+          .select('*')
+          .order('name', { ascending: true })
+      ]);
+
       if (examsError) {
         throw examsError;
       }
-      
-      // Récupérer les sessions d'examen
-      const { data: sessionsData, error: sessionsError } = await supabase
-        .from('exam_sessions')
-        .select('*')
-        .order('academic_year', { ascending: false })
-        .order('semester', { ascending: true });
-      
+
+      if (coursesError) {
+        throw coursesError;
+      }
+
       if (sessionsError) {
         throw sessionsError;
       }
-      
-      setSessions(sessionsData || []);
-      
-      // Récupérer les centres d'examen
-      const { data: centersData, error: centersError } = await supabase
-        .from('exam_centers')
-        .select('*')
-        .order('name', { ascending: true });
-      
+
       if (centersError) {
         throw centersError;
       }
-      
+
+      setCourses(coursesData || []);
+      setSessions(sessionsData || []);
       setCenters(centersData || []);
-      
-      // Enrichir les examens avec les informations des cours
-      const enrichedExams = (examsData || []).map(exam => {
-        const course = coursesData?.find(c => c.id === exam.course_id);
-        return { ...exam, course };
-      });
-      
-      setExams(enrichedExams);
-      setFilteredExams(enrichedExams);
-      
+
+      const examsWithCounts = await Promise.all(
+        (examsData || []).map(async (exam) => {
+          const { count } = await supabase
+            .from('student_exams')
+            .select('*', { count: 'exact', head: true })
+            .eq('exam_id', exam.id);
+
+          return {
+            ...exam,
+            course: (coursesData || []).find((course) => course.id === exam.course_id) || null,
+            session: (sessionsData || []).find((session) => session.id === exam.exam_session_id) || null,
+            center: (centersData || []).find((center) => center.id === exam.exam_center_id) || null,
+            student_count: count || 0
+          };
+        })
+      );
+
+      setExams(examsWithCounts);
+      setFilteredExams(examsWithCounts);
     } catch (err) {
       console.error('Erreur lors du chargement des données:', err);
       setError(err.message || 'Une erreur est survenue lors du chargement des examens');
-      
-      // En cas d'erreur, utiliser des données fictives (à supprimer en production)
       setExams([]);
       setFilteredExams([]);
     } finally {
       setLoading(false);
     }
   };
-  
-  // Définir la référence de la fonction fetch
+
   useEffect(() => {
-    fetchDataRef.current = fetchData;
-  }, []);
-  
-  // Charger les données au chargement du composant
-  useEffect(() => {
-    if (fetchDataRef.current) {
-      fetchDataRef.current();
+    if (authState.professor?.id) {
+      fetchData();
     }
-  }, []);
+  }, [authState.professor?.id]);
   
   // Filtrer les examens selon les critères
   useEffect(() => {
@@ -298,7 +250,7 @@ const ExamsListPage = () => {
     }
     
     if (filterType !== 'all') {
-      filtered = filtered.filter(exam => exam.exam_type === filterType);
+      filtered = filtered.filter(exam => exam.type === filterType);
     }
     
     if (filterStatus !== 'all') {
@@ -306,7 +258,7 @@ const ExamsListPage = () => {
     }
     
     if (filterSession) {
-      filtered = filtered.filter(exam => exam.session_id === filterSession);
+      filtered = filtered.filter(exam => exam.exam_session_id === filterSession);
     }
     
     setFilteredExams(filtered);
@@ -396,7 +348,14 @@ const ExamsListPage = () => {
    * Gérer les étudiants d'un examen
    */
   const handleManageStudents = (id) => {
-    navigate(`/professor/exams/${id}/students`);
+    navigate(`/professor/exams/${id}/edit`);
+  };
+
+  /**
+   * Ouvrir le suivi temps reel d'un examen
+   */
+  const handleMonitorExam = (id) => {
+    navigate(`/professor/exams/${id}/monitor`);
   };
   
   /**
@@ -453,7 +412,7 @@ const ExamsListPage = () => {
     setLoading(true);
     try {
       // Créer une copie de l'examen sans l'ID
-      const { id, created_at, updated_at, ...examData } = exam;
+      const { id, created_at, updated_at, course, session, center, student_count, ...examData } = exam;
       
       // Modifier certaines données pour la copie
       const newExamData = {
@@ -505,10 +464,7 @@ const ExamsListPage = () => {
         }
       }
       
-      // Recharger les examens
-      if (fetchDataRef.current) {
-        fetchDataRef.current();
-      }
+      await fetchData();
       
       setSuccessMessage(`L'examen "${examData.title}" a été dupliqué avec succès.`);
     } catch (err) {
@@ -755,13 +711,13 @@ const ExamsListPage = () => {
                             </Box>
                           </TableCell>
                           <TableCell>
-                            {examTypes.find(t => t.value === exam.exam_type)?.label || exam.exam_type}
+                            {examTypes.find(t => t.value === exam.type)?.label || exam.type}
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <EventIcon fontSize="small" color="info" />
                               <Typography variant="body2">
-                                {formatDate(exam.exam_date)}
+                                {formatDate(exam.date)}
                               </Typography>
                             </Box>
                           </TableCell>
@@ -800,6 +756,18 @@ const ExamsListPage = () => {
                                   <AssignmentIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
+
+                              {exam.status !== 'draft' && (
+                                <Tooltip title="Suivi temps reel">
+                                  <IconButton
+                                    size="small"
+                                    color="warning"
+                                    onClick={() => handleMonitorExam(exam.id)}
+                                  >
+                                    <AnalyticsIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                               
                               <Tooltip title="Dupliquer">
                                 <IconButton
