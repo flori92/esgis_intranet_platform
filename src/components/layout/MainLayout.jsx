@@ -126,14 +126,17 @@ const MainLayout = () => {
         { text: 'Matières & Cours', icon: <BookIcon />, path: '/admin/courses' },
         { text: 'Assignation de Cours', icon: <AssignmentIcon />, path: '/admin/professor-courses' },
         { text: 'Rôles Professeurs', icon: <PersonIcon />, path: '/admin/professor-roles' },
+        { text: 'Paiements', icon: <GradingIcon />, path: '/admin/payments' },
         { text: 'Calendrier', icon: <CalendarMonthIcon />, path: '/admin/calendar' },
         { text: 'Documents', icon: <DescriptionIcon />, path: '/admin/document-generator' },
         { text: 'Génération bulletins', icon: <GradingIcon />, path: '/admin/bulk-bulletins' },
         { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/stages' },
+        { text: 'Partenaires', icon: <PeopleIcon />, path: '/admin/partners' },
+        { text: 'Annonces', icon: <ChatIcon />, path: '/admin/announcements' },
         { text: 'Statistiques', icon: <BarChartIcon />, path: '/admin/reports' },
         { text: 'Rôles & Permissions', icon: <PersonIcon />, path: '/admin/roles' },
         { text: 'Journal d\'audit', icon: <BarChartIcon />, path: '/admin/audit-log' },
-        { text: 'Initialisation', icon: <SettingsIcon />, path: '/admin/initialize-data' },
+        { text: 'Config système', icon: <SettingsIcon />, path: '/admin/system-config' },
         { text: 'Mon Profil', icon: <PersonIcon />, path: '/profile' },
       ];
     } else if (isProfessor) {
@@ -153,9 +156,10 @@ const MainLayout = () => {
       // Étudiant (par défaut)
       return [
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/student' },
+        { text: 'Mes Cours', icon: <BookIcon />, path: '/student/courses' },
         { text: 'Mes examens', icon: <AssignmentIcon />, path: '/student/exams' },
+        { text: 'Quiz entraînement', icon: <SchoolIcon />, path: '/student/practice' },
         { text: 'Emploi du temps', icon: <CalendarMonthIcon />, path: '/student/schedule' },
-        { text: 'Groupes', icon: <SchoolIcon />, path: '/student/groups' },
         { text: 'Notes', icon: <GradingIcon />, path: '/student/grades' },
         { text: 'Certificat de scolarité', icon: <DescriptionIcon />, path: '/student/certificate' },
         { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/student/internships' },

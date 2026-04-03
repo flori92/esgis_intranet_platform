@@ -23,6 +23,10 @@ import AuditLogPage from '../pages/admin/superadmin/AuditLogPage';
 // Nouveaux modules
 import CalendarManagerPage from '../pages/admin/CalendarManagerPage';
 import BulkBulletinPage from '../pages/admin/BulkBulletinPage';
+import PaymentsPage from '../pages/admin/PaymentsPage';
+import PartnersPage from '../pages/admin/PartnersPage';
+import AnnouncementsPage from '../pages/admin/AnnouncementsPage';
+import SystemConfigPage from '../pages/admin/superadmin/SystemConfigPage';
 
 const AdminRoutes = () => {
   const { authState } = useAuth();
@@ -55,9 +59,15 @@ const AdminRoutes = () => {
       <Route path="calendar" element={<CalendarManagerPage />} />
       <Route path="bulk-bulletins" element={<BulkBulletinPage />} />
 
+      {/* Paiements, Partenaires, Annonces */}
+      <Route path="payments" element={<PaymentsPage />} />
+      <Route path="partners" element={<PartnersPage />} />
+      <Route path="announcements" element={<AnnouncementsPage />} />
+
       {/* Super Admin Routes */}
       <Route path="roles" element={<RolesPermissionsPage />} />
       <Route path="audit-log" element={<AuditLogPage />} />
+      <Route path="system-config" element={<SystemConfigPage />} />
 
       {/* Default Route */}
       <Route path="*" element={<AdminDashboardPage />} />

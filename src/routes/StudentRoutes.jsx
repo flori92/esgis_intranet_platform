@@ -11,6 +11,9 @@ import StudentDocumentsPage from '../pages/student/DocumentsPage';
 import StudentMessagesPage from '../pages/student/MessagesPage';
 import StudentInternshipsPage from '../pages/student/InternshipsPage';
 import StudentGroupsPage from '../pages/student/GroupsPage';
+import StudentCertificatePage from '../pages/student/CertificatePage';
+import StudentCoursesPage from '../pages/student/CoursesPage';
+import PracticeQuizPage from '../pages/exams/student/PracticeQuizPage';
 
 /**
  * Routes pour les étudiants
@@ -67,6 +70,15 @@ const StudentRoutes = () => {
       
       {/* Routes pour les groupes */}
       <Route path="groups" element={<StudentGroupsPage />} />
+      
+      {/* Route pour le certificat de scolarité */}
+      <Route path="certificate" element={<StudentCertificatePage />} />
+      
+      {/* Espace Cours & Ressources */}
+      <Route path="courses" element={<StudentCoursesPage />} />
+      
+      {/* Quiz d'entraînement */}
+      <Route path="practice" element={<PracticeQuizPage />} />
     </Routes>
   );
 };
