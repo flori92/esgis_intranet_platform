@@ -23,6 +23,9 @@ const StudentImportPage = lazy(() => import('../pages/admin/StudentImportPage'))
 const ProfessorsListPage = lazy(() => import('../pages/admin/ProfessorsListPage'));
 const DepartmentsListPage = lazy(() => import('../pages/admin/DepartmentsListPage'));
 const AuditLogNewPage = lazy(() => import('../pages/admin/AuditLogPage'));
+const AccountStatusPage = lazy(() => import('../pages/admin/AccountStatusPage'));
+const LevelsAndSemestersPage = lazy(() => import('../pages/admin/LevelsAndSemestersPage'));
+const SubjectsPage = lazy(() => import('../pages/admin/SubjectsPage'));
 
 // Super Admin Pages
 const RolesPermissionsPage = lazy(() => import('../pages/admin/superadmin/RolesPermissionsPage'));
@@ -69,6 +72,9 @@ const AdminRoutes = () => {
         <Route path="professors" element={<ProfessorsListPage />} />
         <Route path="departments-list" element={<DepartmentsListPage />} />
         <Route path="audit-log-new" element={<AuditLogNewPage />} />
+        <Route path="account-status" element={<AccountStatusPage />} />
+        <Route path="levels-semesters" element={<LevelsAndSemestersPage />} />
+        <Route path="subjects" element={<SubjectsPage />} />
 
         {/* Calendrier & Bulletins */}
         <Route path="calendar" element={<CalendarManagerPage />} />
