@@ -162,12 +162,15 @@ const StudentImportPage = () => {
                 });
 
               if (profileError) throw profileError;
+              // @ts-ignore - Null check is done, profile is not null after this line
+              const profileId = profile?.[0]?.id;
+              if (!profileId) throw new Error('Profile creation failed');
 
               // Créer l'étudiant
               const { data: newStudent, error: studentError } = await supabase
                 .from('students')
                 .insert({
-                  profile_id: profile[0].id,
+                  profile_id: profileId,
                   student_id: student.student_id,
                   level: parseInt(student.level) || 1,
                   department_id: parseInt(student.department_id) || null,

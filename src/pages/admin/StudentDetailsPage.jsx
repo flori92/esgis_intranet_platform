@@ -424,9 +424,9 @@ const StudentDetailsPage = () => {
           <FormControl fullWidth>
             <InputLabel>Niveau</InputLabel>
             <Select
-              value={editData.level || 1}
+              value={String(editData.level || 1)}
               label="Niveau"
-              onChange={e => setEditData({ ...editData, level: e.target.value })}
+              onChange={e => setEditData({ ...editData, level: Number(e.target.value) })}
             >
               <MenuItem value={1}>L1</MenuItem>
               <MenuItem value={2}>L2</MenuItem>

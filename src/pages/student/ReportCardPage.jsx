@@ -82,7 +82,7 @@ const ReportCardPage = () => {
 
       // Récupérer les cours du semestre actuel (semestre 1-6)
       // Par défaut, semestre actuel = semestre de son level
-      const currentSemester = (studentData?.level || 1) * 2 - 1; // L2 = semester 3-4
+      const currentSemester = Math.floor((studentData?.level || 1) * 2 - 1); // L2 = semester 3-4
 
       const { data: coursesData } = await supabase
         .from('courses')
@@ -119,10 +119,10 @@ const ReportCardPage = () => {
 
       // Calculer stats
       const validatedCount = mappedCourses.filter(c => c.grade?.score >= 10).length;
-      const averageScore =
+      const averageScore: number =
         mappedCourses.reduce((acc, c) => acc + (c.grade?.score || 0), 0) /
         (mappedCourses.length || 1);
-      const totalAbsences = mappedCourses.reduce(
+      const totalAbsences: number = mappedCourses.reduce(
         (acc, c) => acc + (c.grade?.attendance?.absences || 0),
         0,
       );
@@ -197,6 +197,7 @@ const ReportCardPage = () => {
         c.grade?.score >= 10 ? 'Validé' : 'Échoué',
       ]);
 
+      // @ts-ignore
       doc.autoTable({
         head: [['Code', 'Matière', 'Note', 'Crédits', 'Participation', 'Assiduité', 'Statut']],
         body: tableData,
@@ -207,6 +208,7 @@ const ReportCardPage = () => {
         bodyStyles: { fontSize: 9 },
       });
 
+      // @ts-ignore
       yPosition = doc.lastAutoTable.finalY + 10;
 
       // Résumé

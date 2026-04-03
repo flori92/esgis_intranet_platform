@@ -169,6 +169,7 @@ const TranscriptPage = () => {
         g.score >= 10 ? 'Validé' : 'Échoué',
       ]);
 
+      // @ts-ignore
       doc.autoTable({
         head: [['Code', 'Matière', 'Note/20', 'Crédits', 'Statut']],
         body: tableData,
@@ -178,6 +179,7 @@ const TranscriptPage = () => {
         headStyles: { fillColor: [41, 128, 185], textColor: 255 },
       });
 
+      // @ts-ignore
       yPosition = doc.lastAutoTable.finalY + 10;
 
       // Résumé statistiques
