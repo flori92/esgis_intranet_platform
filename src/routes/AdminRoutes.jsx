@@ -20,6 +20,10 @@ import StudentDetailsPage from '../pages/admin/students/StudentDetailsPage';
 import RolesPermissionsPage from '../pages/admin/superadmin/RolesPermissionsPage';
 import AuditLogPage from '../pages/admin/superadmin/AuditLogPage';
 
+// Nouveaux modules
+import CalendarManagerPage from '../pages/admin/CalendarManagerPage';
+import BulkBulletinPage from '../pages/admin/BulkBulletinPage';
+
 const AdminRoutes = () => {
   const { authState } = useAuth();
 
@@ -46,6 +50,10 @@ const AdminRoutes = () => {
         <Route path=":id" element={<StudentDetailsPage />} />
         <Route path=":id/edit" element={<StudentFormPage />} />
       </Route>
+
+      {/* Calendrier & Bulletins */}
+      <Route path="calendar" element={<CalendarManagerPage />} />
+      <Route path="bulk-bulletins" element={<BulkBulletinPage />} />
 
       {/* Super Admin Routes */}
       <Route path="roles" element={<RolesPermissionsPage />} />

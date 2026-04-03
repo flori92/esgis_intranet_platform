@@ -15,6 +15,7 @@ import MessagesPage from './pages/messages/MessagesPage';
 import NotificationsPage from './pages/notifications/NotificationsPage';
 import StagesPage from './pages/stages/StagesPage';
 import ProfileSettingsPage from './pages/shared/ProfileSettingsPage';
+import ForumPage from './pages/shared/ForumPage';
 import VerifyDocumentPage from './pages/public/VerifyDocumentPage';
 
 /**
@@ -184,6 +185,15 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ProfileSettingsPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/forums" 
+              element={
+                <ProtectedRoute>
+                  <ForumPage />
                 </ProtectedRoute>
               } 
             />

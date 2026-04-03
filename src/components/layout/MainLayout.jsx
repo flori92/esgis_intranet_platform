@@ -121,15 +121,16 @@ const MainLayout = () => {
     if (isAdmin) {
       return [
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/admin' },
+        { text: 'Gestion Étudiants', icon: <PeopleIcon />, path: '/admin/students' },
         { text: 'Départements & Filières', icon: <SchoolIcon />, path: '/admin/departments' },
-        { text: 'Rôles Professeurs', icon: <PersonIcon />, path: '/admin/professor-roles' },
         { text: 'Matières & Cours', icon: <BookIcon />, path: '/admin/courses' },
         { text: 'Assignation de Cours', icon: <AssignmentIcon />, path: '/admin/professor-courses' },
-        { text: 'Gestion Étudiants', icon: <PeopleIcon />, path: '/admin/students' },
-        { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/stages' },
+        { text: 'Rôles Professeurs', icon: <PersonIcon />, path: '/admin/professor-roles' },
+        { text: 'Calendrier', icon: <CalendarMonthIcon />, path: '/admin/calendar' },
         { text: 'Documents', icon: <DescriptionIcon />, path: '/admin/document-generator' },
+        { text: 'Génération bulletins', icon: <GradingIcon />, path: '/admin/bulk-bulletins' },
+        { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/stages' },
         { text: 'Statistiques', icon: <BarChartIcon />, path: '/admin/reports' },
-        { text: 'Emplois du temps', icon: <EventIcon />, path: '/schedule' },
         { text: 'Rôles & Permissions', icon: <PersonIcon />, path: '/admin/roles' },
         { text: 'Journal d\'audit', icon: <BarChartIcon />, path: '/admin/audit-log' },
         { text: 'Initialisation', icon: <SettingsIcon />, path: '/admin/initialize-data' },
@@ -142,8 +143,10 @@ const MainLayout = () => {
         { text: 'Gestion des Notes', icon: <GradingIcon />, path: '/professor/grades' },
         { text: 'Corrections de Notes', icon: <BarChartIcon />, path: '/professor/grades/corrections' },
         { text: 'Examens', icon: <AssignmentIcon />, path: '/professor/exams' },
+        { text: 'Banque de questions', icon: <BookIcon />, path: '/professor/question-bank' },
         { text: 'Documents', icon: <DescriptionIcon />, path: '/professor/documents' },
         { text: 'Messages', icon: <ChatIcon />, path: '/messages' },
+        { text: 'Forums', icon: <ChatIcon />, path: '/forums' },
         { text: 'Mon Profil', icon: <PersonIcon />, path: '/profile' },
       ];
     } else {
@@ -158,6 +161,7 @@ const MainLayout = () => {
         { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/student/internships' },
         { text: 'Documents', icon: <FolderIcon />, path: '/student/documents' },
         { text: 'Messages', icon: <ChatIcon />, path: '/student/messages' },
+        { text: 'Forums', icon: <ChatIcon />, path: '/forums' },
         { text: 'Mon Profil', icon: <PersonIcon />, path: '/profile' },
       ];
     }

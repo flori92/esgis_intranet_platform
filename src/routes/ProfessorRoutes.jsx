@@ -10,6 +10,7 @@ import ExamFormPage from '../pages/professor/exams/ExamFormPage';
 import ExamGradingPage from '../pages/professor/exams/ExamGradingPage';
 import GradesManagementPage from '../pages/professor/grades/GradesManagementPage';
 import GradeCorrectionPage from '../pages/professor/grades/GradeCorrectionPage';
+import QuestionBankPage from '../pages/professor/questions/QuestionBankPage';
 
 /**
  * Routes pour les professeurs
@@ -40,6 +41,8 @@ const ProfessorRoutes = () => {
         <Route index element={<GradesManagementPage />} />
         <Route path="corrections" element={<GradeCorrectionPage />} />
       </Route>
+      {/* Banque de questions */}
+      <Route path="question-bank" element={<QuestionBankPage />} />
     </Routes>
   );
 };
