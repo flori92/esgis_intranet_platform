@@ -21,6 +21,7 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
+import { getAnnouncements as fetchAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement as removeAnnouncement } from '@/api/announcements';
 
 const MOCK_ANNOUNCEMENTS = [
   { id: 'a1', title: 'Rentrée académique 2026-2027', content: 'La rentrée académique pour l\'année 2026-2027 est fixée au lundi 15 septembre 2026. Les inscriptions sont ouvertes à partir du 1er août.', target: ['all'], priority: 'high', status: 'published', author: 'Administration', created_at: '2026-04-01T10:00:00Z', views: 342, send_push: true, send_email: true },
@@ -61,8 +62,22 @@ const AnnouncementsPage = () => {
   const [deleteDialog, setDeleteDialog] = useState(null);
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => { setAnnouncements(MOCK_ANNOUNCEMENTS); setLoading(false); }, 300);
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await fetchAnnouncements();
+        if (!error && data && data.length > 0) {
+          setAnnouncements(data.map(a => ({
+            ...a, author: a.author?.full_name || a.author || 'Administration',
+            views: a.views_count || 0,
+          })));
+        } else {
+          setAnnouncements(MOCK_ANNOUNCEMENTS);
+        }
+      } catch { setAnnouncements(MOCK_ANNOUNCEMENTS); }
+      finally { setLoading(false); }
+    };
+    loadData();
   }, []);
 
   const formatDate = (d) => { try { return format(new Date(d), "dd MMM yyyy 'à' HH:mm", { locale: fr }); } catch { return d || '-'; } };

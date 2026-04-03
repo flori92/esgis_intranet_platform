@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
+import { getStudentsForBulletins, saveBulletin } from '@/api/admin';
 
 const MOCK_FILIERES = [
   { id: 'f1', code: 'INFO', name: 'Informatique' },
@@ -73,22 +74,13 @@ const BulkBulletinPage = () => {
     if (!selectedNiveau) { setError('Sélectionnez un niveau.'); return; }
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('inscriptions')
-        .select('etudiant:etudiant_id(id, first_name, last_name)')
-        .eq('niveau_id', selectedNiveau)
-        .eq('statut', 'en cours');
-
-      if (error || !data || data.length === 0) {
+      const { data, error } = await getStudentsForBulletins(selectedNiveau, selectedSemestre, anneeAcademique);
+      if (!error && data && data.length > 0) {
+        setStudents(data);
+        setSelectedStudents(data.map(s => s.id));
+      } else {
         setStudents(MOCK_STUDENTS_PREVIEW);
         setSelectedStudents(MOCK_STUDENTS_PREVIEW.map(s => s.id));
-      } else {
-        const formatted = data.map((d, idx) => ({
-          id: d.etudiant?.id, name: `${d.etudiant?.last_name} ${d.etudiant?.first_name}`,
-          moyenne: 0, credits: 0, rang: idx + 1, statut: '-', mention: '-'
-        }));
-        setStudents(formatted);
-        setSelectedStudents(formatted.map(s => s.id));
       }
     } catch {
       setStudents(MOCK_STUDENTS_PREVIEW);

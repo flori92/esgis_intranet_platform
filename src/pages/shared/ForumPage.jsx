@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
+import { getForums, getForumPosts, createForumPost, createForumReply, toggleLike, togglePin, deleteForumPost } from '@/api/forums';
 
 const MOCK_FORUMS = [
   { id: 'f1', matiere: 'Développement Web Frontend', code: 'INFO-345', niveau: 'L3', professeur: 'Prof. MENSAH', posts_count: 24, last_activity: '2026-04-03T09:15:00Z', unread: 3 },
@@ -56,9 +57,33 @@ const ForumPage = () => {
   const [posting, setPosting] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => { setForums(MOCK_FORUMS); setLoading(false); }, 300);
-  }, []);
+    const loadForumsData = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await getForums(authState.user?.id, isProfessor ? 'professor' : 'student');
+        if (!error && data && data.length > 0) {
+          const formatted = data.map(f => ({
+            id: f.id,
+            matiere: f.cours?.name || '-',
+            code: f.cours?.code || '-',
+            niveau: f.cours?.niveau?.code || '-',
+            professeur: f.cours?.professeur?.full_name || '-',
+            posts_count: f.posts_count || 0,
+            last_activity: f.last_activity,
+            unread: 0,
+          }));
+          setForums(formatted);
+        } else {
+          setForums(MOCK_FORUMS);
+        }
+      } catch {
+        setForums(MOCK_FORUMS);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadForumsData();
+  }, [authState.user?.id, isProfessor]);
 
   const handleSelectForum = (forum) => {
     setSelectedForum(forum);

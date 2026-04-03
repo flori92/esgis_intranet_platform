@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
+import { getAllPaymentStatuses, recordPayment } from '@/api/payments';
 
 const MOCK_PAYMENTS = [
   { id: 'p1', student_name: 'AGBEKO Kofi', filiere: 'L3 Informatique', montant_du: 850000, montant_paye: 850000, solde: 0, statut: 'payé', derniere_date: '2026-03-15', methode: 'Virement', reference: 'PAY-2026-001' },
@@ -56,8 +57,22 @@ const PaymentsPage = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => { setPayments(MOCK_PAYMENTS); setLoading(false); }, 300);
+    const loadPayments = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await getAllPaymentStatuses();
+        if (!error && data && data.length > 0) {
+          setPayments(data);
+        } else {
+          setPayments(MOCK_PAYMENTS);
+        }
+      } catch {
+        setPayments(MOCK_PAYMENTS);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadPayments();
   }, []);
 
   // Filtrage

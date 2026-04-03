@@ -30,6 +30,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
+import { getStudentCourses, getCourseChaptersAndResources, recordResourceInteraction, getUserFavorites } from '@/api/courses';
 
 const MOCK_COURSES = [
   {
@@ -111,20 +112,68 @@ const StudentCoursesPage = () => {
   const [reactions, setReactions] = useState({});
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => { setCourses(MOCK_COURSES); setLoading(false); }, 300);
-  }, []);
+    const loadCourses = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await getStudentCourses(authState.user?.id);
+        if (!error && data && data.length > 0) {
+          // Transformer les données Supabase au format attendu
+          const formatted = await Promise.all(data.map(async (c) => {
+            const { data: chaptersData } = await getCourseChaptersAndResources(c.id);
+            const allResources = (chaptersData || []).flatMap(ch => ch.resources || []);
+            return {
+              id: c.id, code: c.code, name: c.name, credits: c.credits,
+              professor: c.professeur?.full_name || '-',
+              semester: c.niveau?.code?.startsWith('L') ? 'S1' : 'S2',
+              resources_count: allResources.length,
+              new_count: allResources.filter(r => {
+                const d = new Date(r.created_at);
+                return (Date.now() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
+              }).length,
+              chapters: (chaptersData || []).map(ch => ({
+                id: ch.id, name: ch.name,
+                resources: (ch.resources || []).map(r => ({
+                  id: r.id, title: r.title, type: r.file_type || 'pdf',
+                  size: r.file_size || 0, date: r.created_at,
+                  downloads: r.downloads_count || 0, status: 'read',
+                  professor: r.uploaded_by?.full_name || '-',
+                  file_url: r.file_url,
+                }))
+              }))
+            };
+          }));
+          setCourses(formatted);
+        } else {
+          setCourses(MOCK_COURSES);
+        }
+        // Charger les favoris
+        const { data: favs } = await getUserFavorites(authState.user?.id);
+        if (favs) setFavorites(new Set(favs));
+      } catch (err) {
+        console.error('Erreur chargement cours:', err);
+        setCourses(MOCK_COURSES);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadCourses();
+  }, [authState.user?.id]);
 
-  const toggleFavorite = (resourceId) => {
+  const toggleFavorite = async (resourceId) => {
     setFavorites(prev => {
       const next = new Set(prev);
       if (next.has(resourceId)) next.delete(resourceId); else next.add(resourceId);
       return next;
     });
+    // Persister en base
+    await recordResourceInteraction(resourceId, authState.user?.id, 'favorite').catch(() => {});
   };
 
-  const setReaction = (resourceId, reaction) => {
+  const setReaction = async (resourceId, reaction) => {
     setReactions(prev => ({ ...prev, [resourceId]: reaction }));
+    if (reaction) {
+      await recordResourceInteraction(resourceId, authState.user?.id, 'reaction', reaction).catch(() => {});
+    }
   };
 
   const formatDate = (d) => {

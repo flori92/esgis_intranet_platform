@@ -18,6 +18,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
+import { getSystemConfig, saveAllConfig } from '@/api/admin';
 
 const MOCK_CONFIG = {
   institution: {
@@ -90,8 +91,28 @@ const SystemConfigPage = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => setLoading(false), 300);
+    const loadConfig = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await getSystemConfig();
+        if (!error && data && Object.keys(data).length > 0) {
+          setConfig(prev => ({
+            institution: data.institution || prev.institution,
+            appearance: data.appearance || prev.appearance,
+            smtp: data.smtp || prev.smtp,
+            sms: data.sms || prev.sms,
+            security: data.security || prev.security,
+            storage: data.storage || prev.storage,
+            monitoring: data.monitoring || prev.monitoring,
+          }));
+        }
+      } catch (err) {
+        console.error('Erreur chargement config:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadConfig();
   }, []);
 
   const updateConfig = (section, field, value) => {
@@ -101,12 +122,17 @@ const SystemConfigPage = () => {
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      const { error } = await saveAllConfig(config, authState.user?.id);
+      if (error) throw error;
       setSuccessMessage('Configuration sauvegardée.');
-    }, 500);
+    } catch (err) {
+      setError('Erreur lors de la sauvegarde: ' + (err.message || ''));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const formatDate = (d) => {

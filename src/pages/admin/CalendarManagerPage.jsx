@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
+import { getScheduleEvents, createScheduleEvent, updateScheduleEvent, deleteScheduleEvent } from '@/api/calendar';
 
 const EVENT_TYPES = [
   { value: 'cours', label: 'Cours magistral', color: '#2196F3' },
@@ -68,9 +69,24 @@ const CalendarManagerPage = () => {
   const loadEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('emplois_du_temps').select('*').order('jour_semaine');
-      if (error || !data || data.length === 0) setEvents(MOCK_EVENTS);
-      else setEvents(data);
+      const { data, error } = await getScheduleEvents();
+      if (!error && data && data.length > 0) {
+        const formatted = data.map(e => ({
+          id: e.id,
+          title: e.cours?.name || '',
+          type: 'cours',
+          jour: e.jour_semaine,
+          heure_debut: e.heure_debut,
+          heure_fin: e.heure_fin,
+          salle: e.salle || '',
+          professeur: e.professeur?.full_name || '',
+          groupe: e.groupe?.name || '',
+          filiere: '',
+        }));
+        setEvents(formatted);
+      } else {
+        setEvents(MOCK_EVENTS);
+      }
     } catch { setEvents(MOCK_EVENTS); }
     finally { setLoading(false); }
   }, []);

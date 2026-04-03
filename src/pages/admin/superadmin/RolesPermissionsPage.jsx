@@ -23,6 +23,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
+import { getRoles, createRole as apiCreateRole, updateRole as apiUpdateRole, deleteRole as apiDeleteRole } from '@/api/admin';
 
 /**
  * Ressources et actions disponibles dans le système
@@ -137,18 +138,13 @@ const RolesPermissionsPage = () => {
   const loadRoles = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('roles_permissions')
-        .select('*')
-        .order('created_at');
-
-      if (error || !data || data.length === 0) {
-        setRoles(MOCK_ROLES);
-      } else {
+      const { data, error } = await getRoles();
+      if (!error && data && data.length > 0) {
         setRoles(data);
+      } else {
+        setRoles(MOCK_ROLES);
       }
-    } catch (err) {
-      console.error('Erreur chargement rôles:', err);
+    } catch {
       setRoles(MOCK_ROLES);
     } finally {
       setLoading(false);

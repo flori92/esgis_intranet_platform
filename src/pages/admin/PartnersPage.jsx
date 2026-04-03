@@ -22,6 +22,7 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
+import { getPartners as fetchPartners, createPartner, updatePartner, deletePartner as removePartner } from '@/api/partners';
 
 const MOCK_PARTNERS = [
   { id: 'e1', name: 'TechCorp Togo', sector: 'Informatique / IT', location: 'Lomé', contact_name: 'M. ASSOGBA Jean', contact_email: 'j.assogba@techcorp.tg', contact_phone: '+228 90 12 34 56', website: 'www.techcorp.tg', description: 'ESN spécialisée en développement web et mobile', stages_count: 12, last_collaboration: '2026-03-15', status: 'actif' },
@@ -54,8 +55,16 @@ const PartnersPage = () => {
   const [deleteDialog, setDeleteDialog] = useState(null);
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => { setPartners(MOCK_PARTNERS); setLoading(false); }, 300);
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await fetchPartners();
+        if (!error && data && data.length > 0) setPartners(data);
+        else setPartners(MOCK_PARTNERS);
+      } catch { setPartners(MOCK_PARTNERS); }
+      finally { setLoading(false); }
+    };
+    loadData();
   }, []);
 
   const filtered = partners.filter(p => {

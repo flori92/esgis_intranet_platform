@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
+import { getAuditLogs } from '@/api/admin';
 
 /**
  * Données mock pour l'audit log
@@ -82,16 +83,11 @@ const AuditLogPage = () => {
   const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('audit_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
-
-      if (error || !data || data.length === 0) {
-        setLogs(MOCK_AUDIT_LOGS);
-      } else {
+      const { data, error } = await getAuditLogs({}, 1, 500);
+      if (!error && data && data.length > 0) {
         setLogs(data);
+      } else {
+        setLogs(MOCK_AUDIT_LOGS);
       }
     } catch {
       setLogs(MOCK_AUDIT_LOGS);

@@ -23,6 +23,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/supabase';
+import { getProfessorQuestions, getSharedQuestions, createQuestion, updateQuestion, deleteQuestion, duplicateQuestion } from '@/api/questionBank';
 
 const QUESTION_TYPES = [
   { value: 'qcm_single', label: 'QCM unique' },
@@ -88,23 +89,24 @@ const QuestionBankPage = () => {
   const loadQuestions = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('question_bank')
-        .select('*')
-        .eq('professeur_id', authState.user?.id)
-        .order('created_at', { ascending: false });
-
-      if (error || !data || data.length === 0) {
-        setQuestions(MOCK_QUESTIONS);
+      const apiCall = tabValue === 0
+        ? getProfessorQuestions(authState.user?.id)
+        : getSharedQuestions();
+      const { data, error } = await apiCall;
+      if (!error && data && data.length > 0) {
+        setQuestions(data.map(q => ({
+          ...q,
+          text: q.question_text || q.text,
+        })));
       } else {
-        setQuestions(data);
+        setQuestions(MOCK_QUESTIONS);
       }
     } catch {
       setQuestions(MOCK_QUESTIONS);
     } finally {
       setLoading(false);
     }
-  }, [authState.user?.id]);
+  }, [authState.user?.id, tabValue]);
 
   useEffect(() => { loadQuestions(); }, [loadQuestions]);
 

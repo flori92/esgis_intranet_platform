@@ -15,6 +15,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import QuestionRenderer from '../components/QuestionRenderer';
+import { getPracticeQuizzes, getPracticeQuizQuestions, savePracticeQuizAttempt } from '@/api/admin';
 
 const MOCK_QUIZZES = [
   { id: 'quiz1', title: 'Quiz — HTML/CSS Bases', matiere: 'Développement Web', professor: 'Prof. MENSAH', questions_count: 10, attempts: 2, best_score: 80, duration: 15, difficulty: 'Facile' },
@@ -48,9 +49,33 @@ const PracticeQuizPage = () => {
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => { setQuizzes(MOCK_QUIZZES); setLoading(false); }, 300);
-  }, []);
+    const loadQuizzes = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await getPracticeQuizzes(authState.user?.id);
+        if (!error && data && data.length > 0) {
+          setQuizzes(data.map(q => ({
+            id: q.id,
+            title: q.title,
+            matiere: q.cours?.name || '-',
+            professor: q.professeur?.full_name || '-',
+            questions_count: q.questions_count || 0,
+            attempts: q.attempts || 0,
+            best_score: q.best_score,
+            duration: q.duration_minutes || 30,
+            difficulty: q.difficulty === 'easy' ? 'Facile' : q.difficulty === 'hard' ? 'Difficile' : 'Moyen',
+          })));
+        } else {
+          setQuizzes(MOCK_QUIZZES);
+        }
+      } catch {
+        setQuizzes(MOCK_QUIZZES);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadQuizzes();
+  }, [authState.user?.id]);
 
   const startQuiz = (quiz) => {
     setSelectedQuiz(quiz);
