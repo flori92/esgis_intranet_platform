@@ -55,7 +55,11 @@ const StudentDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [editData, setEditData] = useState({});
+  const [editData, setEditData] = useState({
+    level: 1,
+    status: 'actif',
+    department_id: null,
+  });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {

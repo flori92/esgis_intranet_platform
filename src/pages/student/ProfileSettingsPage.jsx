@@ -43,8 +43,21 @@ const ProfileSettingsPage = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  const [formData, setFormData] = useState({});
-  const [preferences, setPreferences] = useState({});
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    phone_verified: false,
+    avatar_url: '',
+  });
+  const [preferences, setPreferences] = useState({
+    emailNotifications: true,
+    smsNotifications: false,
+    weeklyDigest: true,
+    marketingEmails: false,
+    forumNotifications: true,
+    examReminders: true,
+  });
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',

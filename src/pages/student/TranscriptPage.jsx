@@ -36,8 +36,8 @@ const TranscriptPage = () => {
   const [stats, setStats] = useState({
     totalCredits: 0,
     earnedCredits: 0,
-    gpa: 0.0,
-    averageGrade: 0.0,
+    gpa: '0.00',
+    averageGrade: '0.00',
   });
 
   // Charger les données
@@ -101,8 +101,8 @@ const TranscriptPage = () => {
       setStats({
         totalCredits: 0,
         earnedCredits: 0,
-        gpa: 0.0,
-        averageGrade: 0.0,
+        gpa: '0.00',
+        averageGrade: '0.00',
       });
       return;
     }
