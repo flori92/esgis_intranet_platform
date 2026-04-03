@@ -42,7 +42,7 @@ import {
   Book as BookIcon,
   BarChart as BarChartIcon,
 } from '@mui/icons-material';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../context/AuthContext';
 // Suppression de l'import de AuthContextType
 
 // Largeur du drawer
@@ -130,30 +130,35 @@ const MainLayout = () => {
         { text: 'Documents', icon: <DescriptionIcon />, path: '/admin/document-generator' },
         { text: 'Statistiques', icon: <BarChartIcon />, path: '/admin/reports' },
         { text: 'Emplois du temps', icon: <EventIcon />, path: '/schedule' },
-        { text: 'Paramètres', icon: <SettingsIcon />, path: '/settings' },
+        { text: 'Rôles & Permissions', icon: <PersonIcon />, path: '/admin/roles' },
+        { text: 'Journal d\'audit', icon: <BarChartIcon />, path: '/admin/audit-log' },
+        { text: 'Initialisation', icon: <SettingsIcon />, path: '/admin/initialize-data' },
+        { text: 'Mon Profil', icon: <PersonIcon />, path: '/profile' },
       ];
     } else if (isProfessor) {
       return [
-        { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/professor/dashboard' },
-        { text: 'Emploi du temps', icon: <EventIcon />, path: '/professor/schedule' },
-        { text: 'Mes cours', icon: <SchoolIcon />, path: '/professor/courses' },
-        { text: 'Notes', icon: <AssignmentIcon />, path: '/professor/grades' },
+        { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/professor' },
+        { text: 'Emploi du temps', icon: <EventIcon />, path: '/schedule' },
+        { text: 'Gestion des Notes', icon: <GradingIcon />, path: '/professor/grades' },
+        { text: 'Corrections de Notes', icon: <BarChartIcon />, path: '/professor/grades/corrections' },
         { text: 'Examens', icon: <AssignmentIcon />, path: '/professor/exams' },
         { text: 'Documents', icon: <DescriptionIcon />, path: '/professor/documents' },
-        { text: 'Messages', icon: <ChatIcon />, path: '/professor/messages' },
+        { text: 'Messages', icon: <ChatIcon />, path: '/messages' },
+        { text: 'Mon Profil', icon: <PersonIcon />, path: '/profile' },
       ];
     } else {
       // Étudiant (par défaut)
       return [
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/student' },
         { text: 'Mes examens', icon: <AssignmentIcon />, path: '/student/exams' },
-        { text: 'Emploi du temps', icon: <CalendarMonthIcon />, path: '/schedule' },
-        { text: 'Cours', icon: <SchoolIcon />, path: '/courses' },
-        { text: 'Notes', icon: <GradingIcon />, path: '/grades' },
+        { text: 'Emploi du temps', icon: <CalendarMonthIcon />, path: '/student/schedule' },
+        { text: 'Groupes', icon: <SchoolIcon />, path: '/student/groups' },
+        { text: 'Notes', icon: <GradingIcon />, path: '/student/grades' },
         { text: 'Certificat de scolarité', icon: <DescriptionIcon />, path: '/student/certificate' },
-        { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/stages' },
-        { text: 'Documents', icon: <FolderIcon />, path: '/documents' },
-        { text: 'Messages', icon: <ChatIcon />, path: '/messages' },
+        { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/student/internships' },
+        { text: 'Documents', icon: <FolderIcon />, path: '/student/documents' },
+        { text: 'Messages', icon: <ChatIcon />, path: '/student/messages' },
+        { text: 'Mon Profil', icon: <PersonIcon />, path: '/profile' },
       ];
     }
   };
@@ -357,19 +362,6 @@ const MainLayout = () => {
                 horizontal: 'right',
               }}
             >
-              <MenuItem component={RouterLink} to="/profile" onClick={handleCloseUserMenu}>
-                <ListItemIcon>
-                  <PersonIcon fontSize="small" sx={{ color: '#003366' }} />
-                </ListItemIcon>
-                <Typography textAlign="center" fontFamily="Montserrat">Mon profil</Typography>
-              </MenuItem>
-              <MenuItem component={RouterLink} to="/settings" onClick={handleCloseUserMenu}>
-                <ListItemIcon>
-                  <SettingsIcon fontSize="small" sx={{ color: '#003366' }} />
-                </ListItemIcon>
-                <Typography textAlign="center" fontFamily="Montserrat">Paramètres</Typography>
-              </MenuItem>
-              <Divider />
               <MenuItem onClick={handleLogout}>
                 <ListItemIcon>
                   <LogoutIcon fontSize="small" sx={{ color: '#CC0000' }} />

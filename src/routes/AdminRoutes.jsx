@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
 
 // Pages
 import AdminDashboardPage from '../pages/admin/DashboardPage';
@@ -15,6 +15,10 @@ import InitializeDataPage from '../pages/admin/InitializeDataPage';
 import StudentsListPage from '../pages/admin/students/StudentsListPage';
 import StudentFormPage from '../pages/admin/students/StudentFormPage';
 import StudentDetailsPage from '../pages/admin/students/StudentDetailsPage';
+
+// Super Admin Pages
+import RolesPermissionsPage from '../pages/admin/superadmin/RolesPermissionsPage';
+import AuditLogPage from '../pages/admin/superadmin/AuditLogPage';
 
 const AdminRoutes = () => {
   const { authState } = useAuth();
@@ -38,9 +42,14 @@ const AdminRoutes = () => {
       <Route path="students">
         <Route index element={<StudentsListPage />} />
         <Route path="create" element={<StudentFormPage />} />
+        <Route path="new" element={<StudentFormPage />} />
         <Route path=":id" element={<StudentDetailsPage />} />
         <Route path=":id/edit" element={<StudentFormPage />} />
       </Route>
+
+      {/* Super Admin Routes */}
+      <Route path="roles" element={<RolesPermissionsPage />} />
+      <Route path="audit-log" element={<AuditLogPage />} />
 
       {/* Default Route */}
       <Route path="*" element={<AdminDashboardPage />} />

@@ -1,36 +1,44 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Box, CircularProgress, Typography } from '@mui/material';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import MainLayout from './components/layout/MainLayout';
-import StudentDashboardPage from './pages/student/DashboardPage';
 import AdminRoutes from './routes/AdminRoutes';
 import ProfessorRoutes from './routes/ProfessorRoutes';
+import StudentRoutes from './routes/StudentRoutes';
 import SchedulePage from './pages/schedule/SchedulePage';
 import GradesPage from './pages/grades/GradesPage';
 import DocumentsPage from './pages/documents/DocumentsPage';
 import MessagesPage from './pages/messages/MessagesPage';
 import NotificationsPage from './pages/notifications/NotificationsPage';
 import StagesPage from './pages/stages/StagesPage';
-import StudentExamsList from './pages/exams/student/StudentExamsList'; // Import du composant StudentExamsList
-import StudentSchedulePage from './pages/student/SchedulePage';
-import CertificatePage from './pages/student/CertificatePage'; // Import du composant CertificatePage
-import QuizLauncher from './components/QuizLauncher'; // Import du composant QuizLauncher
-import { QuizProvider } from './context/QuizContext'; // Import du provider de contexte Quiz
+import ProfileSettingsPage from './pages/shared/ProfileSettingsPage';
+import VerifyDocumentPage from './pages/public/VerifyDocumentPage';
 
 /**
  * Composant de protection des routes
  * Vérifie si l'utilisateur est connecté et a les droits d'accès requis
- * @param {Object} props - Propriétés du composant
- * @param {JSX.Element} props.children - Composant enfant à afficher si l'accès est autorisé
- * @param {string} [props.requiredRole] - Rôle requis pour accéder à la route ('admin', 'professor', 'student')
- * @returns {JSX.Element} Le composant enfant ou une redirection
+ * @param {Object} props
+ * @param {JSX.Element} props.children - Composant enfant
+ * @param {string} [props.requiredRole] - Rôle requis ('admin', 'professor', 'student')
+ * @returns {JSX.Element}
  */
 const ProtectedRoute = ({ children, requiredRole }) => {
   const { authState } = useAuth();
   
-  // Si l'utilisateur n'est pas connecté, rediriger vers la page de connexion
+  // Afficher un loader pendant le chargement de l'auth
+  if (authState.loading) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 2 }}>
+        <CircularProgress size={48} />
+        <Typography color="text.secondary">Chargement...</Typography>
+      </Box>
+    );
+  }
+  
+  // Si l'utilisateur n'est pas connecté, rediriger vers login
   if (!authState.user) {
     return <Navigate to="/login" replace />;
   }
@@ -41,7 +49,10 @@ const ProtectedRoute = ({ children, requiredRole }) => {
     (requiredRole === 'professor' && !authState.isProfessor) ||
     (requiredRole === 'student' && !authState.isStudent)
   )) {
-    // Rediriger vers la page appropriée selon le rôle
+    // Rediriger vers le dashboard approprié selon le rôle
+    if (authState.isAdmin) return <Navigate to="/admin" replace />;
+    if (authState.isProfessor) return <Navigate to="/professor" replace />;
+    if (authState.isStudent) return <Navigate to="/student" replace />;
     return <Navigate to="/login" replace />;
   }
   
@@ -49,9 +60,28 @@ const ProtectedRoute = ({ children, requiredRole }) => {
 };
 
 /**
+ * Composant de redirection intelligente après login
+ * Redirige vers le dashboard approprié selon le rôle
+ */
+const RoleBasedRedirect = () => {
+  const { authState } = useAuth();
+  
+  if (authState.loading) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 2 }}>
+        <CircularProgress size={48} />
+        <Typography color="text.secondary">Chargement...</Typography>
+      </Box>
+    );
+  }
+  if (!authState.user) return <Navigate to="/login" replace />;
+  if (authState.isAdmin) return <Navigate to="/admin" replace />;
+  if (authState.isProfessor) return <Navigate to="/professor" replace />;
+  return <Navigate to="/student" replace />;
+};
+
+/**
  * Composant principal de l'application
- * Définit la structure des routes et le système d'authentification
- * @returns {JSX.Element} Application complète
  */
 function App() {
   return (
@@ -62,9 +92,9 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           
-          {/* Routes protégées */}
+          {/* Routes protégées avec layout */}
           <Route element={<MainLayout />}>
-            {/* Routes pour les administrateurs */}
+            {/* Routes administrateur */}
             <Route 
               path="/admin/*" 
               element={
@@ -74,43 +104,17 @@ function App() {
               } 
             />
             
-            {/* Routes pour les étudiants */}
+            {/* Routes étudiant - utilise StudentRoutes avec sous-routes */}
             <Route 
               path="/student/*" 
               element={
                 <ProtectedRoute requiredRole="student">
-                  <StudentDashboardPage />
+                  <StudentRoutes />
                 </ProtectedRoute>
               } 
             />
-            <Route 
-              path="/student/exams" 
-              element={
-                <ProtectedRoute requiredRole="student">
-                  <StudentExamsList />
-                </ProtectedRoute>
-              }
-            />
-            <Route 
-              path="/student/quiz/:examId" 
-              element={
-                <ProtectedRoute requiredRole="student">
-                  <QuizProvider>
-                    <QuizLauncher />
-                  </QuizProvider>
-                </ProtectedRoute>
-              }
-            />
-            <Route 
-              path="/student/certificate" 
-              element={
-                <ProtectedRoute requiredRole="student">
-                  <CertificatePage />
-                </ProtectedRoute>
-              }
-            />
             
-            {/* Routes pour les professeurs */}
+            {/* Routes professeur */}
             <Route 
               path="/professor/*" 
               element={
@@ -120,7 +124,7 @@ function App() {
               } 
             />
             
-            {/* Routes pour les stages */}
+            {/* Routes partagées (accessibles à tous les rôles authentifiés) */}
             <Route 
               path="/stages/*" 
               element={
@@ -130,17 +134,15 @@ function App() {
               } 
             />
             
-            {/* Routes pour les emplois du temps */}
             <Route 
               path="/schedule" 
               element={
-                <ProtectedRoute requiredRole="student">
-                  <StudentSchedulePage />
+                <ProtectedRoute>
+                  <SchedulePage />
                 </ProtectedRoute>
               } 
             />
             
-            {/* Routes pour les notes */}
             <Route 
               path="/grades" 
               element={
@@ -150,7 +152,6 @@ function App() {
               } 
             />
             
-            {/* Routes pour les documents */}
             <Route 
               path="/documents" 
               element={
@@ -160,7 +161,6 @@ function App() {
               } 
             />
             
-            {/* Routes pour les messages */}
             <Route 
               path="/messages" 
               element={
@@ -170,7 +170,6 @@ function App() {
               } 
             />
             
-            {/* Routes pour les notifications */}
             <Route 
               path="/notifications" 
               element={
@@ -179,10 +178,22 @@ function App() {
                 </ProtectedRoute>
               } 
             />
+            
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <ProfileSettingsPage />
+                </ProtectedRoute>
+              } 
+            />
           </Route>
           
-          {/* Redirection par défaut */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          {/* Route publique: Vérification de document QR */}
+          <Route path="/verify/:reference" element={<VerifyDocumentPage />} />
+          
+          {/* Redirection intelligente selon le rôle */}
+          <Route path="/" element={<RoleBasedRedirect />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </AuthProvider>

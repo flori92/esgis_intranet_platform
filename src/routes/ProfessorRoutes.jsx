@@ -4,9 +4,12 @@ import { useAuth } from '../context/AuthContext';
 
 // Import des composants du professeur
 import ProfessorDashboard from '../pages/professor/DashboardPage';
+import ProfessorDocumentsPage from '../pages/professor/DocumentsPage';
 import ExamsListPage from '../pages/professor/exams/ExamsListPage';
 import ExamFormPage from '../pages/professor/exams/ExamFormPage';
 import ExamGradingPage from '../pages/professor/exams/ExamGradingPage';
+import GradesManagementPage from '../pages/professor/grades/GradesManagementPage';
+import GradeCorrectionPage from '../pages/professor/grades/GradeCorrectionPage';
 
 /**
  * Routes pour les professeurs
@@ -24,6 +27,7 @@ const ProfessorRoutes = () => {
   return (
     <Routes>
       <Route index element={<ProfessorDashboard />} />
+      <Route path="documents" element={<ProfessorDocumentsPage />} />
       <Route path="exams">
         <Route index element={<ExamsListPage />} />
         <Route path="create" element={<ExamFormPage />} />
@@ -31,7 +35,11 @@ const ProfessorRoutes = () => {
         <Route path=":id/edit" element={<ExamFormPage />} />
         <Route path=":id/grade" element={<ExamGradingPage />} />
       </Route>
-      {/* Ajouter ici d'autres routes professeur si nécessaire */}
+      {/* Routes pour la gestion des notes */}
+      <Route path="grades">
+        <Route index element={<GradesManagementPage />} />
+        <Route path="corrections" element={<GradeCorrectionPage />} />
+      </Route>
     </Routes>
   );
 };
