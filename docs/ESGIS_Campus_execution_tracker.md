@@ -155,12 +155,12 @@ Tant que Phase 0 n'est pas terminee, ne pas etendre fonctionnellement:
 
 ## 5. Statut Actuel
 
-Date de référence: 2026-04-04 — 02h (après commit 0791c7db)
+Date de référence: 2026-04-04 — 05h (après commit 2eea26f6)
 
 - Phase 0: en cours (socle cohérent; RLS et dead paths à finaliser)
 - Phase 1: **100%** (dashboard, calendrier, notes, certificats, stages, messages, documents réels, releve, bulletin, profil)
 - Phase 2: **70%** (- [x] Suivi temps réel **FERMÉ** / - [ ] Création d'examen / - [ ] Correction automatique/manuelle **VERROUS**)
-- Phase 3: **40%** en cours (6/15: Admin Dashboard, Student CRUD, Import, Professors, Departments, Audit Log)
+- Phase 3: **60%** en cours (9/15: Admin Dashboard, Student CRUD, Import, Professors, Departments, Audit Log, Account Status, Levels/Semesters, Subjects)
 - Phase 4: non demarrée
 - Phase 5: non demarrée
 
@@ -570,5 +570,69 @@ Une fois Phase 2 fermée, passer à Phase 3:
 2. CRUD Filières/Niveaux/Semestres  
 3. CRUD Matières avec coefficients/crédits
 4. Templates de documents officiels
+
+---
+
+### 7.8 — ✅ Phase 3 CRUD Admin Étendu (2026-04-04 — commit 2eea26f6)
+
+**Pages créées pour gestion statut comptes, niveaux/semestres et matières:**
+- ✅ `src/pages/admin/AccountStatusPage.jsx` — Gestion du cycle de vie des comptes étudiants
+  - CRUD statut (actif ↔ suspendu → diplomé/radié)
+  - Table avec statut code (couleur Chip), étudiant, email, ID
+  - Dialog selection nouveau statut + champ raison (audit trail)
+  - Filtre par nom/email/ID + filtre statut
+  - Audit log automatique pour chaque changement de statut
+  - Données réelles: students, profiles, audit_log
+  
+- ✅ `src/pages/admin/LevelsAndSemestersPage.jsx` — Configuration structure académique avec interface à onglets
+  - Tab 1: Gestion des filières/niveaux
+    - Affiche L1 → M2 avec codes courts (L1, L2, L3, M1, M2)
+    - CRUD niveaux (création/modification)
+    - Affiche nombre étudiants par niveau
+  - Tab 2: Gestion des semestres
+    - CRUD semesters (création/modification)
+    - Date début/fin avec formatage fr-FR
+    - Toggle isActive (Chip couleur)
+    - Recherche filtre
+  - Données réelles: students (pour levels), grades (pour semesters)
+  
+- ✅ `src/pages/admin/SubjectsPage.jsx` — Gestion complète matières/cours avec attributs financiers
+  - Affichage table: Code (Chip), Nom, Crédits (badge), Coefficient (badge), Semestre, Département
+  - CRUD complet: créer/modifier/supprimer matières
+  - Champs: code, nom, description, crédits (int), coefficient (float), semestre (int), département
+  - Recherche par code ou nom (real-time, case-insensitive)
+  - Select dropdown pour department_id
+  - Données réelles: courses, departments join, validation nombres
+  
+**Routes intégrées dans AdminRoutes.jsx:**
+- `GET /admin/account-status` → AccountStatusPage (gestion statuts)
+- `GET /admin/levels-semesters` → LevelsAndSemestersPage (configuration académique)
+- `GET /admin/subjects` → SubjectsPage (gestion matières)
+
+**TypeScript Validation & Build:**
+- ✅ Corrections appliquées:
+  1. Chip color type error ~ switch statement hardcoded MUI colors (success/warning/info/error)
+  2. Calendar icon missing ~ changed to EventNote (MUI icons-material)
+  3. Unused ref removed from AccountStatusPage
+- ✅ Build réussi après cache cleanup (49.51s): dist/index.html généré avec succès
+- ✅ Zéro erreurs TypeScript après corrections
+
+**Statut Phase 3:** 9/15 items marqués (60%) — **+3 pages creées**
+- ✅ Admin Dashboard
+- ✅ Student CRUD (StudentDetailsPage + StudentImportPage)  
+- ✅ Professeurs CRUD (ProfessorsListPage)
+- ✅ Départements CRUD (DepartmentsListPage)
+- ✅ Audit Log (AuditLogPage)
+- ✅ **[NOUVEAU] Statut comptes**
+- ✅ **[NOUVEAU] Niveaux & Semestres**
+- ✅ **[NOUVEAU] Matières & Coefficients**
+
+**Prochaines étapes Phase 3 recommandées (priorité):**
+1. Templates de documents officiels
+2. File d'attente de validation des documents
+3. Génération en masse de bulletins (BulkBulletinPage — partiellement existant)
+4. Dépôt manuel documents dans dossier étudiant
+5. Rapports et exports (ReportsPage — partiellement existant)
+6. Paiements (PaymentsPage — partiellement existant)
 
 ---
