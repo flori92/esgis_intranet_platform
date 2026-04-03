@@ -44,7 +44,7 @@ const ReportCardPage = () => {
   const [error, setError] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [stats, setStats] = useState({
-    averageGrade: 0,
+    averageGrade: '0.00',
     coursesValidated: 0,
     totalCourses: 0,
     absenceCount: 0,
@@ -119,10 +119,10 @@ const ReportCardPage = () => {
 
       // Calculer stats
       const validatedCount = mappedCourses.filter(c => c.grade?.score >= 10).length;
-      const averageScore: number =
+      const averageScore =
         mappedCourses.reduce((acc, c) => acc + (c.grade?.score || 0), 0) /
         (mappedCourses.length || 1);
-      const totalAbsences: number = mappedCourses.reduce(
+      const totalAbsences = mappedCourses.reduce(
         (acc, c) => acc + (c.grade?.attendance?.absences || 0),
         0,
       );
@@ -280,7 +280,7 @@ const ReportCardPage = () => {
               <Typography variant="h5">{stats.averageGrade}/20</Typography>
               <LinearProgress
                 variant="determinate"
-                value={(stats.averageGrade / 20) * 100}
+                value={(Number(stats.averageGrade) / 20) * 100}
                 sx={{ mt: 1 }}
               />
             </CardContent>
