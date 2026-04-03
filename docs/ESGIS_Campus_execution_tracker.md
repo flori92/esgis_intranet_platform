@@ -155,14 +155,14 @@ Tant que Phase 0 n'est pas terminee, ne pas etendre fonctionnellement:
 
 ## 5. Statut Actuel
 
-Date de reference: 2026-04-03 — 23h (après commit 2b2c1757)
+Date de référence: 2026-04-04 — 02h (après commit 0791c7db)
 
 - Phase 0: en cours (socle cohérent; RLS et dead paths à finaliser)
-- Phase 1: **96%** (dashboard, calendrier, notes, certificats, stages, messages, documents réels)
+- Phase 1: **100%** (dashboard, calendrier, notes, certificats, stages, messages, documents réels, releve, bulletin, profil)
 - Phase 2: **70%** (- [x] Suivi temps réel **FERMÉ** / - [ ] Création d'examen / - [ ] Correction automatique/manuelle **VERROUS**)
-- Phase 3: partiellement en cours via CRUD admin
-- Phase 4: non demarree
-- Phase 5: non demarree
+- Phase 3: **40%** en cours (6/15: Admin Dashboard, Student CRUD, Import, Professors, Departments, Audit Log)
+- Phase 4: non demarrée
+- Phase 5: non demarrée
 
 ### Verrous Phase 2 Restants (Blockers)
 
@@ -531,5 +531,44 @@ Une fois Phase 2 fermée, passer à Phase 3:
 2. CRUD Départements
 3. Activation/suspension de comptes
 4. Page audit & historique des modifications
+
+### 7.7 — ✅ Phase 3 CRUD Admin Étendu (2026-04-04 — commit 0791c7db)
+
+**Pages créées pour CRUD Professeurs, Départements et Audit:**
+- ✅ `src/pages/admin/ProfessorsListPage.jsx` — Gestion complète des professeurs (CRUD, recherche, assignment dept)
+  - Affiche liste avec nom, email, spécialisation, département
+  - Formulaire dialog pour ajouter/modifier professeurs
+  - Suppression avec confirmation
+  - Intégration département (select)
+  
+- ✅ `src/pages/admin/DepartmentsListPage.jsx` — Gestion des départements (CRUD, hiérarchie)
+  - Affiche liste avec nom, code département, responsable
+  - Formulaire dialog pour ajouter/modifier départements
+  - Selection du chef de département (professeur)
+  - Suppression avec confirmation
+  
+- ✅ `src/pages/admin/AuditLogPage.jsx` — Journal d'audit complet avec filtrage avancé
+  - Affichage table avec date, utilisateur, action, ressource, ID, description
+  - Filtres multi-critères: action, ressource, date (du/au)
+  - Recherche texte (user_id, description, resource_id)
+  - Export CSV avec timestamps et descriptions
+  - Couleurs par type d'action et ressource
+
+**Routes intégrées dans AdminRoutes.jsx:**
+- `GET /admin/professors` → ProfessorsListPage (gestion professeurs)
+- `GET /admin/departments-list` → DepartmentsListPage (gestion départements)  
+- `GET /admin/audit-log-new` → AuditLogPage (consulter audit log)
+
+**TypeScript Validation:** ✅ Zéro erreur (0 warnings)
+- Corrections appliquées: imports alias `@/supabase`, InputProps pour MUI TextField startAdornment
+- Build complet validé: `dist/index.html` généré avec succès
+
+**Statut Phase 3:** 6/15 items marqués (40%)
+
+**Prochaines étapes Phase 3 recommandées (priorité):**
+1. Activation/suspension de comptes étudiant
+2. CRUD Filières/Niveaux/Semestres  
+3. CRUD Matières avec coefficients/crédits
+4. Templates de documents officiels
 
 ---
