@@ -154,14 +154,19 @@ Tant que Phase 0 n'est pas terminee, ne pas etendre fonctionnellement:
 
 ## 5. Statut Actuel
 
-Date de reference: 2026-04-03
+Date de reference: 2026-04-03 — 23h (après commit 2b2c1757)
 
-- Phase 0: en cours
-- Phase 1: partiellement en cours
-- Phase 2: partiellement en cours via examens, dashboard et ressources reelles
+- Phase 0: en cours (socle cohérent; RLS et dead paths à finaliser)
+- Phase 1: **96%** (dashboard, calendrier, notes, certificats, stages, messages, documents réels)
+- Phase 2: **70%** (- [x] Suivi temps réel **FERMÉ** / - [ ] Création d'examen / - [ ] Correction automatique/manuelle **VERROUS**)
 - Phase 3: partiellement en cours via CRUD admin
 - Phase 4: non demarree
 - Phase 5: non demarree
+
+### Verrous Phase 2 Restants (Blockers)
+
+1. **Création d'examen complète** — ExamFormPage.jsx terminé mais pas testé end-to-end avec l'ensemble des types de questions
+2. **Correction manuelle et automatique** — API prét dans exams.js, ExamGradingPage.jsx corrigé, mais workflows D\&P pas couplés avec les schemas reels
 
 ## 6. Journal D'Avancement
 
@@ -388,3 +393,108 @@ Date de reference: 2026-04-03
 - `src/pages/professor/exams/ExamsListPage.jsx` ajoute l'acces au suivi temps reel
 - Correctifs runtime sur `ExamGradingPage.jsx`, `GradeQuestionItem.jsx`, `ExamStudents.jsx` et `StudentAnswersList.jsx` pour supprimer les references `supabase` implicites
 - Build `npm run build` validee apres integration
+
+## 7. Points Clés à Faire Immédiatement
+
+### 7.1 — ✅ FAIT: Migrations Supabase appliquées (2026-04-03 23h30)
+
+**Migrations appliquées avec succès (16/16):**
+
+- ✅ 20250503_document_tags.sql
+- ✅ 20250503_document_templates.sql
+- ✅ 20250503_exams_system.sql
+- ✅ 20250503_grade_corrections.sql
+- ✅ 20250503_initial_schema.sql
+- ✅ 20250503_professor_roles.sql
+- ✅ 20250503_student_courses.sql
+- ✅ 20250504_news_events.sql
+- ✅ 20250504102629_add_missing_tables.sql
+- ✅ 20260403_add_forums_resources_practice_quizzes.sql
+- ✅ 20260403_api_runtime_support.sql
+- ✅ 20260403_complete_dynamic_tables.sql
+- ✅ 20260403_documents_legacy_compatibility.sql
+- ✅ 20260403_grades_canonical.sql
+- ✅ 20260403_profile_settings_fields.sql
+- ✅ 20260403_student_exams_attempt_status.sql
+
+**Validation post-migration:**
+- 49 tables publiques créées dans PostgreSQL
+- Schema canonique complet: profiles, exams, exam_results, active_students, cheating_attempts, quiz_results, forums, etc.
+- Triggers updated_at actifs
+- RLS policies en place
+- Outil CLI: `bash scripts/apply-migrations.sh` pour futures migrations
+
+**Commande utilisée:**
+```bash
+bash scripts/apply-migrations.sh
+# Utilise: PostgreSQL direct via psql + credentials Supabase
+# Host: db.zsuszjlgatsylleuopff.supabase.co
+# User: postgres
+```
+
+### 7.2 — Fermeture Phase 2 — Verrou 1: Création d'Examen Complète
+
+**Définition de Done:**
+- Créer un examen depuis ExamFormPage.jsx avec tous les types de questions possibles
+- Sauvegarder réellement dans student_exams, exam_questions, question_options
+- Publier l'examen (status → published)
+- Vérifier que la durée, nombre de points, et visibilité sont persistés
+
+**Tests manuels requis:**
+1. Créer examen QCM unique (1 bonne réponse)
+2. Créer examen QCM multiple (plusieurs bonnes réponses)
+3. Créer examen Vrai/Faux
+4. Créer examen Réponse courte
+5. Créer examen Dissertation
+6. Tester la duplication de question
+7. Tester l'import depuis la banque de questions
+8. Publier et vérifier l'accès étudiant en lecture seule
+
+**Fichiers concernés:**
+- `src/pages/professor/exams/ExamFormPage.jsx` — À tester end-to-end
+- `src/pages/exams/components/ExamQuestions.jsx` — À valider tous les types
+- `src/api/exams.js` — Vérifier `createExam()` et `publishExam()`
+
+**État actuel:** Codé et complet, besoin de validation humaine
+
+### 7.3 — Fermeture Phase 2 — Verrou 2: Correction Manuelle et Automatique
+
+**Définition de Done:**
+- Étudiant soumis une copie d'examen (quiz_results + student_exams.attempt_status = submitted)
+- Professeur accède à ExamGradingPage.jsx et voit la liste des copies à corriger
+- Professeur note chaque question (score/points), ajoute feedback
+- Sauvegarde réelle de la note dans exam_results.score et exam_results.graded_by
+- Étudiant reçoit notification et voit sa note dans ExamResultsPage.jsx
+
+**Correction automatique (bonus, si temps):**
+- Pour QCM, VF, Réponse courte: calcul auto du score d'après les réponses
+- Pour Dissertation, Texte à trous: marquer comme "À corriger à la main"
+- Barème par question defini au moment de la création
+
+**Tests manuels requis:**
+1. Prendre examen complet (étudiant)
+2. Attendre fin d'examen (ou forcer submitted)
+3. Accéder à GradingPage professeur
+4. Noter manuellement chaque question
+5. Ajouter feedback général
+6. Enregistrer les notes
+7. Vérifier notification étudiant
+8. Vérifier affichage notes côté étudiant
+
+**Fichiers concernés:**
+- `src/pages/professor/exams/ExamGradingPage.jsx` — À tester end-to-end
+- `src/pages/professor/exams/components/GradeQuestionItem.jsx` — Champs formulaire
+- `src/api/exams.js` — Vérifier `submitExamAnswers()` et `gradeExam()`
+- `src/pages/exams/student/ExamResultsPage.jsx` — Vérifier l'affichage des notes
+
+**État actuel:** Codé, runtime buggy sur certaines pages (corrigé à 2026-04-03 19h), besoin de validation humaine
+
+### 7.4 — Post-Phase-2: Dossier Étudian Numérique
+
+Une fois Phase 2 fermée, passer à Phase 3:
+- Dossier administrateur centralisant identité, inscriptions, notes, documents officiels, paiements par étudiant
+- Import massif d'étudiants (CSV)
+- Activation/suspension comptes
+- Génération en masse de bulletins
+
+---
