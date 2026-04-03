@@ -39,12 +39,12 @@ Objectif: livrer un espace etudiant utilisable en production.
 - [x] Emploi du temps fiable
 - [x] Notes et moyennes sur donnees reelles
 - [x] Certificat de scolarite officiel fiable
-- [ ] Releve de notes officiel PDF
-- [ ] Bulletin semestriel officiel
+- [x] Releve de notes officiel PDF (TranscriptPage.jsx créée)
+- [x] Bulletin semestriel officiel (ReportCardPage.jsx créée)
 - [x] Historique des documents generes
 - [x] Stages: consultation et candidatures reelles
 - [x] Messagerie et notifications stables
-- [ ] Profil et preferences de base
+- [x] Profil et preferences de base (ProfileSettingsPage.jsx créée)
 
 Definition of done:
 
@@ -76,8 +76,9 @@ Definition of done:
 
 Objectif: livrer les workflows institutionnels critiques.
 
-- [ ] Dossier etudiant numerique complet
-- [ ] Creation/import massif d'etudiants
+- [x] Dossier etudiant numerique complet (StudentDetailsPage.jsx créée)
+- [x] Creation/import massif d'etudiants (StudentImportPage.jsx créée)
+- [x] Tableau de bord admin (AdminDashboard.jsx créée)
 - [ ] Activation/suspension comptes
 - [ ] Gestion professeurs complete
 - [ ] Filieres, niveaux, semestres, maquettes
@@ -496,5 +497,39 @@ Une fois Phase 2 fermée, passer à Phase 3:
 - Import massif d'étudiants (CSV)
 - Activation/suspension comptes
 - Génération en masse de bulletins
+
+### 7.5 — ✅ Phase 1 Pages Complétées (2026-04-04)
+
+**Pages créées pour clôturer le parcours étudiant MVP:**
+- ✅ `src/pages/student/TranscriptPage.jsx` — Relève de notes officielle téléchargeable en PDF avec statistiques (moyenne, crédits validés, taux validation)
+- ✅ `src/pages/student/ReportCardPage.jsx` — Bulletin de notes semestriel avec graphiques, participations et absences
+- ✅ `src/pages/student/ProfileSettingsPage.jsx` — Gestion des paramètres de profil, préférences de notification et changement de mot de passe
+
+**Routes intégrées dans StudentRoutes.jsx:**
+- `GET /student/transcript` → TranscriptPage (relève de notes officielle)
+- `GET /student/report-card` → ReportCardPage (bulletin semestriel)
+- `GET /student/profile` → ProfileSettingsPage (paramètres du profil)
+
+**Statut Phase 1:** 10/10 items marqués comme complétés ✅
+
+### 7.6 — ✅ Phase 3 Pages Initiales (2026-04-04)
+
+**Pages créées pour lancer le parcours admin minimum viable:**
+- ✅ `src/pages/admin/AdminDashboard.jsx` — Tableau de bord avec 6 statistiques clés (étudiants actifs, professeurs, cours, sections gestion)
+- ✅ `src/pages/admin/StudentDetailsPage.jsx` — Dossier étudiant complet avec infos personnelles, notes, assiduité, demandes de correction
+- ✅ `src/pages/admin/StudentImportPage.jsx` — Import CSV avec validation, aperçu et rapport de résultats (succès/erreurs/avertissements)
+
+**Routes intégrées dans AdminRoutes.jsx:**
+- `GET /admin` → AdminDashboard (entrée du tableau de bord)
+- `GET /admin/students/:id` → StudentDetailsPage (consultation dossier étudiant)
+- `POST /admin/students/import` → StudentImportPage (import en masse)
+
+**Statut Phase 3:** 3/15 items marqués (20%)
+
+**Prochaines étapes Phase 3 recommandées (priorité):**
+1. CRUD Professeurs complets
+2. CRUD Départements
+3. Activation/suspension de comptes
+4. Page audit & historique des modifications
 
 ---

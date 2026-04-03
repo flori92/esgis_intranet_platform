@@ -17,6 +17,7 @@ const InitializeDataPage = lazy(() => import('../pages/admin/InitializeDataPage'
 const StudentsListPage = lazy(() => import('../pages/admin/students/StudentsListPage'));
 const StudentFormPage = lazy(() => import('../pages/admin/students/StudentFormPage'));
 const StudentDetailsPage = lazy(() => import('../pages/admin/students/StudentDetailsPage'));
+const StudentImportPage = lazy(() => import('../pages/admin/StudentImportPage'));
 
 // Super Admin Pages
 const RolesPermissionsPage = lazy(() => import('../pages/admin/superadmin/RolesPermissionsPage'));
@@ -54,6 +55,7 @@ const AdminRoutes = () => {
           <Route index element={<StudentsListPage />} />
           <Route path="create" element={<StudentFormPage />} />
           <Route path="new" element={<StudentFormPage />} />
+          <Route path="import" element={<StudentImportPage />} />
           <Route path=":id" element={<StudentDetailsPage />} />
           <Route path=":id/edit" element={<StudentFormPage />} />
         </Route>

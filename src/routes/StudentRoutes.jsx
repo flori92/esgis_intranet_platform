@@ -16,6 +16,9 @@ const StudentGroupsPage = lazy(() => import('../pages/student/GroupsPage'));
 const StudentCertificatePage = lazy(() => import('../pages/student/CertificatePage'));
 const StudentCoursesPage = lazy(() => import('../pages/student/CoursesPage'));
 const PracticeQuizPage = lazy(() => import('../pages/exams/student/PracticeQuizPage'));
+const TranscriptPage = lazy(() => import('../pages/student/TranscriptPage'));
+const ReportCardPage = lazy(() => import('../pages/student/ReportCardPage'));
+const ProfileSettingsPage = lazy(() => import('../pages/student/ProfileSettingsPage'));
 
 /**
  * Routes pour les étudiants
@@ -82,6 +85,15 @@ const StudentRoutes = () => {
         
         {/* Quiz d'entraînement */}
         <Route path="practice" element={<PracticeQuizPage />} />
+
+        {/* Relève de notes */}
+        <Route path="transcript" element={<TranscriptPage />} />
+
+        {/* Bulletin de notes */}
+        <Route path="report-card" element={<ReportCardPage />} />
+
+        {/* Paramètres de profil */}
+        <Route path="profile" element={<ProfileSettingsPage />} />
       </Routes>
     </Suspense>
   );
