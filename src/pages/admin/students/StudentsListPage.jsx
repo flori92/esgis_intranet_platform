@@ -42,6 +42,7 @@ import {
 import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { triggerDownload } from '@/utils/DownloadLinkUtil';
+import { supabase } from '../../../supabase';
 
 const StudentsListPage = () => {
   const { authState } = useAuth();

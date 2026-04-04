@@ -109,7 +109,7 @@ export const getAdminDashboardData = async (adminProfileId) => {
 
     const eventsQuery = supabase
       .from('events')
-      .select('id, title, description, start_date, start_time, end_date, end_time, location, type, event_type, created_at')
+      .select('*')
       .order('start_date', { ascending: true })
       .limit(50);
 
@@ -1663,8 +1663,7 @@ export const getProfessorsList = async () => {
   try {
     const { data, error } = await supabase
       .from('professors')
-      .select('id, full_name')
-      .order('full_name');
+      .select('id, profiles(full_name)');
 
     if (error) throw error;
     return { data: data || [], error: null };
@@ -1807,7 +1806,7 @@ export const getDepartmentsWithProfessors = async () => {
   try {
     const { data, error } = await supabase
       .from('departments')
-      .select('*, professors(full_name)');
+      .select('*, professors!head_professor_id(profiles(full_name))');
 
     if (error) throw error;
     return { data: data || [], error: null };

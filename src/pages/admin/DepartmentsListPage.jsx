@@ -57,15 +57,14 @@ export default function DepartmentsListPage() {
       // Fetch departments with head professor name
       const { data: deptsData, error: deptsError } = await supabase
         .from('departments')
-        .select('*, professors(full_name)');
+        .select('*, professors!head_professor_id(profiles(full_name))');
 
       if (deptsError) throw deptsError;
 
       // Fetch professors for form
       const { data: profsData, error: profsError } = await supabase
         .from('professors')
-        .select('id, full_name')
-        .order('full_name');
+        .select('id, profiles(full_name)');
 
       if (profsError) throw profsError;
 

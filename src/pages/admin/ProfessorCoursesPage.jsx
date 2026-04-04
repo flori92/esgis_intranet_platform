@@ -37,7 +37,7 @@ import {
   FilterList as FilterListIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-// Correction du chemin d'importation de Supabase
+import { supabase } from '../../supabase';
 
 const ProfessorCoursesPage = () => {
   const { authState } = useAuth();
