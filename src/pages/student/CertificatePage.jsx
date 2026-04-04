@@ -57,7 +57,7 @@ const DocumentPreview = styled(Box)(({ theme }) => ({
     content: '""',
     position: 'absolute',
     inset: 0,
-    backgroundImage: `url(${getAssetPath('images/logo-esgis-white.svg')})`,
+    backgroundImage: `url(${getAssetPath('images/logo-esgis-brand.png')})`,
     backgroundRepeat: 'no-repeat',
     backgroundPosition: 'center',
     backgroundSize: '50%',

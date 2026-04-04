@@ -23,13 +23,6 @@ import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { getAnnouncements as fetchAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement as removeAnnouncement } from '@/api/announcements';
 
-const MOCK_ANNOUNCEMENTS = [
-  { id: 'a1', title: 'Rentrée académique 2026-2027', content: 'La rentrée académique pour l\'année 2026-2027 est fixée au lundi 15 septembre 2026. Les inscriptions sont ouvertes à partir du 1er août.', target: ['all'], priority: 'high', status: 'published', author: 'Administration', created_at: '2026-04-01T10:00:00Z', views: 342, send_push: true, send_email: true },
-  { id: 'a2', title: 'Résultats du semestre 1 disponibles', content: 'Les notes du semestre 1 ont été publiées. Consultez votre espace Notes pour voir vos résultats.', target: ['L2 INFO', 'L3 INFO'], priority: 'normal', status: 'published', author: 'Service Scolarité', created_at: '2026-03-28T14:00:00Z', views: 185, send_push: true, send_email: false },
-  { id: 'a3', title: 'Journée Portes Ouvertes — 10 mai 2026', content: 'L\'ESGIS organise sa journée portes ouvertes le samedi 10 mai. Tous les étudiants sont invités à participer comme ambassadeurs.', target: ['all'], priority: 'normal', status: 'draft', author: 'Direction', created_at: '2026-04-03T08:00:00Z', views: 0, send_push: false, send_email: false },
-  { id: 'a4', title: 'Stage obligatoire — L3 Informatique', content: 'Rappel : tous les étudiants de L3 Informatique doivent effectuer un stage de 3 mois minimum avant la fin de l\'année académique.', target: ['L3 INFO'], priority: 'high', status: 'published', author: 'Responsable des stages', created_at: '2026-03-20T09:00:00Z', views: 68, send_push: true, send_email: true },
-];
-
 const TARGET_OPTIONS = [
   { value: 'all', label: 'Tous les utilisateurs' },
   { value: 'students', label: 'Tous les étudiants' },
@@ -66,15 +59,19 @@ const AnnouncementsPage = () => {
       setLoading(true);
       try {
         const { data, error } = await fetchAnnouncements();
-        if (!error && data && data.length > 0) {
-          setAnnouncements(data.map(a => ({
-            ...a, author: a.author?.full_name || a.author || 'Administration',
-            views: a.views_count || 0,
-          })));
-        } else {
-          setAnnouncements(MOCK_ANNOUNCEMENTS);
+        if (error) {
+          throw error;
         }
-      } catch { setAnnouncements(MOCK_ANNOUNCEMENTS); }
+        setAnnouncements((data || []).map((a) => ({
+          ...a,
+          author: a.author?.full_name || a.author || 'Administration',
+          views: a.views_count || 0,
+        })));
+      } catch (err) {
+        console.error('load announcements:', err);
+        setAnnouncements([]);
+        setError('Erreur lors du chargement des annonces.');
+      }
       finally { setLoading(false); }
     };
     loadData();
@@ -99,31 +96,54 @@ const AnnouncementsPage = () => {
     setEditDialog(true);
   };
 
-  const handleSave = (publish = false) => {
+  const handleSave = async (publish = false) => {
     if (!form.title || !form.content) { setError('Titre et contenu obligatoires.'); return; }
     setSaving(true);
+    setError(null);
     const status = publish ? 'published' : 'draft';
-    if (editingAnnouncement) {
-      setAnnouncements(prev => prev.map(a => a.id === editingAnnouncement.id
-        ? { ...a, ...form, status, updated_at: new Date().toISOString() } : a));
+
+    const payload = {
+      ...form,
+      status,
+      author_id: authState.profile?.id || authState.user?.id || null,
+    };
+
+    try {
+      const response = editingAnnouncement
+        ? await updateAnnouncement(editingAnnouncement.id, payload)
+        : await createAnnouncement(payload);
+
+      if (response.error) throw response.error;
+
+      const { data, error } = await fetchAnnouncements();
+      if (error) throw error;
+
+      setAnnouncements((data || []).map((a) => ({
+        ...a,
+        author: a.author?.full_name || a.author || 'Administration',
+        views: a.views_count || 0,
+      })));
       setSuccessMessage(publish ? 'Annonce publiée.' : 'Brouillon sauvegardé.');
-    } else {
-      const newAnn = {
-        id: `a${Date.now()}`, ...form, status,
-        author: authState.profile?.full_name || 'Administration',
-        created_at: new Date().toISOString(), views: 0
-      };
-      setAnnouncements(prev => [newAnn, ...prev]);
-      setSuccessMessage(publish ? 'Annonce publiée et notifications envoyées.' : 'Brouillon sauvegardé.');
+      setEditDialog(false);
+    } catch (err) {
+      console.error('handleSave announcement:', err);
+      setError(err.message || 'Impossible de sauvegarder l’annonce.');
+    } finally {
+      setSaving(false);
     }
-    setEditDialog(false);
-    setSaving(false);
   };
 
-  const handleDelete = (ann) => {
-    setAnnouncements(prev => prev.filter(a => a.id !== ann.id));
-    setDeleteDialog(null);
-    setSuccessMessage('Annonce supprimée.');
+  const handleDelete = async (ann) => {
+    try {
+      const { error } = await removeAnnouncement(ann.id);
+      if (error) throw error;
+      setAnnouncements(prev => prev.filter(a => a.id !== ann.id));
+      setDeleteDialog(null);
+      setSuccessMessage('Annonce supprimée.');
+    } catch (err) {
+      console.error('handleDelete announcement:', err);
+      setError(err.message || 'Impossible de supprimer l’annonce.');
+    }
   };
 
   const handleTargetToggle = (value) => {

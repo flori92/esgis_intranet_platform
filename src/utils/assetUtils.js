@@ -29,5 +29,5 @@ export const getAssetPath = (path) => {
   return `${basePath}/${cleanPath}`;
 };
 
-// Exportation d'un chemin spécifique pour le logo ESGIS
-export const LOGO_ESGIS_PATH = () => getAssetPath('images/logo-esgis-white.svg');
+// Exportation d'un chemin spécifique pour le logo ESGIS officiel
+export const LOGO_ESGIS_PATH = () => getAssetPath('images/logo-esgis-brand.png');

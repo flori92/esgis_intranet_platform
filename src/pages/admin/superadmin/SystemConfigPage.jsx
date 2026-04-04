@@ -28,7 +28,7 @@ const MOCK_CONFIG = {
     phone: '+228 22 21 00 00',
     email: 'contact@esgis.org',
     website: 'www.esgis.org',
-    logo_url: '/images/esgis-logo.png',
+    logo_url: '/images/logo-esgis-brand.png',
     director_name: 'Prof. AMETOWOYONA Kossi',
     director_title: 'Directeur Général',
     legal_info: 'Établissement privé d\'enseignement supérieur — Agrément N° 2015/0042/MESR',

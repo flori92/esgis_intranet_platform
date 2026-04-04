@@ -13,7 +13,9 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { getStudentsForBulletins, saveBulletin } from '@/api/admin';
-import { supabase } from '@/supabase';
+import { getDepartments } from '@/api/departments';
+import { uploadFile } from '@/api/storage';
+import { loadPdfLib } from '@/utils/pdfLib';
 
 const BulkBulletinPage = () => {
   const { authState } = useAuth();
@@ -46,10 +48,11 @@ const BulkBulletinPage = () => {
   useEffect(() => {
     const loadDepartments = async () => {
       try {
-        const { data, error } = await supabase.from('departments').select('id, name, code').order('name');
-        if (!error) setDepartments(data || []);
+        const { departments: data, error } = await getDepartments();
+        if (error) throw error;
+        setDepartments(data || []);
       } catch (err) {
-        // departments are optional for filtering
+        console.error('loadDepartments bulk bulletins:', err);
       } finally {
         setLoadingDepts(false);
       }
@@ -62,7 +65,12 @@ const BulkBulletinPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: apiError } = await getStudentsForBulletins(selectedNiveau, selectedSemestre, anneeAcademique);
+      const { data, error: apiError } = await getStudentsForBulletins(
+        selectedNiveau,
+        selectedSemestre,
+        anneeAcademique,
+        selectedDepartment || null
+      );
       if (apiError) throw apiError;
       if (!data || data.length === 0) {
         setStudents([]);
@@ -105,7 +113,7 @@ const BulkBulletinPage = () => {
       const student = selectedData[i];
       try {
         // Generate PDF bulletin using pdf-lib
-        const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+        const { PDFDocument, rgb, StandardFonts } = await loadPdfLib();
         const pdfDoc = await PDFDocument.create();
         const page = pdfDoc.addPage([595, 842]); // A4
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -135,9 +143,13 @@ const BulkBulletinPage = () => {
         const fileName = `bulletin_${student.id}_${selectedSemestre}_${anneeAcademique.replace('-', '_')}.pdf`;
 
         // Upload to storage
-        const { error: uploadError } = await supabase.storage
-          .from('documents')
-          .upload(`bulletins/${fileName}`, blob, { contentType: 'application/pdf', upsert: true });
+        const { error: uploadError } = await uploadFile(
+          'documents',
+          `bulletins/${fileName}`,
+          blob,
+          { contentType: 'application/pdf', upsert: true }
+        );
+        if (uploadError) throw uploadError;
 
         // Save record in generated_documents
         const { error: saveError } = await saveBulletin({

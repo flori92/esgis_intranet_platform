@@ -499,7 +499,7 @@ const ExamsListPage = () => {
     return (
       <Chip 
         label={statusConfig.label} 
-        color={statusConfig.color} 
+        color={/** @type {import('@mui/material').ChipProps['color']} */ (statusConfig.color)} 
         size="small" 
         variant="outlined"
       />

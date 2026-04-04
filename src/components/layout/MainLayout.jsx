@@ -121,23 +121,25 @@ const MainLayout = () => {
     if (isAdmin) {
       return [
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/admin' },
-        { text: 'Gestion Étudiants', icon: <PeopleIcon />, path: '/admin/students' },
-        { text: 'Départements & Filières', icon: <SchoolIcon />, path: '/admin/departments' },
-        { text: 'Matières & Cours', icon: <BookIcon />, path: '/admin/courses' },
+        { text: 'Étudiants & Comptes', icon: <PeopleIcon />, path: '/admin/students' },
+        { text: 'Statut des Comptes', icon: <PersonIcon />, path: '/admin/account-status' },
+        { text: 'Structure Académique', icon: <SchoolIcon />, path: '/admin/levels-semesters' },
+        { text: 'Départements & Filières', icon: <SchoolIcon />, path: '/admin/departments-list' },
+        { text: 'Matières & Cours', icon: <BookIcon />, path: '/admin/subjects' },
         { text: 'Assignation de Cours', icon: <AssignmentIcon />, path: '/admin/professor-courses' },
         { text: 'Rôles Professeurs', icon: <PersonIcon />, path: '/admin/professor-roles' },
         { text: 'Paiements', icon: <GradingIcon />, path: '/admin/payments' },
         { text: 'Calendrier', icon: <CalendarMonthIcon />, path: '/admin/calendar' },
-        { text: 'Documents', icon: <DescriptionIcon />, path: '/admin/document-generator' },
+        { text: 'Demandes (Guichet)', icon: <AssignmentIcon />, path: '/admin/validation-queue' },
+        { text: 'Générateur Documents', icon: <DescriptionIcon />, path: '/admin/document-generator' },
+        { text: 'Modèles Documents', icon: <DescriptionIcon />, path: '/admin/document-templates' },
         { text: 'Génération bulletins', icon: <GradingIcon />, path: '/admin/bulk-bulletins' },
-        { text: 'Stages & Emplois', icon: <WorkIcon />, path: '/stages' },
-        { text: 'Partenaires', icon: <PeopleIcon />, path: '/admin/partners' },
+        { text: 'Partenaires & Stages', icon: <WorkIcon />, path: '/admin/partners' },
         { text: 'Annonces', icon: <ChatIcon />, path: '/admin/announcements' },
         { text: 'Statistiques', icon: <BarChartIcon />, path: '/admin/reports' },
         { text: 'Rôles & Permissions', icon: <PersonIcon />, path: '/admin/roles' },
-        { text: 'Journal d\'audit', icon: <BarChartIcon />, path: '/admin/audit-log' },
+        { text: 'Journal d\'audit', icon: <BarChartIcon />, path: '/admin/audit-log-new' },
         { text: 'Config système', icon: <SettingsIcon />, path: '/admin/system-config' },
-        { text: 'Mon Profil', icon: <PersonIcon />, path: '/profile' },
       ];
     } else if (isProfessor) {
       return [
@@ -188,15 +190,28 @@ const MainLayout = () => {
         py: 2,
       }}>
         <Box
-          component="img"
-          src={getAssetPath('images/logo-esgis-white.svg')}
-          alt="Logo ESGIS"
           sx={{
-            height: 60,
-            mb: 1,
-            filter: 'brightness(0) invert(1)', // Assure que le logo est blanc sur fond bleu
+            backgroundColor: 'white',
+            borderRadius: 2,
+            px: 2,
+            py: 1.25,
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+            mb: 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
-        />
+        >
+          <Box
+            component="img"
+            src={getAssetPath('images/logo-esgis-brand.png')}
+            alt="Logo ESGIS"
+            sx={{
+              height: 48,
+              display: 'block'
+            }}
+          />
+        </Box>
         <Typography 
           variant="subtitle1" 
           component="div"

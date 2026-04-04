@@ -23,15 +23,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { getAllPaymentStatuses, recordPayment } from '@/api/payments';
-
-const MOCK_PAYMENTS = [
-  { id: 'p1', student_name: 'AGBEKO Kofi', filiere: 'L3 Informatique', montant_du: 850000, montant_paye: 850000, solde: 0, statut: 'payé', derniere_date: '2026-03-15', methode: 'Virement', reference: 'PAY-2026-001' },
-  { id: 'p2', student_name: 'DOSSEH Ama', filiere: 'L2 Informatique', montant_du: 850000, montant_paye: 500000, solde: 350000, statut: 'partiel', derniere_date: '2026-02-28', methode: 'Espèces', reference: 'PAY-2026-002' },
-  { id: 'p3', student_name: 'KPOMASSE Yao', filiere: 'L3 Informatique', montant_du: 850000, montant_paye: 0, solde: 850000, statut: 'impayé', derniere_date: null, methode: '-', reference: '-' },
-  { id: 'p4', student_name: 'MENSAH Akossiwa', filiere: 'L2 Gestion', montant_du: 750000, montant_paye: 750000, solde: 0, statut: 'payé', derniere_date: '2026-01-20', methode: 'Mobile Money', reference: 'PAY-2026-004' },
-  { id: 'p5', student_name: 'AMEGAH Komi', filiere: 'M1 Informatique', montant_du: 950000, montant_paye: 475000, solde: 475000, statut: 'partiel', derniere_date: '2026-03-01', methode: 'Chèque', reference: 'PAY-2026-005' },
-  { id: 'p6', student_name: 'TOGBUI Edem', filiere: 'L1 Informatique', montant_du: 850000, montant_paye: 850000, solde: 0, statut: 'exonéré', derniere_date: '2026-01-05', methode: 'Bourse', reference: 'PAY-2026-006' },
-];
+import { loadPdfLib } from '@/utils/pdfLib';
 
 const PAYMENT_METHODS = ['Espèces', 'Virement', 'Chèque', 'Mobile Money', 'Carte bancaire', 'Bourse'];
 
@@ -59,13 +51,12 @@ const PaymentsPage = () => {
     setLoading(true);
     try {
       const { data, error } = await getAllPaymentStatuses();
-      if (!error && data && data.length > 0) {
-        setPayments(data);
-      } else {
-        setPayments(MOCK_PAYMENTS);
-      }
-    } catch {
-      setPayments(MOCK_PAYMENTS);
+      if (error) throw error;
+      setPayments(data || []);
+    } catch (err) {
+      console.error('loadPayments:', err);
+      setPayments([]);
+      setError(err.message || 'Impossible de charger les paiements.');
     } finally {
       setLoading(false);
     }
@@ -153,6 +144,55 @@ const PaymentsPage = () => {
     link.download = `paiements_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadReceipt = async (paymentStatus) => {
+    const latestPayment = paymentStatus?.paiements?.[0];
+    if (!latestPayment) {
+      setError('Aucun versement enregistré pour cet étudiant.');
+      return;
+    }
+
+    try {
+      const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([595, 842]);
+      const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const draw = (text, x, y, options = {}) => page.drawText(text, {
+        x,
+        y,
+        size: options.size || 12,
+        font: options.font || regular,
+        color: options.color || rgb(0, 0, 0),
+      });
+
+      draw('ESGIS CAMPUS', 50, 790, { font: bold, size: 20, color: rgb(0, 0.2, 0.4) });
+      draw('Reçu de paiement', 50, 760, { font: bold, size: 16 });
+      draw(`Référence: ${latestPayment.reference_number || latestPayment.reference || '-'}`, 50, 720);
+      draw(`Date: ${formatDate(latestPayment.payment_date || latestPayment.date_versement || latestPayment.created_at)}`, 50, 700);
+      draw(`Étudiant: ${paymentStatus.student_name}`, 50, 665, { font: bold });
+      draw(`Filière / Niveau: ${paymentStatus.filiere}`, 50, 645);
+      draw(`Année académique: ${latestPayment.academic_year || paymentStatus.annee_academique || '-'}`, 50, 625);
+      draw(`Semestre: ${latestPayment.semester || paymentStatus.semester || '-'}`, 50, 605);
+      draw(`Montant versé: ${formatMoney(Number(latestPayment.amount || latestPayment.montant || 0))}`, 50, 570, { font: bold, size: 14, color: rgb(0, 0.45, 0.1) });
+      draw(`Méthode: ${latestPayment.payment_method || latestPayment.methode || '-'}`, 50, 545);
+      draw(`Description: ${latestPayment.description || 'Frais de scolarité'}`, 50, 525);
+      draw(`Reste à payer après versement: ${formatMoney(paymentStatus.solde)}`, 50, 490);
+      draw('Document généré électroniquement par ESGIS Campus.', 50, 80, { size: 10, color: rgb(0.45, 0.45, 0.45) });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `recu_${(paymentStatus.student_name || 'etudiant').replace(/\s+/g, '_').toLowerCase()}_${(latestPayment.reference_number || latestPayment.reference || 'paiement')}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('handleDownloadReceipt:', err);
+      setError('Impossible de générer le reçu PDF.');
+    }
   };
 
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
@@ -260,8 +300,10 @@ const PaymentsPage = () => {
                       <AddIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Imprimer le reçu">
-                    <IconButton size="small"><ReceiptIcon fontSize="small" /></IconButton>
+                  <Tooltip title="Télécharger le reçu">
+                    <IconButton size="small" onClick={() => handleDownloadReceipt(p)} disabled={!p.paiements?.length}>
+                      <ReceiptIcon fontSize="small" />
+                    </IconButton>
                   </Tooltip>
                 </TableCell>
               </TableRow>
@@ -269,6 +311,12 @@ const PaymentsPage = () => {
           </TableBody>
         </Table>
       </TableContainer>
+      {!filtered.length && (
+        <Paper elevation={1} sx={{ p: 3, mt: 2, textAlign: 'center' }}>
+          <Typography color="text.secondary">Aucun dossier de paiement à afficher.</Typography>
+        </Paper>
+      )}
+
       {totalPages > 1 && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
           <Pagination count={totalPages} page={page} onChange={(_, v) => setPage(v)} color="primary" />

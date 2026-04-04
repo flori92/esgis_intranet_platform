@@ -1531,6 +1531,7 @@ export const createRealtimeChannel = (channelName, subscriptions) => {
       config.filter = sub.filter;
     }
 
+    // @ts-ignore - Les types dynamiques du paramètre event sont difficiles à inférer pour la surcharge
     channel = channel.on('postgres_changes', config, sub.callback);
   }
 

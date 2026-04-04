@@ -79,17 +79,18 @@ Objectif: livrer les workflows institutionnels critiques.
 - [x] Dossier etudiant numerique complet (StudentDetailsPage.jsx créée)
 - [x] Creation/import massif d'etudiants (StudentImportPage.jsx créée)
 - [x] Tableau de bord admin (AdminDashboard.jsx créée)
-- [ ] Activation/suspension comptes
-- [ ] Gestion professeurs complete
-- [ ] Filieres, niveaux, semestres, maquettes
-- [ ] Matieres, coefficients, credits
+- [x] Activation/suspension comptes (AccountStatusPage.jsx)
+- [x] Gestion professeurs complete (ProfessorsListPage.jsx)
+- [x] Filieres, niveaux, semestres, maquettes (LevelsAndSemestersPage.jsx)
+- [x] Matieres, coefficients, credits (SubjectsPage.jsx)
+- [x] Journal d'audit (AuditLogPage.jsx)
 - [ ] Templates de documents officiels
 - [ ] File d'attente de validation
 - [ ] Generation en masse de bulletins
 - [ ] Depot manuel de documents dans un dossier etudiant
 - [ ] Offres de stages et partenaires
-- [ ] Calendrier institutionnel
-- [ ] Communication institutionnelle
+- [x] Calendrier institutionnel
+- [x] Communication institutionnelle
 - [ ] Rapports et exports fiables
 - [ ] Paiements et recus
 
@@ -160,13 +161,13 @@ Date de référence: 2026-04-04 — 15h (build de validation OK)
 - Phase 0: **100%** sur le perimetre socle actif des phases 1 et 2 (schema canonique, auth unifiee, routes utiles, dead paths examens supprimes, fallbacks silencieux retires, build validee)
 - Phase 1: **100%** (dashboard, bibliotheque pedagogique structuree, calendrier, notes, certificats, stages, messages, documents reels, releve, bulletin, profil)
 - Phase 2: **100%** (ressources, notes, banque de questions, creation d'examen complete, suivi temps reel, correction automatique/manuelle, suivi promotions, communication)
-- Phase 3: **60%** en cours (9/15: Admin Dashboard, Student CRUD, Import, Professors, Departments, Audit Log, Account Status, Levels/Semesters, Subjects)
-- Phase 4: en cours (verification publique QR active, rapport d'integrite branche; OTP/2FA/RGPD encore ouverts)
-- Phase 5: non demarrée
+- Phase 3: **60%** (9/15 items: Admin Dashboard, Student CRUD, Import, Professors, Departments, Audit Log, Account Status, Levels/Semesters, Subjects). Reste 6 items (Templates, File d'attente, Bulletins masse, Rapports, Paiements, Stages).
+- Phase 4: **30%** en cours (QR verification, Integrity report done; OTP/2FA/RGPD/Audit logs ouverts)
+- Phase 5: **0%** non demarrée
 
-### Verrous Phase 2 Restants (Blockers)
+### Verrous Actuels (Blockers)
 
-Aucun verrou ouvert sur le perimetre actif professeur.
+Aucun verrou ouvert sur le perimetre actif étudiant ou professeur. Le focus est maintenant exclusivement sur les workflows backend administrateurs et métier (Paiements, Bulletins en masse, Validation).
 
 ## 6. Journal D'Avancement
 

@@ -1,16 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   CardHeader,
+  Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -18,489 +26,365 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Typography,
-  Chip,
-  Alert,
-  CircularProgress,
-  Stack,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Tooltip,
+  Typography,
 } from '@mui/material';
 import {
   Check as CheckIcon,
   Close as CloseIcon,
-  Visibility as VisibilityIcon,
-  Comment as CommentIcon,
   Info as InfoIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
-import { supabase } from '@/supabase';
+import { getValidationQueue, reviewValidationQueueItem } from '@/api/admin';
 import { useAuth } from '../../hooks/useAuth';
 
 const VALIDATION_STATUSES = [
   { value: 'pending', label: 'En attente', color: 'warning' },
   { value: 'approved', label: 'Approuvé', color: 'success' },
   { value: 'rejected', label: 'Rejeté', color: 'error' },
-  { value: 'revision', label: 'En révision', color: 'info' },
 ];
 
-const DOCUMENT_STATUSES = [
-  { value: 'student_record', label: 'Dossier étudiant' },
-  { value: 'grade_correction', label: 'Demande de correction de note' },
-  { value: 'transcript_request', label: 'Demande de relevé' },
-  { value: 'certificate_request', label: 'Demande de certificat' },
-  { value: 'document_upload', label: 'Upload de document' },
-  { value: 'stage_application', label: 'Candidature stage' },
+const REQUEST_TYPES = [
+  { value: 'transcript', label: 'Relevé de notes' },
+  { value: 'certificate', label: 'Certificat de scolarité' },
+  { value: 'attestation', label: 'Attestation' },
+  { value: 'diploma', label: 'Diplôme' },
+  { value: 'grade_correction', label: 'Correction de note' },
+  { value: 'document_upload', label: 'Dépôt de document' },
 ];
+
+const getRequestLabel = (value) => REQUEST_TYPES.find((item) => item.value === value)?.label || value;
+const getStatusLabel = (value) => VALIDATION_STATUSES.find((item) => item.value === value)?.label || value;
+const getStatusColor = (value) => VALIDATION_STATUSES.find((item) => item.value === value)?.color || 'default';
+const getWaitingDays = (createdAt) => Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24)));
+
+const getRequesterName = (requester) => requester?.full_name || requester?.email || 'Demandeur inconnu';
 
 export default function ValidationQueuePage() {
   const { authState } = useAuth();
   const [queue, setQueue] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('pending');
   const [filterType, setFilterType] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
-  const [detailsDialog, setDetailsDialog] = useState(false);
-  const [actionDialog, setActionDialog] = useState(false);
-  const [actionType, setActionType] = useState(null); // 'approve' or 'reject'
-  const [feedback, setFeedback] = useState('');
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [actionType, setActionType] = useState('approve');
+  const [reviewComment, setReviewComment] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    fetchValidationQueue();
-    const interval = setInterval(fetchValidationQueue, 30000); // Refresh every 30s
+    fetchQueue();
+    const interval = setInterval(fetchQueue, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchValidationQueue = async () => {
+  const fetchQueue = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const { data, error: fetchError } = await supabase
-        .from('validation_queue')
-        .select(
-          `
-          *,
-          student:students(id, profile_id, level),
-          requester:profiles(id, first_name, last_name, email)
-        `
-        )
-        .order('created_at', { ascending: false });
-
-      if (fetchError) throw fetchError;
+      setError('');
+      const { data, error: fetchError } = await getValidationQueue();
+      if (fetchError) {
+        throw fetchError;
+      }
       setQueue(data || []);
     } catch (err) {
-      console.error('Error fetching validation queue:', err);
-      setError('Erreur lors du chargement de la file de validation');
+      console.error('fetchQueue:', err);
+      setError('Erreur lors du chargement de la file de validation.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleApprove = async () => {
-    if (!selectedItem) return;
-    try {
-      setLoading(true);
-      setError(null);
+  const filteredQueue = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
 
-      // Update validation queue
-      const { error: updateError } = await supabase
-        .from('validation_queue')
-        .update({
-          status: 'approved',
-          reviewed_by: authState.user?.id,
-          reviewed_at: new Date().toISOString(),
-          feedback: feedback || null,
-        })
-        .eq('id', selectedItem.id);
+    return queue.filter((item) => {
+      const matchesStatus = !filterStatus || item.status === filterStatus;
+      const matchesType = !filterType || item.request_type === filterType;
+      const matchesSearch = !query
+        || getRequesterName(item.requester).toLowerCase().includes(query)
+        || item.requester?.email?.toLowerCase().includes(query)
+        || item.request_type?.toLowerCase().includes(query)
+        || item.details?.title?.toLowerCase().includes(query)
+        || item.details?.document_name?.toLowerCase().includes(query);
 
-      if (updateError) throw updateError;
+      return matchesStatus && matchesType && matchesSearch;
+    });
+  }, [filterStatus, filterType, queue, searchQuery]);
 
-      // Create audit log
-      await supabase.from('audit_log').insert([
-        {
-          user_id: authState.user?.id,
-          action: 'approve',
-          resource_type: 'validation_queue_item',
-          resource_id: selectedItem.id,
-          description: `Item validé: ${selectedItem.document_type}${feedback ? ` - ${feedback}` : ''}`,
-        },
-      ]);
+  const stats = useMemo(() => ({
+    pending: queue.filter((item) => item.status === 'pending').length,
+    approved: queue.filter((item) => item.status === 'approved').length,
+    rejected: queue.filter((item) => item.status === 'rejected').length,
+  }), [queue]);
 
-      setSuccess('Item approuvé avec succès');
-      setActionDialog(false);
-      setFeedback('');
-      fetchValidationQueue();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      console.error('Error approving item:', err);
-      setError('Erreur lors de l\'approbation');
-    } finally {
-      setLoading(false);
-    }
+  const openDetails = (item) => {
+    setSelectedItem(item);
+    setDetailsDialogOpen(true);
   };
 
-  const handleReject = async () => {
-    if (!selectedItem || !feedback.trim()) {
-      setError('La raison du rejet est requise');
+  const openReviewDialog = (item, decision) => {
+    setSelectedItem(item);
+    setActionType(decision);
+    setReviewComment(item.review_comment || '');
+    setActionDialogOpen(true);
+  };
+
+  const handleReview = async () => {
+    if (!selectedItem) {
       return;
     }
+
+    if (actionType === 'reject' && !reviewComment.trim()) {
+      setError('Un commentaire est requis pour rejeter une demande.');
+      return;
+    }
+
     try {
       setLoading(true);
-      setError(null);
+      setError('');
 
-      const { error: updateError } = await supabase
-        .from('validation_queue')
-        .update({
-          status: 'rejected',
-          reviewed_by: authState.user?.id,
-          reviewed_at: new Date().toISOString(),
-          feedback: feedback,
-        })
-        .eq('id', selectedItem.id);
+      const actor = {
+        id: authState.profile?.id || authState.user?.id || null,
+        full_name: authState.profile?.full_name || authState.user?.email || 'Admin ESGIS',
+        role: authState.profile?.role || 'admin',
+      };
 
-      if (updateError) throw updateError;
+      const { error: reviewError } = await reviewValidationQueueItem(selectedItem.id, {
+        decision: actionType,
+        comment: reviewComment,
+        reviewerId: actor.id,
+        actor,
+      });
 
-      // Create audit log
-      await supabase.from('audit_log').insert([
-        {
-          user_id: authState.user?.id,
-          action: 'reject',
-          resource_type: 'validation_queue_item',
-          resource_id: selectedItem.id,
-          description: `Item rejeté: ${selectedItem.document_type} - ${feedback}`,
-        },
-      ]);
+      if (reviewError) {
+        throw reviewError;
+      }
 
-      setSuccess('Item rejeté avec succès');
-      setActionDialog(false);
-      setFeedback('');
-      fetchValidationQueue();
-      setTimeout(() => setSuccess(null), 3000);
+      setSuccess(actionType === 'approve' ? 'Demande approuvée.' : 'Demande rejetée.');
+      setActionDialogOpen(false);
+      setSelectedItem(null);
+      setReviewComment('');
+      await fetchQueue();
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      console.error('Error rejecting item:', err);
-      setError('Erreur lors du rejet');
+      console.error('handleReview:', err);
+      setError(`Erreur lors de la revue: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDetails = (item) => {
-    setSelectedItem(item);
-    setDetailsDialog(true);
-  };
-
-  const handleAction = (item, type) => {
-    setSelectedItem(item);
-    setActionType(type);
-    setFeedback(item.feedback || '');
-    setActionDialog(true);
-  };
-
-  const filteredQueue = queue.filter((item) => {
-    const matchesStatus = !filterStatus || item.status === filterStatus;
-    const matchesType = !filterType || item.document_type === filterType;
-    const matchesSearch =
-      !searchQuery ||
-      item.requester?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.document_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.document_title?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesStatus && matchesType && matchesSearch;
-  });
-
-  const getStatusChip = (status) => {
-    const config = DOCUMENT_STATUSES.find((s) => s.value === status);
-    return config?.label || status;
-  };
-
-  const getValidationColor = (status) => {
-    const colors = {
-      pending: 'warning',
-      approved: 'success',
-      rejected: 'error',
-      revision: 'info',
-    };
-    return colors[status] || 'default';
-  };
-
-  const getWaitingDays = (createdAt) => {
-    const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
-    return days;
-  };
-
-  const stats = {
-    pending: queue.filter((q) => q.status === 'pending').length,
-    approved: queue.filter((q) => q.status === 'approved').length,
-    rejected: queue.filter((q) => q.status === 'rejected').length,
-    revision: queue.filter((q) => q.status === 'revision').length,
   };
 
   return (
     <Box sx={{ p: 3 }}>
-      <Card sx={{ mb: 3 }}>
+      <Card>
         <CardHeader
-          title="File d'Attente de Validation"
-          subheader="Gérer les demandes de validation des documents"
+          title="File d'attente de validation"
+          subheader="Traiter les demandes documentaires et institutionnelles en attente"
         />
         <CardContent>
-          {/* Stats Summary */}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 3 }}>
-            <Chip
-              icon={<InfoIcon />}
-              label={`En attente: ${stats.pending}`}
-              color={stats.pending > 0 ? 'warning' : 'default'}
-              variant="outlined"
-            />
-            <Chip
-              icon={<CheckIcon />}
-              label={`Approuvés: ${stats.approved}`}
-              color="success"
-              variant="outlined"
-            />
-            <Chip
-              label={`Rejetés: ${stats.rejected}`}
-              color="error"
-              variant="outlined"
-            />
-            <Chip
-              label={`En révision: ${stats.revision}`}
-              color="info"
-              variant="outlined"
-            />
+            <Chip icon={<InfoIcon />} label={`En attente: ${stats.pending}`} color={stats.pending ? 'warning' : 'default'} variant="outlined" />
+            <Chip icon={<CheckIcon />} label={`Approuvées: ${stats.approved}`} color="success" variant="outlined" />
+            <Chip icon={<CloseIcon />} label={`Rejetées: ${stats.rejected}`} color="error" variant="outlined" />
           </Stack>
 
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
           {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-          {/* Filters */}
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
               <InputLabel>Statut</InputLabel>
-              <Select
-                value={filterStatus}
-                label="Statut"
-                onChange={(e) => setFilterStatus(e.target.value)}
-              >
+              <Select value={filterStatus} label="Statut" onChange={(event) => setFilterStatus(event.target.value)}>
                 <MenuItem value="">Tous les statuts</MenuItem>
                 {VALIDATION_STATUSES.map((status) => (
-                  <MenuItem key={status.value} value={status.value}>
-                    {status.label}
-                  </MenuItem>
+                  <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={filterType}
-                label="Type"
-                onChange={(e) => setFilterType(e.target.value)}
-              >
+
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel>Type de demande</InputLabel>
+              <Select value={filterType} label="Type de demande" onChange={(event) => setFilterType(event.target.value)}>
                 <MenuItem value="">Tous les types</MenuItem>
-                {DOCUMENT_STATUSES.map((type) => (
-                  <MenuItem key={type.value} value={type.value}>
-                    {type.label}
-                  </MenuItem>
+                {REQUEST_TYPES.map((type) => (
+                  <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
                 ))}
               </Select>
             </FormControl>
+
             <TextField
               size="small"
-              placeholder="Rechercher par email, titre..."
+              fullWidth
+              placeholder="Rechercher par demandeur, type ou objet..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{ flex: 1 }}
+              onChange={(event) => setSearchQuery(event.target.value)}
             />
           </Stack>
 
-          {/* Queue Table */}
           {loading && !queue.length ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
               <CircularProgress />
             </Box>
           ) : (
             <TableContainer component={Paper}>
-              <Table>
-                <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
-                  <TableRow>
-                    <TableCell>Date</TableCell>
-                    <TableCell>Demandeur</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Titre</TableCell>
-                    <TableCell align="center">Statut</TableCell>
-                    <TableCell align="center">En attente</TableCell>
-                    <TableCell align="center">Actions</TableCell>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                    <TableCell><strong>Date</strong></TableCell>
+                    <TableCell><strong>Demandeur</strong></TableCell>
+                    <TableCell><strong>Type</strong></TableCell>
+                    <TableCell><strong>Objet</strong></TableCell>
+                    <TableCell><strong>Priorité</strong></TableCell>
+                    <TableCell align="center"><strong>Statut</strong></TableCell>
+                    <TableCell align="center"><strong>En attente</strong></TableCell>
+                    <TableCell align="right"><strong>Actions</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredQueue.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                        <Typography color="textSecondary">
-                          Aucun item dans la file de validation
-                        </Typography>
+                      <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                        <Typography color="text.secondary">Aucune demande à afficher.</Typography>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    filteredQueue.map((item) => (
-                      <TableRow key={item.id} hover>
-                        <TableCell sx={{ fontSize: '0.9rem' }}>
-                          {new Date(item.created_at).toLocaleDateString('fr-FR', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip title={item.requester?.email}>
-                            <Typography variant="body2">
-                              {item.requester?.first_name} {item.requester?.last_name}
-                            </Typography>
+                  ) : filteredQueue.map((item) => (
+                    <TableRow key={item.id} hover>
+                      <TableCell>
+                        {new Date(item.created_at).toLocaleDateString('fr-FR', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={500}>
+                          {getRequesterName(item.requester)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.requester?.email || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={getRequestLabel(item.request_type)} variant="outlined" size="small" />
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 260 }}>
+                        <Typography variant="body2" noWrap title={item.details?.title || item.details?.document_name || item.request_type}>
+                          {item.details?.title || item.details?.document_name || item.request_type}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={item.priority || 'normal'}
+                          size="small"
+                          color={item.priority === 'urgent' ? 'error' : item.priority === 'high' ? 'warning' : 'default'}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip label={getStatusLabel(item.status)} color={getStatusColor(item.status)} size="small" />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Typography variant="body2" color={getWaitingDays(item.created_at) > 7 ? 'error.main' : 'text.secondary'}>
+                          {getWaitingDays(item.created_at)}j
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          <Tooltip title="Détails">
+                            <IconButton size="small" onClick={() => openDetails(item)}>
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
                           </Tooltip>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={getStatusChip(item.document_type)}
-                            size="small"
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {item.document_title}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Chip
-                            label={
-                              VALIDATION_STATUSES.find((s) => s.value === item.status)?.label ||
-                              item.status
-                            }
-                            color={getValidationColor(item.status)}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell align="center">
-                          <Typography
-                            variant="body2"
-                            color={getWaitingDays(item.created_at) > 7 ? 'error' : 'textSecondary'}
-                          >
-                            {getWaitingDays(item.created_at)}j
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Stack direction="row" spacing={0.5} justifyContent="center">
-                            <Tooltip title="Détails">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleDetails(item)}
-                              >
-                                <VisibilityIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            {item.status === 'pending' && (
-                              <>
-                                <Tooltip title="Approuver">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleAction(item, 'approve')}
-                                    color="success"
-                                  >
-                                    <CheckIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Rejeter">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleAction(item, 'reject')}
-                                    color="error"
-                                  >
-                                    <CloseIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </>
-                            )}
-                            {item.status === 'revision' && (
-                              <Tooltip title="Ajouter un commentaire">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleAction(item, 'comment')}
-                                >
-                                  <CommentIcon fontSize="small" />
+                          {item.status === 'pending' && (
+                            <>
+                              <Tooltip title="Approuver">
+                                <IconButton size="small" color="success" onClick={() => openReviewDialog(item, 'approve')}>
+                                  <CheckIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
-                            )}
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                              <Tooltip title="Rejeter">
+                                <IconButton size="small" color="error" onClick={() => openReviewDialog(item, 'reject')}>
+                                  <CloseIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
         </CardContent>
       </Card>
-    </Box>
-  );
-}
 
-// Details Dialog Component
-function DetailsDialog({ open, onClose, item }) {
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Détails de la demande</DialogTitle>
-      <DialogContent sx={{ pt: 2 }}>
-        {item && (
+      <Dialog open={detailsDialogOpen} onClose={() => setDetailsDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Détails de la demande</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          {selectedItem && (
+            <Stack spacing={2}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Demandeur</Typography>
+                <Typography variant="body2">{getRequesterName(selectedItem.requester)}</Typography>
+                <Typography variant="caption" color="text.secondary">{selectedItem.requester?.email || '-'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Type de demande</Typography>
+                <Typography variant="body2">{getRequestLabel(selectedItem.request_type)}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Objet</Typography>
+                <Typography variant="body2">{selectedItem.details?.title || selectedItem.details?.document_name || '-'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Commentaire de revue</Typography>
+                <Typography variant="body2">{selectedItem.review_comment || '-'}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Détails</Typography>
+                <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, p: 1.5, backgroundColor: '#f8f9fb', borderRadius: 1 }}>
+                  {JSON.stringify(selectedItem.details || {}, null, 2)}
+                </Typography>
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailsDialogOpen(false)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={actionDialogOpen} onClose={() => setActionDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{actionType === 'approve' ? 'Approuver la demande' : 'Rejeter la demande'}</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={2}>
-            <Box>
-              <Typography variant="caption" color="textSecondary">
-                Demandeur
-              </Typography>
-              <Typography variant="body2">
-                {item.requester?.first_name} {item.requester?.last_name}
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                {item.requester?.email}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="textSecondary">
-                Type de document
-              </Typography>
-              <Typography variant="body2">
-                {DOCUMENT_STATUSES.find((t) => t.value === item.document_type)?.label ||
-                  item.document_type}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="textSecondary">
-                Titre
-              </Typography>
-              <Typography variant="body2">{item.document_title}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="textSecondary">
-                Description
-              </Typography>
-              <Typography variant="body2">{item.description || '-'}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="textSecondary">
-                Commentaires
-              </Typography>
-              <Typography variant="body2">{item.feedback || '-'}</Typography>
-            </Box>
+            <Typography variant="body2" color="text.secondary">
+              {selectedItem ? `${getRequestLabel(selectedItem.request_type)} — ${selectedItem.details?.title || selectedItem.details?.document_name || selectedItem.id}` : ''}
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              minRows={3}
+              label={actionType === 'approve' ? 'Commentaire (optionnel)' : 'Motif du rejet'}
+              value={reviewComment}
+              onChange={(event) => setReviewComment(event.target.value)}
+            />
           </Stack>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Fermer</Button>
-      </DialogActions>
-    </Dialog>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActionDialogOpen(false)}>Annuler</Button>
+          <Button variant="contained" color={actionType === 'approve' ? 'success' : 'error'} onClick={handleReview}>
+            Confirmer
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

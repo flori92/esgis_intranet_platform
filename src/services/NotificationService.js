@@ -139,8 +139,8 @@ class NotificationService {
       const notifConfig = NOTIFICATION_TYPES[options.type];
       const notification = new Notification(title, {
         body: options.body || '',
-        icon: '/images/esgis-logo.png',
-        badge: '/images/esgis-logo.png',
+        icon: '/android-chrome-192x192.png',
+        badge: '/android-chrome-192x192.png',
         tag: options.tag || `esgis-${Date.now()}`,
         data: { url: options.url || '/' },
         requireInteraction: options.priority === 'critical',

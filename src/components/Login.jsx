@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { Lucide } from '@/components/base-components';
 import { useNavigate } from 'react-router-dom';
+import { LOGO_ESGIS_PATH } from '@/utils/assetUtils';
 
 /**
  * Composant de connexion à l'application
@@ -134,9 +135,9 @@ const Login = () => {
           <div className="hidden min-h-screen flex-col xl:flex">
             <div className="my-auto">
               <img
-                alt="Tailwind HTML Admin Template"
+                alt="Logo ESGIS"
                 className="w-1/2 -mt-16"
-                src="/assets/images/logo.svg"
+                src={LOGO_ESGIS_PATH()}
               />
               <div className="-mt-10 text-white">
                 <div className="mt-4 text-4xl font-medium">

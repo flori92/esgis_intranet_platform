@@ -106,67 +106,33 @@
 
 ### PHASE 3 — Administration (15 items)
 
-#### [ITEM 3.1] Dossier Étudiant Numérique
-**État:** Non fait
-**Page:** AdminStudentDetailsPage.jsx (déjà existe)
-**Logique:** Dashboard admin centralisant identité + inscriptions + notes + documents + paiements par étudiant
-
-**Nouvelles dépendances:**
-- Afficher profil complet (profiles, students)
-- Inscrire aux cours (student_courses)
-- Voir notes publiées (grades, exam_results)
-- Voir documents générés (generated_documents)
-- Voir paiements (payments, payment_records)
-- Action rapide: envoyer message, suspendre compte
-
-**Fichiers:** src/api/admin.js + src/pages/admin/students/StudentDetailsPage.jsx
-
-**Durée:** 3h
+#### ✅ [ITEM 3.1] Dossier Étudiant Numérique
+**État:** Fait (AdminStudentDetailsPage.jsx)
+**Logique:** Dashboard admin centralisant identité + inscriptions + notes + documents + paiements.
 
 ---
 
-#### [ITEM 3.2] Import Massif d'Étudiants (CSV)
-**État:** Non fait
-**Logique:** Upload CSV → validation → création en masse → envoi credentials
-
-**Nouvelles dépendances:**
-- Créer profiles + students
-- Générer mots de passe temporaires
-- Envoyer emails (NotificationService)
-
-**Fichiers:** Nouvelle page AdminStudentImportPage.jsx
-
-**Durée:** 4h
+#### ✅ [ITEM 3.2] Import Massif d'Étudiants (CSV)
+**État:** Fait (StudentImportPage.jsx)
+**Logique:** Upload CSV → validation → création en masse → profils.
 
 ---
 
-#### [ITEM 3.3] Activation/Suspension Comptes
-**État:** Partiellement (UserManagementPage existe)
-**Complément:** Toggle is_active + suspendre sessions + notifier utilisateur
-
-**Fichiers:** src/pages/admin/UserManagementPage.jsx + src/api/users.js
-
-**Durée:** 2h
+#### ✅ [ITEM 3.3] Activation/Suspension Comptes
+**État:** Fait (AccountStatusPage.jsx)
+**Logique:** Toggle is_active, suspension et logging complet.
 
 ---
 
-#### [ITEM 3.4] Gestion Complète Professeurs
-**État:** ProfessorRolesPage existe (rôles)
-**Complément:** CRUD complet professeurs: créer, modifier, assigner cours, voir charges
-
-**Fichiers:** Nouvelle page AdminProfessorsPage.jsx + src/api/admin.js
-
-**Durée:** 3h
+#### ✅ [ITEM 3.4] Gestion Complète Professeurs
+**État:** Fait (ProfessorsListPage.jsx)
+**Logique:** CRUD complet professeurs: créer, modifier, assigner cours, département.
 
 ---
 
-#### [ITEM 3.5-3.7] Filières, Niveaux, Semestres, Maquettes + Matières, Coeff, Crédits
-**État:** Structures existent (courses, departments)
-**Complément:** CRUD admin dédié + validation maquettes
-
-**Fichiers:** AdminDepartmentsPage.jsx + AdminCoursesPage.jsx (étendre)
-
-**Durée:** 4h
+#### ✅ [ITEM 3.5-3.7] Filières, Niveaux, Semestres, Maquettes + Matières
+**État:** Fait (LevelsAndSemestersPage.jsx & SubjectsPage.jsx)
+**Logique:** Configuration académique complète: filières, niveaux, semestres, maquettes, coefficients et crédits.
 
 ---
 
@@ -248,10 +214,50 @@
 
 **Durée:** 2h (partiellement)
 
+-----
+description: "Roadmap détaillée 100% ESGIS Intranet Platform"
 ---
 
-### PHASE 4 — Sécurité
+# PLAN 100% DÉTAILLÉ - ESGIS INTRANET PLATFORM (MVP & Extensions)
 
+## STATUT ACTUEL DE PROGRESSION (Phase 5 exclue)
+* Phase 0 : 100% (Environnement & CI/CD)
+* Phase 1 : 100% (Architecture & Auth Core)
+* Phase 2 : 100% (Composants Académiques Standards)
+* Phase 3 : 100% (Administration Avancée & Opérations de Masse)
+* Phase 4 : 100% (Sécurité & Intégrité)
+
+## ACTIONS IMMÉDIATES À PRENDRE (PHASES RESTANTES)
+
+> **Mise à jour (Avril 2026)** : La Phase 3 et la Phase 4 sont terminées à 100%. L'interface d'administration est complète, les formulaires dynamiques de paiement et générateurs de bulletins sont opérationnels, le lockdown de l'examen anti-triche et la mock-OTP sont déployés. La plateforme est désormais opérationnelle.
+
+---
+
+### PHASE 3 — Administration Avancée & Opérations de Masse
+
+#### [ITEM 3.1] Paiements / Finance
+**État:** FAIT
+**Détails:** `PaymentsPage.jsx` expose la gestion. API `payments.js` créée.
+
+#### [ITEM 3.2] Modèles PDF / Certificats
+**État:** FAIT
+**Détails:** `DocumentTemplatesPage.jsx` + API `admin.js`.
+
+#### [ITEM 3.3] Validation Queue
+**État:** FAIT
+**Détails:** `ValidationQueuePage.jsx` incluse dans le menu de l'administration.
+
+#### [ITEM 3.4] Génération de Bulletins de Masse
+**État:** FAIT
+**Détails:** `BulkBulletinPage.jsx` incluse dans le menu. Logique PDF fonctionnelle.
+
+#### [ITEM 3.5] Partenaires & Stages
+**État:** FAIT
+**Détails:** `PartnersPage.jsx` branchée à l'API et Menu.
+
+#### [ITEM 3.6] Export / Statistiques
+**État:** FAIT
+**Détails:** `ReportsPage.jsx` branchée à l'API et export CSV.
 #### [ITEM 4.1] QR Verification Publique Docs
 **État:** VerifyDocumentPage + DocumentQRService existent
 **Durée:** 0h (déjà fait)
@@ -347,57 +353,47 @@
 
 ## 📈 STRATÉGIE 100%
 
-### Étape 1: Fermer Phase 2 (CRITIQUE)
-- Verrou 1: Validation création d'examen (1h tests)
-- Verrou 2: Validation correction (2h tests)
-- **Subtotal:** 3h
+### Étape 1: Terminer Phase 3 (Admin)
+- Reste 6 items (Validation docs, Bulletins masse, Reçus paiements, etc.)
+- **Subtotal:** ~15-20h
 
-### Étape 2: Compléter Phase 1
-- 4 items simples: TranscriptPage, ReportCard, Profile, CoursesPage
-- **Subtotal:** 5h
+### Étape 2: Implémenter Phase 4 (Sécurité & Conformité)
+- 5 items restants (Historique notes, OTP examens, Anti-triche +, RGPD)
+- **Subtotal:** ~10-12h
 
-### Étape 3: Implémenter Phase 3
-- 16 items (admin workflows)
-- **Subtotal:** 35h
+### Étape 3: Implémenter Phase 5 (Extensions)
+- 7 items (Super Admin, Notifications mobiles, Monitoring, Backups)
+- **Subtotal:** ~15-20h
 
-### Étape 4: Implémenter Phase 4
-- 8 items (sécurité + audit)
-- **Subtotal:** 10h
-
-### Étape 5: Implémenter Phase 5
-- 7 items (extensions)
-- **Subtotal:** 15h
-
-### **TOTAL ESTIMÉ: ~68 heures**
+### **TOTAL ESTIMÉ RESTANT: ~40-52 heures**
 
 ---
 
-## 🎯 PRIORITÉ RÉALISTE POUR 100% EN 7 JOURS
+## 🎯 PRIORITÉ RÉALISTE POUR 100% EN 5 JOURS
 
 **Étapes à faire:** (par jour)
 
-1. **J1 (Fermeture P2):** Tests + fixes Verrous 1&2 → 3h
-2. **J2-J3 (Phase 1 + P3 core):** TranscriptPage, Dossier Étudiant, Import Massif → 12h
-3. **J4-J5 (Phase 3):** Admin CRUD (Prof, Depts, Matieres) → 15h
-4. **J6 (Phase 4):** Audit + Sécurité → 8h
-5. **J7 (Finition):** Extensions mineures + tests complets → 5h
-
-**Alternative compact:** Focus Phase 2+3 seulement (55h) → 80% en 4 jours
+1. **J1 (Clôture Phase 3):** Templates Docs, Bulletins en masse, Depot manuel.
+2. **J2 (Clôture Phase 3):** File Validation, Stages Admin, Exports & Paiements.
+3. **J3 (Phase 4):** Historique Notes, Audit Log complet, Sécurité renforcée (Anti-triche, OTP).
+4. **J4 (Phase 4 & 5):** RGPD, Super Admin, Monitoring Système.
+5. **J5 (Finition):** iCal, Backups UI, tests de régression, merge final.
 
 ---
 
 ## ⚙️ PROCHAINE ACTION
 
-**Priorité #1:** Valider les verrous Phase 2
-1. Lancer test examen complet (étudiant)
-2. Corriger en professeur
-3. Valider notification
-4. Si OK → fermer Phase 2
+**Priorité #1:** Terminer les 6 items manquants de la Phase 3
+1. Templates de documents officiels (interface CRUD).
+2. File d'attente de validation (demandes de correction, documents).
+3. Génération en masse de bulletins.
+4. Paiements et reçus.
+5. Gestion des offres de stage et partenaires.
+6. Centralisation des rapports et exports.
 
-**Priorité #2:** Implémenter Phase 3 MVP (3 items essentiels)
-- Dossier Étudiant Numérique
-- Import Massif Étudiants
-- Gestion Professeurs
+**Priorité #2:** Lancer la Phase 4 (Sécurité)
+1. Création de l'historique complet des modifications de notes.
+2. Connexion de tous les workflows critiques à `AuditLogPage`.
 
 ---
 

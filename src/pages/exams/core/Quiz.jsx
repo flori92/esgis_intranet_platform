@@ -150,9 +150,22 @@ const Quiz = () => {
         }
       }
     };
+
+    /**
+     * Empêche de tricher via la complétion du cache ou click-droit/copier
+     */
+    const preventAction = (e) => {
+      if (quizStatus === 'IN_PROGRESS') {
+        e.preventDefault();
+      }
+    };
     
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleBlur);
+    document.addEventListener('contextmenu', preventAction);
+    document.addEventListener('copy', preventAction);
+    document.addEventListener('cut', preventAction);
+    document.addEventListener('paste', preventAction);
     
     const intervalCheck = setInterval(() => {
       if (document.visibilityState === "hidden" && quizStatus === 'IN_PROGRESS') {
@@ -166,6 +179,10 @@ const Quiz = () => {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
+      document.removeEventListener('contextmenu', preventAction);
+      document.removeEventListener('copy', preventAction);
+      document.removeEventListener('cut', preventAction);
+      document.removeEventListener('paste', preventAction);
       clearInterval(intervalCheck);
       if (alertRef.current && document.body.contains(alertRef.current)) {
         document.body.removeChild(alertRef.current);

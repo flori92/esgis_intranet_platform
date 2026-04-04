@@ -297,7 +297,7 @@ export const saveAllConfig = async (configObject, updatedBy) => {
 // ============================================================
 
 /** Récupère les étudiants d'un niveau avec leurs moyennes */
-export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademique) => {
+export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademique, departmentId = null) => {
   try {
     const normalizedLevel = normalizeLevel(niveauId);
     if (!normalizedLevel) {
@@ -313,7 +313,9 @@ export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademiqu
         level,
         profile:profile_id(
           id,
-          full_name
+          full_name,
+          department_id,
+          departments:department_id(name)
         )
       `)
       .eq('level', normalizedLevel)
@@ -324,7 +326,19 @@ export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademiqu
       return { data: [], error: null };
     }
 
-    const studentIds = students.map((student) => student.id);
+    const filteredStudents = (students || []).filter((student) => {
+      if (!departmentId) {
+        return true;
+      }
+
+      return Number(student.profile?.department_id) === Number(departmentId);
+    });
+
+    const studentIds = filteredStudents.map((student) => student.id);
+    if (!studentIds.length) {
+      return { data: [], error: null };
+    }
+
     const { data: results, error: resultsError } = await supabase
       .from('exam_results')
       .select(`
@@ -360,7 +374,7 @@ export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademiqu
       return 'ajourné';
     };
 
-    const studentsWithGrades = (students || []).map((student) => {
+    const studentsWithGrades = filteredStudents.map((student) => {
       const studentResults = (results || []).filter((result) => {
         const resultSemester = result.exams?.courses?.semester;
         return result.student_id === student.id && resultSemester === semesterNumber;
@@ -389,6 +403,8 @@ export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademiqu
       return {
         id: student.id,
         name: student.profile?.full_name || '-',
+        department_id: student.profile?.department_id || null,
+        department_name: getRelation(student.profile?.departments)?.name || 'Non assigné',
         moyenne,
         credits,
         rang: 0,
@@ -558,7 +574,7 @@ export const getValidationQueue = async () => {
       .select(`
         *,
         student:students(id, profile_id, level),
-        requester:profiles(id, first_name, last_name, email)
+        requester:profiles(id, full_name, email)
       `)
       .order('created_at', { ascending: false });
 
@@ -582,6 +598,55 @@ export const updateValidationQueueItem = async (id, updates) => {
     return { error: null };
   } catch (error) {
     console.error('updateValidationQueueItem:', error);
+    return { error };
+  }
+};
+
+/** Applique une décision de validation avec journal d'audit */
+export const reviewValidationQueueItem = async (id, { decision, comment = '', reviewerId = null, actor = null } = {}) => {
+  try {
+    const normalizedDecision = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : decision;
+
+    const { data: currentItem, error: fetchError } = await supabase
+      .from('validation_queue')
+      .select('id, request_type, status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    const updates = {
+      status: normalizedDecision,
+      reviewer_id: reviewerId,
+      reviewed_at: new Date().toISOString(),
+      review_comment: comment || null,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error: updateError } = await updateValidationQueueItem(id, updates);
+    if (updateError) {
+      throw updateError;
+    }
+
+    await insertAuditLogEntry({
+      user_id: actor?.id || reviewerId || null,
+      user_name: actor?.full_name || null,
+      user_role: actor?.role || 'admin',
+      action: normalizedDecision === 'approved' ? 'approve_validation_request' : 'reject_validation_request',
+      resource: 'validation_queue',
+      resource_id: `${id}`,
+      details: [
+        `Type: ${currentItem.request_type}`,
+        `Statut: ${currentItem.status} -> ${normalizedDecision}`,
+        comment ? `Commentaire: ${comment}` : null
+      ].filter(Boolean).join(' | ')
+    });
+
+    return { error: null };
+  } catch (error) {
+    console.error('reviewValidationQueueItem:', error);
     return { error };
   }
 };

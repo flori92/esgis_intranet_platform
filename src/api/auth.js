@@ -206,7 +206,7 @@ export const getCurrentProfile = async () => {
 
 /**
  * Souscrit aux changements d'état d'authentification
- * @param {Function} callback - (_event, session) => void
+ * @param {(event: import('@supabase/supabase-js').AuthChangeEvent, session: import('@supabase/supabase-js').Session | null) => void} callback
  * @returns {{ data: { subscription: Object } }}
  */
 export const onAuthStateChange = (callback) =>

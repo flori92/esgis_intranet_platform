@@ -196,17 +196,27 @@ const TakeExamPage = () => {
             </Typography>
           </Box>
           
-          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Button variant="outlined" onClick={handleGoBack}>
               Annuler
             </Button>
-            <Button 
-              variant="contained" 
-              color="primary"
-              onClick={handleConfirmStart}
-            >
-              Commencer l'examen
-            </Button>
+            
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Button 
+                variant="contained" 
+                color="primary"
+                onClick={() => {
+                  const userCode = window.prompt("Veuillez saisir le code OTP confidentiel fourni par le surveillant (Indice: ESGIS2026):");
+                  if (userCode === "ESGIS2026" || userCode === "esgis2026") {
+                    handleConfirmStart();
+                  } else if (userCode !== null) {
+                    alert("Code OTP incorrect.");
+                  }
+                }}
+              >
+                Saisir le code OTP et commencer
+              </Button>
+            </Box>
           </Box>
         </Paper>
       )}

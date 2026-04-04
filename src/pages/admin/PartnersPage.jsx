@@ -4,7 +4,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   Card, CardContent, Divider, Snackbar, IconButton, Tooltip,
-  FormControl, InputLabel, Select, MenuItem, Pagination, Avatar
+  FormControl, InputLabel, Select, MenuItem, Avatar
 } from '@mui/material';
 import {
   Business as BusinessIcon,
@@ -24,20 +24,13 @@ import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { getPartners as fetchPartners, createPartner, updatePartner, deletePartner as removePartner } from '@/api/partners';
 
-const MOCK_PARTNERS = [
-  { id: 'e1', name: 'TechCorp Togo', sector: 'Informatique / IT', location: 'Lomé', contact_name: 'M. ASSOGBA Jean', contact_email: 'j.assogba@techcorp.tg', contact_phone: '+228 90 12 34 56', website: 'www.techcorp.tg', description: 'ESN spécialisée en développement web et mobile', stages_count: 12, last_collaboration: '2026-03-15', status: 'actif' },
-  { id: 'e2', name: 'BanqueATL', sector: 'Banque / Finance', location: 'Lomé', contact_name: 'Mme AMOUZOU Afi', contact_email: 'a.amouzou@banqueatl.tg', contact_phone: '+228 22 21 00 00', website: 'www.banqueatl.tg', description: 'Banque commerciale togolaise', stages_count: 8, last_collaboration: '2026-01-20', status: 'actif' },
-  { id: 'e3', name: 'Togocom', sector: 'Télécommunications', location: 'Lomé', contact_name: 'M. EKLU Koffi', contact_email: 'k.eklu@togocom.tg', contact_phone: '+228 90 00 00 00', website: 'www.togocom.tg', description: 'Opérateur télécom national', stages_count: 15, last_collaboration: '2026-02-28', status: 'actif' },
-  { id: 'e4', name: 'Cabinet Audit Plus', sector: 'Audit / Comptabilité', location: 'Lomé', contact_name: 'M. KOUDJO Pierre', contact_email: 'p.koudjo@auditplus.tg', contact_phone: '+228 91 22 33 44', website: '', description: 'Cabinet d\'audit et d\'expertise comptable', stages_count: 5, last_collaboration: '2025-12-10', status: 'inactif' },
-  { id: 'e5', name: 'GreenEnergy SA', sector: 'Énergie', location: 'Kara', contact_name: 'Mme DOSSOU Rita', contact_email: 'r.dossou@greenenergy.tg', contact_phone: '+228 93 44 55 66', website: 'www.greenenergy.tg', description: 'Société d\'énergie solaire', stages_count: 3, last_collaboration: '2026-03-01', status: 'actif' },
-];
-
 const SECTORS = ['Informatique / IT', 'Banque / Finance', 'Télécommunications', 'Audit / Comptabilité', 'Énergie', 'Commerce', 'Santé', 'ONG', 'Administration publique', 'Industrie'];
 
 /**
  * Page Carnet de Partenaires Entreprises — ESGIS Campus §5.6
  */
 const PartnersPage = () => {
+  const { authState } = useAuth();
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -59,9 +52,15 @@ const PartnersPage = () => {
       setLoading(true);
       try {
         const { data, error } = await fetchPartners();
-        if (!error && data && data.length > 0) setPartners(data);
-        else setPartners(MOCK_PARTNERS);
-      } catch { setPartners(MOCK_PARTNERS); }
+        if (error) {
+          throw error;
+        }
+        setPartners(data || []);
+      } catch (err) {
+        console.error('load partners:', err);
+        setError('Erreur lors du chargement des partenaires.');
+        setPartners([]);
+      }
       finally { setLoading(false); }
     };
     loadData();
@@ -88,24 +87,51 @@ const PartnersPage = () => {
     setEditDialog(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!partnerForm.name) { setError('Le nom est obligatoire.'); return; }
     setSaving(true);
-    if (editingPartner) {
-      setPartners(prev => prev.map(p => p.id === editingPartner.id ? { ...p, ...partnerForm } : p));
-      setSuccessMessage('Partenaire mis à jour.');
-    } else {
-      setPartners(prev => [{ id: `e${Date.now()}`, ...partnerForm, stages_count: 0, last_collaboration: null }, ...prev]);
-      setSuccessMessage('Partenaire ajouté.');
+    setError(null);
+
+    const payload = {
+      ...partnerForm,
+      website: partnerForm.website || null,
+      created_by: authState.profile?.id || authState.user?.id || null,
+    };
+
+    try {
+      if (editingPartner) {
+        const { error: updateError } = await updatePartner(editingPartner.id, payload);
+        if (updateError) throw updateError;
+        setSuccessMessage('Partenaire mis à jour.');
+      } else {
+        const { error: createError } = await createPartner(payload);
+        if (createError) throw createError;
+        setSuccessMessage('Partenaire ajouté.');
+      }
+
+      setEditDialog(false);
+      const { data, error } = await fetchPartners();
+      if (error) throw error;
+      setPartners(data || []);
+    } catch (err) {
+      console.error('handleSave partner:', err);
+      setError(err.message || 'Impossible de sauvegarder le partenaire.');
+    } finally {
+      setSaving(false);
     }
-    setEditDialog(false);
-    setSaving(false);
   };
 
-  const handleDelete = (partner) => {
-    setPartners(prev => prev.filter(p => p.id !== partner.id));
-    setDeleteDialog(null);
-    setSuccessMessage('Partenaire supprimé.');
+  const handleDelete = async (partner) => {
+    try {
+      const { error } = await removePartner(partner.id);
+      if (error) throw error;
+      setPartners(prev => prev.filter(p => p.id !== partner.id));
+      setDeleteDialog(null);
+      setSuccessMessage('Partenaire supprimé.');
+    } catch (err) {
+      console.error('handleDelete partner:', err);
+      setError(err.message || 'Impossible de supprimer le partenaire.');
+    }
   };
 
   const formatDate = (d) => { try { return format(new Date(d), 'dd MMM yyyy', { locale: fr }); } catch { return d || '-'; } };

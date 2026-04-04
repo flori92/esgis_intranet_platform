@@ -45,6 +45,7 @@ import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { supabase } from '../../../supabase';
 
 // Composant Tab Panel
 const TabPanel = (props) => {
@@ -74,6 +75,8 @@ const StudentDetailsPage = () => {
   const [student, setStudent] = useState(null);
   const [courses, setStudentCourses] = useState([]);
   const [exams, setStudentExams] = useState([]);
+  const [paymentsList, setPaymentsList] = useState([]);
+  const [documentsList, setDocumentsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
@@ -83,6 +86,9 @@ const StudentDetailsPage = () => {
   const fetchDataRef = useRef(async () => {
     setLoading(true);
     setError(null);
+    
+    // Helper pour extraire les objets des requêtes Supabase qui peuvent retourner des tableaux
+    const getRelation = (value) => (Array.isArray(value) ? value[0] : value);
     
     try {
       if (!id) {
@@ -114,19 +120,22 @@ const StudentDetailsPage = () => {
       }
       
       // Transformer les données de l'étudiant
+      const profile = getRelation(studentData.profiles);
+      const department = getRelation(studentData.departments);
+      
       const transformedStudent = {
         id: studentData.id,
-        profile_id: studentData.profiles?.id || '',
+        profile_id: profile?.id || '',
         student_id: studentData.student_id,
-        full_name: studentData.profiles?.full_name || 'Nom inconnu',
-        email: studentData.profiles?.email || 'Email inconnu',
-        gender: studentData.profiles?.gender || '',
-        date_of_birth: studentData.profiles?.date_of_birth || null,
-        phone_number: studentData.profiles?.phone_number || '',
-        address: studentData.profiles?.address || '',
-        department_id: studentData.departments?.id || null,
-        department_name: studentData.departments?.name || 'Département inconnu',
-        department_code: studentData.departments?.code || '',
+        full_name: profile?.full_name || 'Nom inconnu',
+        email: profile?.email || 'Email inconnu',
+        gender: profile?.gender || '',
+        date_of_birth: profile?.date_of_birth || null,
+        phone_number: profile?.phone_number || '',
+        address: profile?.address || '',
+        department_id: department?.id || null,
+        department_name: department?.name || 'Département inconnu',
+        department_code: department?.code || '',
         level: studentData.level || '',
         academic_year: studentData.academic_year || '',
         status: studentData.status || '',
@@ -134,6 +143,28 @@ const StudentDetailsPage = () => {
       };
       
       setStudent(transformedStudent);
+      
+      // Fetch payments
+      const { data: paymentsData } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('student_id', parseInt(id))
+        .order('payment_date', { ascending: false });
+      setPaymentsList(paymentsData || []);
+
+      // Fetch documents
+      const { data: docsData } = await supabase
+        .from('generated_documents')
+        .select(`
+          id,
+          file_path,
+          status,
+          created_at,
+          document_templates(name, type)
+        `)
+        .eq('student_id', parseInt(id))
+        .order('created_at', { ascending: false });
+      setDocumentsList(docsData || []);
       
       // Récupérer les cours de l'étudiant
       const { data: coursesData, error: coursesError } = await supabase
@@ -160,19 +191,25 @@ const StudentDetailsPage = () => {
       }
       
       // Transformer les données des cours
-      const transformedCourses = (coursesData || []).map(course => ({
-        id: course.id,
-        student_id: course.student_id,
-        course_id: course.course_id,
-        academic_year: course.academic_year,
-        semester: course.semester,
-        enrollment_date: course.enrollment_date,
-        status: course.status,
-        course_name: course.courses?.name || 'Cours inconnu',
-        course_code: course.courses?.code || '',
-        credits: course.courses?.credits || 0,
-        professor_name: course.professor_courses?.[0]?.professors?.profiles?.full_name || null
-      }));
+      const transformedCourses = (coursesData || []).map(course => {
+        const courseRef = getRelation(course.courses);
+        const profCourse = getRelation(course.professor_courses);
+        const profRef = getRelation(profCourse?.professors);
+        const profProfile = getRelation(profRef?.profiles);
+        return {
+          id: course.id,
+          student_id: course.student_id,
+          course_id: course.course_id,
+          academic_year: course.academic_year,
+          semester: course.semester,
+          enrollment_date: course.enrollment_date,
+          status: course.status,
+          course_name: courseRef?.name || 'Cours inconnu',
+          course_code: courseRef?.code || '',
+          credits: courseRef?.credits || 0,
+          professor_name: profProfile?.full_name || null
+        };
+      });
       
       setStudentCourses(transformedCourses);
       
@@ -197,18 +234,22 @@ const StudentDetailsPage = () => {
       }
       
       // Transformer les données des examens
-      const transformedExams = (examsData || []).map(exam => ({
-        id: exam.id,
-        exam_id: exam.exam_id,
-        student_id: exam.student_id,
-        course_id: exam.course_id,
-        grade: exam.grade,
-        status: exam.status,
-        exam_date: exam.exams?.date || '',
-        exam_type: exam.exams?.type || 'Inconnu',
-        course_name: exam.courses?.name || 'Cours inconnu',
-        course_code: exam.courses?.code || ''
-      }));
+      const transformedExams = (examsData || []).map(exam => {
+        const examRef = getRelation(exam.exams);
+        const courseRef = getRelation(exam.courses);
+        return {
+          id: exam.id,
+          exam_id: exam.exam_id,
+          student_id: exam.student_id,
+          course_id: exam.course_id,
+          grade: exam.grade,
+          status: exam.status,
+          exam_date: examRef?.date || '',
+          exam_type: examRef?.type || 'Inconnu',
+          course_name: courseRef?.name || 'Cours inconnu',
+          course_code: courseRef?.code || ''
+        };
+      });
       
       setStudentExams(transformedExams);
       
@@ -449,6 +490,7 @@ const StudentDetailsPage = () => {
           <Tab label="Cours" />
           <Tab label="Examens" />
           <Tab label="Paiements" />
+          <Tab label="Documents / Dépôt" />
         </Tabs>
         
         {/* Onglet Informations personnelles */}
@@ -658,18 +700,85 @@ const StudentDetailsPage = () => {
         {/* Onglet Paiements */}
         <TabPanel value={tabValue} index={3}>
           <Typography variant="h6" gutterBottom>
-            Historique des paiements
+            Historique des paiements ({paymentsList.length})
           </Typography>
           
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Le module de gestion des paiements est en cours de développement.
-          </Alert>
-          
-          <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
-            <Typography variant="body1">
-              Aucun paiement enregistré pour cet étudiant.
+          <TableContainer component={Paper} variant="outlined">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Montant</TableCell>
+                  <TableCell>Méthode</TableCell>
+                  <TableCell>Référence</TableCell>
+                  <TableCell>Année/Semestre</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {paymentsList.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      Aucun paiement enregistré pour cet étudiant.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paymentsList.map((payment) => (
+                    <TableRow key={payment.id}>
+                      <TableCell>{formatDate(payment.payment_date)}</TableCell>
+                      <TableCell>{new Intl.NumberFormat('fr-FR').format(payment.amount)} XOF</TableCell>
+                      <TableCell>{payment.payment_method}</TableCell>
+                      <TableCell>{payment.reference_number || '-'}</TableCell>
+                      <TableCell>{payment.academic_year} - S{payment.semester}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </TabPanel>
+
+        {/* Onglet Documents */}
+        <TabPanel value={tabValue} index={4}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6">
+              Documents et Relevés ({documentsList.length})
             </Typography>
-          </Paper>
+            <Button variant="contained" size="small" onClick={() => alert('Dépôt manuel disponible prochainement via API.')}>Dépôt manuel</Button>
+          </Box>
+          <TableContainer component={Paper} variant="outlined">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Document</TableCell>
+                  <TableCell>Statut</TableCell>
+                  <TableCell>Date de génération</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {documentsList.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      Aucun document dans le dossier.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  documentsList.map((doc) => {
+                    const templateName = doc.document_templates?.name || (doc.file_path.includes('bulletins') ? 'Bulletin' : 'Document');
+                    return (
+                      <TableRow key={doc.id}>
+                        <TableCell>
+                           <strong>{templateName}</strong>
+                           <Typography variant="caption" display="block" color="text.secondary">{doc.file_path}</Typography>
+                        </TableCell>
+                        <TableCell><Chip label={doc.status} size="small" color="primary" variant="outlined" /></TableCell>
+                        <TableCell>{formatDate(doc.created_at)}</TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </TabPanel>
       </Paper>
       
