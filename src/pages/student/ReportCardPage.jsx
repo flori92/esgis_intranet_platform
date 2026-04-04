@@ -27,7 +27,9 @@ import {
 } from '@mui/material';
 import { Download as DownloadIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '@/supabase';
+import { getProfileById } from '@/api/profile';
+import { getRoleEntities } from '@/api/users';
+import { getCoursesBySemesterWithGrades } from '@/api/grades';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
@@ -62,17 +64,9 @@ const ReportCardPage = () => {
       setError(null);
 
       // Profil étudiant
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authState.user.id)
-        .single();
+      const { profile: profileData } = await getProfileById(authState.user.id);
 
-      const { data: studentData } = await supabase
-        .from('students')
-        .select('*')
-        .eq('profile_id', authState.user.id)
-        .single();
+      const { studentEntity: studentData } = await getRoleEntities(authState.user.id);
 
       setStudentInfo({
         ...profileData,
@@ -84,23 +78,7 @@ const ReportCardPage = () => {
       // Par défaut, semestre actuel = semestre de son level
       const currentSemester = Math.floor((studentData?.level || 1) * 2 - 1); // L2 = semester 3-4
 
-      const { data: coursesData } = await supabase
-        .from('courses')
-        .select(`
-          *,
-          grades(
-            id,
-            score,
-            is_published,
-            lecture_notes,
-            participation,
-            attendance,
-            comments,
-            created_at
-          )
-        `)
-        .eq('semester', currentSemester)
-        .order('name');
+      const { data: coursesData } = await getCoursesBySemesterWithGrades(currentSemester);
 
       if (!coursesData) {
         setCourses([]);

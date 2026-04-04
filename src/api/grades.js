@@ -868,3 +868,37 @@ export const getCourseGradeStats = async (courseId, typeEvaluation) => {
     return { data: null, error };
   }
 };
+
+/**
+ * Récupère les cours d'un semestre avec les grades associés.
+ * Utilisé par ReportCardPage pour le bulletin.
+ * @param {number} semester
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getCoursesBySemesterWithGrades = async (semester) => {
+  try {
+    const { data, error } = await supabase
+      .from('courses')
+      .select(`
+        *,
+        grades(
+          id,
+          score,
+          is_published,
+          lecture_notes,
+          participation,
+          attendance,
+          comments,
+          created_at
+        )
+      `)
+      .eq('semester', semester)
+      .order('name');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getCoursesBySemesterWithGrades:', error);
+    return { data: null, error };
+  }
+};

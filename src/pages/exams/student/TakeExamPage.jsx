@@ -79,6 +79,10 @@ const TakeExamPage = () => {
         };
         
         setExam(formattedExam);
+
+        if (studentExam.attempt_status === 'in_progress') {
+          setExamStarted(true);
+        }
       } catch (error) {
         console.error('Erreur lors de la récupération de l\'examen:', error);
         setError(error.message);

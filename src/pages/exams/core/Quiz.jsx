@@ -16,13 +16,22 @@ const Quiz = () => {
   const { 
     questions, 
     currentQuestionIndex, 
+    userAnswers,
     quizStatus,
     timer,
     examData,
     loading,
     error,
     startQuiz, 
-    reportCheatingAttempt 
+    reportCheatingAttempt,
+    answerQuestion,
+    goToNextQuestion,
+    goToPreviousQuestion,
+    endQuiz,
+    calculateScore,
+    cheatingAttempts,
+    scoreSummary,
+    countCorrectAnswers
   } = useQuiz();
   
   // Référence pour le div d'alerte personnalisé
@@ -174,7 +183,16 @@ const Quiz = () => {
 
   // Affichage des résultats si le quiz est terminé
   if (quizStatus === 'COMPLETED') {
-    return <QuizResults />;
+    return (
+      <QuizResults
+        questions={questions}
+        userAnswers={userAnswers}
+        calculateScore={calculateScore}
+        cheatingAttempts={cheatingAttempts}
+        scoreSummary={scoreSummary}
+        correctAnswersCount={countCorrectAnswers()}
+      />
+    );
   }
 
   if (error) {
@@ -240,8 +258,21 @@ const Quiz = () => {
             Tester l'alerte de triche
           </button>
         )}
-        <QuestionCard question={currentQuestion} />
-        <QuizNavigation />
+        <QuestionCard
+          question={currentQuestion}
+          answer={userAnswers[currentQuestion.id]}
+          onAnswerChange={(value) => answerQuestion(currentQuestion.id, value)}
+          questionNumber={currentQuestionIndex + 1}
+          totalQuestions={questions.length}
+        />
+        <QuizNavigation
+          questions={questions}
+          currentQuestionIndex={currentQuestionIndex}
+          userAnswers={userAnswers}
+          goToNextQuestion={goToNextQuestion}
+          goToPreviousQuestion={goToPreviousQuestion}
+          endQuiz={endQuiz}
+        />
       </div>
     </div>
   );

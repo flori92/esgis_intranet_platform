@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm run build",
+  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" = \"gh-pages\" ]; then echo \"Skipping gh-pages branch on Vercel\"; exit 0; fi; exit 1",
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [

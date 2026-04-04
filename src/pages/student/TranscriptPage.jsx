@@ -19,7 +19,9 @@ import {
 } from '@mui/material';
 import { Download as DownloadIcon, Print as PrintIcon } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '@/supabase';
+import { getProfileById } from '@/api/profile';
+import { getRoleEntities } from '@/api/users';
+import { getStudentPublishedGrades } from '@/api/grades';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
@@ -53,17 +55,9 @@ const TranscriptPage = () => {
       setError(null);
 
       // Récupérer l'info étudiant
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authState.user.id)
-        .single();
+      const { profile: profileData } = await getProfileById(authState.user.id);
 
-      const { data: studentData } = await supabase
-        .from('students')
-        .select('*')
-        .eq('profile_id', authState.user.id)
-        .single();
+      const { studentEntity: studentData } = await getRoleEntities(authState.user.id);
 
       setStudentInfo({
         ...profileData,
@@ -72,15 +66,7 @@ const TranscriptPage = () => {
       });
 
       // Charger les notes publiées avec cours
-      const { data: gradesData, error: gradesError } = await supabase
-        .from('grades')
-        .select(`
-          *,
-          course:courses(name, code, credits, semester)
-        `)
-        .eq('student_id', studentData?.id || authState.user.id)
-        .eq('is_published', true)
-        .order('courses.semester', { ascending: true });
+      const { data: gradesData, error: gradesError } = await getStudentPublishedGrades(studentData?.id || authState.user.id);
 
       if (gradesError) throw gradesError;
 

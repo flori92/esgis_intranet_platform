@@ -28,7 +28,10 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '@/supabase';
+import { getProfileById, updateProfileDirect } from '@/api/profile';
+import { updatePassword } from '@/api/auth';
+import { getRoleEntities } from '@/api/users';
+import { uploadFile, getPublicUrl } from '@/api/storage';
 
 /**
  * Page permettant à l'étudiant de gérer ses paramètres de profil
@@ -78,22 +81,14 @@ const ProfileSettingsPage = () => {
       setError(null);
 
       // Charger le profil
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authState.user.id)
-        .single();
+      const { profile: profileData, error: profileError } = await getProfileById(authState.user.id);
 
       if (profileError) throw profileError;
       setProfile(profileData);
       setFormData(profileData);
 
       // Charger les infos étudiant
-      const { data: studentData } = await supabase
-        .from('students')
-        .select('*')
-        .eq('profile_id', authState.user.id)
-        .single();
+      const { studentEntity: studentData } = await getRoleEntities(authState.user.id);
 
       setStudentInfo(studentData);
 
@@ -140,28 +135,21 @@ const ProfileSettingsPage = () => {
       // Upload avatar
       const fileExt = file.name.split('.').pop();
       const fileName = `${authState.user.id}-avatar.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file, { upsert: true });
+      const { error: uploadError } = await uploadFile('avatars', fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
       // Récupérer l'URL
-      const { data } = await supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
+      const { publicUrl } = getPublicUrl('avatars', fileName);
 
       // Mettre à jour le profil
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: data.publicUrl })
-        .eq('id', authState.user.id);
+      const { error: updateError } = await updateProfileDirect(authState.user.id, { avatar_url: publicUrl });
 
       if (updateError) throw updateError;
 
       setFormData({
         ...formData,
-        avatar_url: data.publicUrl,
+        avatar_url: publicUrl,
       });
 
       setSuccess('Avatar mis à jour avec succès');
@@ -193,10 +181,7 @@ const ProfileSettingsPage = () => {
         exam_reminders: preferences.examReminders,
       };
 
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('id', authState.user.id);
+      const { error: updateError } = await updateProfileDirect(authState.user.id, updateData);
 
       if (updateError) throw updateError;
 
@@ -227,10 +212,7 @@ const ProfileSettingsPage = () => {
       setSaving(true);
       setError(null);
 
-      // Utiliser Supabase auth pour changer le mot de passe
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: passwordForm.newPassword,
-      });
+      const { error: updateError } = await updatePassword(passwordForm.newPassword);
 
       if (updateError) throw updateError;
 

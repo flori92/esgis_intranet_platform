@@ -32,7 +32,7 @@ import {
 import { Offre } from '../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import supabase from '../../../services/supabase';
+import { uploadFile, getPublicUrl } from '../../../api/storage';
 
 interface OffresListProps {
   offres: Offre[];
@@ -106,23 +106,19 @@ const OffresListComponent: React.FC<OffresListProps> = ({
       const fileName = `cv_${Date.now()}_${fichierCV.name}`;
       const filePath = `stages/cv/${fileName}`;
       
-      const { error: uploadError } = await supabase.storage
-        .from('files')
-        .upload(filePath, fichierCV, {
-          cacheControl: '3600',
-          upsert: false
-        });
-      
+      const { error: uploadError } = await uploadFile('files', filePath, fichierCV, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
       if (uploadError) {
         throw uploadError;
       }
-      
+
       // 2. Obtenir l'URL du CV
-      const { data: urlData } = supabase.storage
-        .from('files')
-        .getPublicUrl(filePath);
-      
-      const fileUrl = urlData.publicUrl;
+      const { publicUrl } = getPublicUrl('files', filePath);
+
+      const fileUrl = publicUrl;
       setCvPath(fileUrl);
       
       // 3. Envoyer la candidature

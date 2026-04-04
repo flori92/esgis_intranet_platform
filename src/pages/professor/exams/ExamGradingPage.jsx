@@ -45,6 +45,54 @@ import GradeQuestionItem from './components/GradeQuestionItem';
 import { useAuth } from '@/context/AuthContext';
 import { createNotification } from '@/api/notifications';
 import { supabase } from '@/supabase';
+import { normalizeExamQuestion } from '@/utils/examQuestionUtils';
+
+const AUTO_GRADED_TYPES = new Set(['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric']);
+
+const normalizeString = (value) => String(value ?? '').trim().toLowerCase();
+
+const normalizeChoiceArray = (values = []) => [...values].map((value) => String(value)).sort();
+
+const computeAutoGrade = (question, answerValue) => {
+  if (
+    answerValue === null ||
+    answerValue === undefined ||
+    answerValue === '' ||
+    (Array.isArray(answerValue) && answerValue.length === 0)
+  ) {
+    return null;
+  }
+
+  if (question.question_type === 'qcm_single') {
+    return normalizeString(answerValue) === normalizeString(question.correct_answer) ? Number(question.points || 0) : 0;
+  }
+
+  if (question.question_type === 'qcm_multiple') {
+    const expected = normalizeChoiceArray(question.correct_answers || question.correct_answer || []);
+    const received = normalizeChoiceArray(Array.isArray(answerValue) ? answerValue : []);
+    return expected.length > 0 && expected.length === received.length && expected.every((value, index) => value === received[index])
+      ? Number(question.points || 0)
+      : 0;
+  }
+
+  if (question.question_type === 'true_false' || question.question_type === 'short_answer') {
+    return normalizeString(answerValue) === normalizeString(question.correct_answer) ? Number(question.points || 0) : 0;
+  }
+
+  if (question.question_type === 'numeric') {
+    const expected = Number(question.correct_answer);
+    const received = Number(answerValue);
+    const tolerance = Number(question.tolerance || 0);
+
+    if (Number.isFinite(expected) && Number.isFinite(received) && Math.abs(expected - received) <= tolerance) {
+      return Number(question.points || 0);
+    }
+
+    return 0;
+  }
+
+  return null;
+};
 
 /**
  * @typedef {Object} Exam - Informations sur un examen
@@ -219,7 +267,7 @@ const ExamGradingPage = () => {
           throw questionsError;
         }
         
-        setQuestions(questionsData || []);
+        setQuestions((questionsData || []).map((question) => normalizeExamQuestion(question)));
         
         // Récupérer les étudiants inscrits à l'examen
         const { data: studentExamsData, error: studentExamsError } = await supabase
@@ -323,16 +371,21 @@ const ExamGradingPage = () => {
       
       // Initialiser les réponses manquantes (si l'étudiant n'a pas répondu à toutes les questions)
       const allAnswers = questions.map(question => {
+        const normalizedQuestion = normalizeExamQuestion(question);
         const gradeRow = (gradeRows || []).find((row) => row.question_id === question.id);
+        const answerValue = rawAnswers?.[question.id] ?? null;
+        const autoGrade = !gradeRow && AUTO_GRADED_TYPES.has(normalizedQuestion.question_type)
+          ? computeAutoGrade(normalizedQuestion, answerValue)
+          : null;
         return {
           id: gradeRow?.id || `temp-${question.id}`,
           student_exam_id: studentExamId,
           question_id: question.id,
-          answer_value: rawAnswers?.[question.id] ?? null,
+          answer_value: answerValue,
           is_correct: typeof gradeRow?.points_earned === 'number'
-            ? gradeRow.points_earned >= question.points
-            : null,
-          grade: typeof gradeRow?.points_earned === 'number' ? gradeRow.points_earned : null,
+            ? gradeRow.points_earned >= Number(normalizedQuestion.points || 0)
+            : (typeof autoGrade === 'number' ? autoGrade >= Number(normalizedQuestion.points || 0) : null),
+          grade: typeof gradeRow?.points_earned === 'number' ? gradeRow.points_earned : autoGrade,
           feedback: gradeRow?.feedback || null,
           grade_record_id: gradeRow?.id || null
         };

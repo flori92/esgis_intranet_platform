@@ -211,6 +211,27 @@ export const updateProfileSettings = async (profileId, updates) => {
   }
 };
 
+/**
+ * Mise à jour directe du profil (sans transformation de champs).
+ * Utile pour les pages qui envoient des colonnes brutes (préférences, etc.).
+ * @param {string} profileId
+ * @param {Object} updates
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export const updateProfileDirect = async (profileId, updates) => {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', profileId);
+
+    return { error: error || null };
+  } catch (error) {
+    console.error('updateProfileDirect:', error);
+    return { error };
+  }
+};
+
 export const updateCurrentUserPassword = async (newPassword) => {
   try {
     const { error } = await supabase.auth.updateUser({ password: newPassword });

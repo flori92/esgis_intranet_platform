@@ -3,6 +3,7 @@
  * Centralise toutes les opérations liées aux examens
  */
 import { supabase } from '../supabase';
+import { normalizeExamQuestion } from '../utils/examQuestionUtils';
 
 /**
  * Types pour les examens - remplacés par des commentaires JSDoc
@@ -747,5 +748,644 @@ export const getProfessorExamMonitoringData = async (examId) => {
   } catch (error) {
     console.error('Erreur getProfessorExamMonitoringData:', error);
     return { exam: null, participants: [], activeStudents: [], incidents: [], summary: null, error };
+  }
+};
+
+export const getStudentExamResultDetails = async ({ examId, studentId, profileId }) => {
+  try {
+    const numericExamId = Number(examId);
+
+    const [
+      { data: examData, error: examError },
+      { data: studentExam, error: studentExamError },
+      { data: quizResult, error: quizResultError },
+      { data: questionRows, error: questionsError }
+    ] = await Promise.all([
+      supabase
+        .from('exams')
+        .select(`
+          id,
+          title,
+          description,
+          course_id,
+          professor_id,
+          exam_session_id,
+          exam_center_id,
+          date,
+          duration,
+          type,
+          room,
+          total_points,
+          passing_grade,
+          status,
+          courses:course_id(id, name, code),
+          professors:professor_id(id, profile_id, profiles:profile_id(full_name, email))
+        `)
+        .eq('id', numericExamId)
+        .single(),
+      supabase
+        .from('student_exams')
+        .select(`
+          id,
+          exam_id,
+          student_id,
+          seat_number,
+          attendance,
+          attempt_status,
+          status,
+          grade,
+          comments,
+          answers,
+          arrival_time,
+          departure_time,
+          created_at,
+          updated_at
+        `)
+        .eq('exam_id', numericExamId)
+        .eq('student_id', studentId)
+        .maybeSingle(),
+      supabase
+        .from('quiz_results')
+        .select(`
+          id,
+          student_id,
+          exam_id,
+          score,
+          total_questions,
+          completion_time,
+          answers,
+          cheating_attempts,
+          completed_at,
+          created_at,
+          updated_at
+        `)
+        .eq('exam_id', numericExamId)
+        .eq('student_id', profileId)
+        .maybeSingle(),
+      supabase
+        .from('exam_questions')
+        .select('*')
+        .eq('exam_id', numericExamId)
+        .order('question_number', { ascending: true })
+    ]);
+
+    if (examError) {
+      return { exam: null, studentExam: null, quizResult: null, questions: [], grades: [], error: examError };
+    }
+
+    if (studentExamError) {
+      return { exam: null, studentExam: null, quizResult: null, questions: [], grades: [], error: studentExamError };
+    }
+
+    if (quizResultError) {
+      return { exam: null, studentExam: null, quizResult: null, questions: [], grades: [], error: quizResultError };
+    }
+
+    if (questionsError) {
+      return { exam: null, studentExam: null, quizResult: null, questions: [], grades: [], error: questionsError };
+    }
+
+    let grades = [];
+
+    if (studentExam?.id) {
+      const { data: gradeRows, error: gradesError } = await supabase
+        .from('exam_grades')
+        .select('id, student_exam_id, question_id, points_earned, feedback')
+        .eq('student_exam_id', studentExam.id);
+
+      if (gradesError) {
+        return { exam: null, studentExam: null, quizResult: null, questions: [], grades: [], error: gradesError };
+      }
+
+      grades = gradeRows || [];
+    }
+
+    return {
+      exam: normalizeExamRecord(examData),
+      studentExam,
+      quizResult,
+      questions: (questionRows || []).map((question) => normalizeExamQuestion(question)),
+      grades,
+      error: null
+    };
+  } catch (error) {
+    console.error('Erreur getStudentExamResultDetails:', error);
+    return { exam: null, studentExam: null, quizResult: null, questions: [], grades: [], error };
+  }
+};
+
+/**
+ * Récupère la liste des cours (id, name, code).
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getCoursesList = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('courses')
+      .select('id, name, code')
+      .order('name');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getCoursesList:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Récupère la liste des sessions d'examen.
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getExamSessions = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('exam_sessions')
+      .select('*')
+      .order('academic_year', { ascending: false })
+      .order('semester', { ascending: true });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getExamSessions:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Récupère la liste des centres d'examen.
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getExamCenters = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('exam_centers')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getExamCenters:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Récupère un examen brut (sans jointures) par son ID.
+ * @param {number} examId
+ * @returns {Promise<{ data: Object|null, error: Error|null }>}
+ */
+export const getExamRaw = async (examId) => {
+  try {
+    const { data, error } = await supabase
+      .from('exams')
+      .select('*')
+      .eq('id', examId)
+      .single();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Erreur getExamRaw:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Récupère les questions d'un examen.
+ * @param {number} examId
+ * @param {{ orderBy?: string }} [options]
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getExamQuestions = async (examId, options = {}) => {
+  try {
+    const { data, error } = await supabase
+      .from('exam_questions')
+      .select('*')
+      .eq('exam_id', examId)
+      .order(options.orderBy || 'question_number', { ascending: true });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getExamQuestions:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Récupère les student_exams d'un examen.
+ * @param {number} examId
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getStudentExamsByExamId = async (examId) => {
+  try {
+    const { data, error } = await supabase
+      .from('student_exams')
+      .select('*')
+      .eq('exam_id', examId);
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getStudentExamsByExamId:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Supprime les questions d'un examen.
+ * @param {number} examId
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export const deleteExamQuestions = async (examId) => {
+  try {
+    const { error } = await supabase
+      .from('exam_questions')
+      .delete()
+      .eq('exam_id', examId);
+
+    return { error: error || null };
+  } catch (error) {
+    console.error('Erreur deleteExamQuestions:', error);
+    return { error };
+  }
+};
+
+/**
+ * Insère des questions d'examen.
+ * @param {Array<Object>} questions
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export const insertExamQuestions = async (questions) => {
+  try {
+    const { error } = await supabase
+      .from('exam_questions')
+      .insert(questions);
+
+    return { error: error || null };
+  } catch (error) {
+    console.error('Erreur insertExamQuestions:', error);
+    return { error };
+  }
+};
+
+/**
+ * Supprime les assignations d'étudiants à un examen.
+ * @param {number} examId
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export const deleteStudentExams = async (examId) => {
+  try {
+    const { error } = await supabase
+      .from('student_exams')
+      .delete()
+      .eq('exam_id', examId);
+
+    return { error: error || null };
+  } catch (error) {
+    console.error('Erreur deleteStudentExams:', error);
+    return { error };
+  }
+};
+
+/**
+ * Insère des assignations d'étudiants à un examen.
+ * @param {Array<Object>} studentExams
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export const insertStudentExams = async (studentExams) => {
+  try {
+    const { error } = await supabase
+      .from('student_exams')
+      .insert(studentExams);
+
+    return { error: error || null };
+  } catch (error) {
+    console.error('Erreur insertStudentExams:', error);
+    return { error };
+  }
+};
+
+/**
+ * Crée un examen (insert + select).
+ * @param {Object} examData
+ * @returns {Promise<{ data: Object|null, error: Error|null }>}
+ */
+export const insertExam = async (examData) => {
+  try {
+    const { data, error } = await supabase
+      .from('exams')
+      .insert(examData)
+      .select();
+
+    if (error) throw error;
+    return { data: data?.[0] || null, error: null };
+  } catch (error) {
+    console.error('Erreur insertExam:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Met à jour un examen (sans select).
+ * @param {number} examId
+ * @param {Object} updates
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export const updateExamDirect = async (examId, updates) => {
+  try {
+    const { error } = await supabase
+      .from('exams')
+      .update(updates)
+      .eq('id', examId);
+
+    return { error: error || null };
+  } catch (error) {
+    console.error('Erreur updateExamDirect:', error);
+    return { error };
+  }
+};
+
+/**
+ * Supprime un examen par son ID (sans vérification de résultats).
+ * @param {number} examId
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export const deleteExamDirect = async (examId) => {
+  try {
+    const { error } = await supabase
+      .from('exams')
+      .delete()
+      .eq('id', examId);
+
+    return { error: error || null };
+  } catch (error) {
+    console.error('Erreur deleteExamDirect:', error);
+    return { error };
+  }
+};
+
+/**
+ * Récupère un examen avec ses jointures (cours, professeur) pour la notation.
+ * @param {number} examId
+ * @returns {Promise<{ data: Object|null, error: Error|null }>}
+ */
+export const getExamWithDetails = async (examId) => {
+  try {
+    const { data, error } = await supabase
+      .from('exams')
+      .select(`
+        id,
+        title,
+        course_id,
+        courses(name, code),
+        professor_id,
+        professors(profiles(full_name)),
+        date,
+        duration,
+        type,
+        room,
+        total_points,
+        passing_grade,
+        status,
+        description
+      `)
+      .eq('id', examId)
+      .single();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Erreur getExamWithDetails:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Récupère des étudiants par leurs IDs avec leurs profils.
+ * @param {number[]} studentIds
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getStudentsByIds = async (studentIds) => {
+  try {
+    if (!studentIds || studentIds.length === 0) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('students')
+      .select('id, profile_id, profiles:profile_id(full_name, email, avatar_url)')
+      .in('id', studentIds);
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getStudentsByIds:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Récupère les notes d'un student_exam.
+ * @param {number} studentExamId
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getExamGradesByStudentExam = async (studentExamId) => {
+  try {
+    const { data, error } = await supabase
+      .from('exam_grades')
+      .select('id, question_id, points_earned, feedback')
+      .eq('student_exam_id', studentExamId);
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getExamGradesByStudentExam:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Met à jour un student_exam.
+ * @param {number} studentExamId
+ * @param {Object} updates
+ * @returns {Promise<{ error: Error|null }>}
+ */
+export const updateStudentExam = async (studentExamId, updates) => {
+  try {
+    const { error } = await supabase
+      .from('student_exams')
+      .update(updates)
+      .eq('id', studentExamId);
+
+    return { error: error || null };
+  } catch (error) {
+    console.error('Erreur updateStudentExam:', error);
+    return { error };
+  }
+};
+
+/**
+ * Upsert d'une note d'examen (exam_grades).
+ * @param {Object} gradeData
+ * @returns {Promise<{ data: Object|null, error: Error|null }>}
+ */
+export const upsertExamGrade = async (gradeData) => {
+  try {
+    const { data, error } = await supabase
+      .from('exam_grades')
+      .upsert(gradeData, {
+        onConflict: 'student_exam_id,question_id'
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Erreur upsertExamGrade:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Récupère les étudiants inscrits à un cours (via student_courses).
+ * @param {number} courseId
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getCourseStudentsForExam = async (courseId) => {
+  try {
+    const { data, error } = await supabase
+      .from('student_courses')
+      .select(`
+        student_id,
+        academic_year,
+        status,
+        students:student_id(
+          id,
+          profile_id,
+          profiles:profile_id(full_name, email, department_id, departments:department_id(name)),
+          student_number,
+          level,
+          entry_year,
+          status
+        )
+      `)
+      .eq('course_id', courseId)
+      .eq('status', 'enrolled');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getCourseStudentsForExam:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Récupère tous les étudiants actifs avec leurs profils.
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getAllActiveStudents = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .select(`
+        id,
+        profile_id,
+        profiles:profile_id(full_name, email, department_id, departments:department_id(name)),
+        student_number,
+        level,
+        entry_year,
+        status
+      `)
+      .eq('status', 'active');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getAllActiveStudents:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Compte les student_exams pour un examen.
+ * @param {number} examId
+ * @returns {Promise<{ count: number, error: Error|null }>}
+ */
+export const getStudentExamsCount = async (examId) => {
+  try {
+    const { count, error } = await supabase
+      .from('student_exams')
+      .select('*', { count: 'exact', head: true })
+      .eq('exam_id', examId);
+
+    if (error) throw error;
+    return { count: count || 0, error: null };
+  } catch (error) {
+    console.error('Erreur getStudentExamsCount:', error);
+    return { count: 0, error };
+  }
+};
+
+/**
+ * Récupère les examens d'un professeur avec colonnes spécifiques.
+ * @param {number} professorId
+ * @returns {Promise<{ data: Array|null, error: Error|null }>}
+ */
+export const getProfessorExams = async (professorId) => {
+  try {
+    const { data, error } = await supabase
+      .from('exams')
+      .select('id, title, description, course_id, exam_session_id, exam_center_id, professor_id, date, duration, type, total_points, passing_grade, status, room, created_at, updated_at')
+      .eq('professor_id', professorId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Erreur getProfessorExams:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Crée un canal Supabase Realtime.
+ * @param {string} channelName
+ * @param {Array<{ event: string, schema: string, table: string, filter?: string, callback: Function }>} subscriptions
+ * @returns {Object} Le canal Supabase
+ */
+export const createRealtimeChannel = (channelName, subscriptions) => {
+  let channel = supabase.channel(channelName);
+
+  for (const sub of subscriptions) {
+    const config = {
+      event: sub.event,
+      schema: sub.schema,
+      table: sub.table
+    };
+
+    if (sub.filter) {
+      config.filter = sub.filter;
+    }
+
+    channel = channel.on('postgres_changes', config, sub.callback);
+  }
+
+  channel.subscribe();
+  return channel;
+};
+
+/**
+ * Supprime un canal Supabase Realtime.
+ * @param {Object} channel
+ */
+export const removeRealtimeChannel = (channel) => {
+  if (channel) {
+    supabase.removeChannel(channel);
   }
 };

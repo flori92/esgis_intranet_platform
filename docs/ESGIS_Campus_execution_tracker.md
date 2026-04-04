@@ -573,6 +573,40 @@ Une fois Phase 2 fermée, passer à Phase 3:
 
 ---
 
+### 7.9 — ✅ Module Examens Mixtes Stabilisé (2026-04-04)
+
+**Objectif fermé sur le flux actif professeur → étudiant → correction:**
+- ✅ Un examen peut désormais combiner plusieurs types de questions dans le même sujet sur le flux actif:
+  - `qcm_single`
+  - `qcm_multiple`
+  - `true_false`
+  - `short_answer`
+  - `long_answer`
+  - `numeric`
+- ✅ Contrat unique de sérialisation/normalisation ajouté dans `src/utils/examQuestionUtils.js`
+- ✅ Le builder professeur actif `src/pages/professor/exams/components/ExamQuestions.jsx` gère maintenant ces types sans retomber sur l’ancien modèle `multiple_choice / essay`
+- ✅ `src/pages/professor/exams/ExamFormPage.jsx` enregistre et recharge correctement les réponses correctes complexes (QCM multiple, numérique avec tolérance, dissertation)
+- ✅ Le runtime étudiant n’instancie plus plusieurs hooks de quiz concurrents:
+  - `src/pages/exams/core/Quiz.jsx`
+  - `src/pages/exams/core/QuestionCard.jsx`
+  - `src/pages/exams/core/QuizNavigation.jsx`
+  - `src/pages/exams/core/QuizResults.jsx`
+- ✅ Le passage étudiant supporte correctement les réponses:
+  - index unique pour QCM simple
+  - tableau d’indices pour QCM multiple
+  - vrai/faux
+  - texte court / texte long
+  - numérique avec tolérance
+- ✅ La correction professeur pré-remplit maintenant les notes auto-corrigeables pour éviter de re-noter manuellement les QCM/numériques
+- ✅ La page résultats étudiant `src/pages/exams/student/ExamResultsPage.jsx` a été réalignée sur les tables canoniques `student_exams`, `quiz_results`, `exam_grades`
+- ✅ La route étudiante `src/routes/StudentRoutes.jsx` n’injecte plus de faux résultat stub
+- ✅ Build de validation réussi: `npm run build`
+
+**Reste éventuel hors périmètre fermé de cette passe:**
+- Types avancés déjà esquissés ailleurs (`matching`, `ordering`, `fill_blank`, `image_question`) non activés dans le builder professeur actif tant que leur correction/restauration complète n’est pas fermée sur tout le flux.
+
+---
+
 ### 7.8 — ✅ Phase 3 CRUD Admin Étendu (2026-04-04 — commit 2eea26f6)
 
 **Pages créées pour gestion statut comptes, niveaux/semestres et matières:**

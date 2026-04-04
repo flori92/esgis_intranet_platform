@@ -12,35 +12,64 @@ import {
   recordCheatingAttempt,
   updateActiveStudent
 } from '@/api/quiz';
+import { normalizeExamQuestion } from '@/utils/examQuestionUtils';
 
-const AUTO_GRADED_TYPES = new Set(['multiple_choice', 'true_false', 'short_answer', 'numeric']);
-
-const normalizeQuestion = (question) => ({
-  ...question,
-  text: question.text || question.question_text || '',
-  correctAnswer: question.correctAnswer ?? question.correct_answer ?? null,
-  options: Array.isArray(question.options) ? question.options : []
-});
+const AUTO_GRADED_TYPES = new Set(['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric']);
 
 const getInitialAnswerValue = (question) => {
-  if (question.question_type === 'multiple_select') {
-    return [];
+  switch (question.question_type) {
+    case 'qcm_multiple':
+      return [];
+    case 'matching':
+    case 'fill_blank':
+      return {};
+    case 'ordering':
+      return (question.items || []).map((item, index) => ({
+        id: index,
+        text: item
+      }));
+    default:
+      return '';
   }
-
-  return '';
 };
 
 const isQuestionAutoGradable = (question) => AUTO_GRADED_TYPES.has(question.question_type);
 
 const normalizeString = (value) => String(value ?? '').trim().toLowerCase();
 
+const normalizeChoiceArray = (values = []) => {
+  return [...values]
+    .map((value) => String(value))
+    .sort();
+};
+
+const normalizeOrderingAnswer = (answer = []) => {
+  return (Array.isArray(answer) ? answer : [])
+    .map((item) => typeof item === 'string' ? item : item?.text || '')
+    .filter(Boolean);
+};
+
 const computeQuestionScore = (question, answer) => {
-  if (answer === null || answer === undefined || answer === '') {
+  if (
+    answer === null ||
+    answer === undefined ||
+    answer === '' ||
+    (Array.isArray(answer) && answer.length === 0) ||
+    (typeof answer === 'object' && !Array.isArray(answer) && Object.keys(answer).length === 0)
+  ) {
     return 0;
   }
 
-  if (question.question_type === 'multiple_choice') {
+  if (question.question_type === 'qcm_single') {
     return normalizeString(answer) === normalizeString(question.correctAnswer) ? question.points : 0;
+  }
+
+  if (question.question_type === 'qcm_multiple') {
+    const expected = normalizeChoiceArray(question.correct_answers || question.correctAnswer || []);
+    const received = normalizeChoiceArray(Array.isArray(answer) ? answer : []);
+    return expected.length > 0 && expected.length === received.length && expected.every((value, index) => value === received[index])
+      ? question.points
+      : 0;
   }
 
   if (question.question_type === 'true_false') {
@@ -56,9 +85,18 @@ const computeQuestionScore = (question, answer) => {
   if (question.question_type === 'numeric') {
     const expected = Number(question.correctAnswer);
     const received = Number(answer);
+    const tolerance = Number(question.tolerance || 0);
     if (Number.isFinite(expected) && Number.isFinite(received)) {
-      return expected === received ? question.points : 0;
+      return Math.abs(expected - received) <= tolerance ? question.points : 0;
     }
+  }
+
+  if (question.question_type === 'ordering') {
+    const expected = normalizeOrderingAnswer(question.correctAnswer || question.items || []);
+    const received = normalizeOrderingAnswer(answer);
+    return expected.length > 0 && expected.length === received.length && expected.every((value, index) => value === received[index])
+      ? question.points
+      : 0;
   }
 
   return 0;
@@ -111,6 +149,16 @@ export const useQuiz = () => {
       }
 
       return total + computeQuestionScore(question, answers[question.id]);
+    }, 0);
+  }, [answers, questions]);
+
+  const countCorrectAnswers = useCallback(() => {
+    return questions.reduce((total, question) => {
+      if (!isQuestionAutoGradable(question)) {
+        return total;
+      }
+
+      return total + (computeQuestionScore(question, answers[question.id]) >= Number(question.points || 0) ? 1 : 0);
     }, 0);
   }, [answers, questions]);
 
@@ -234,7 +282,7 @@ export const useQuiz = () => {
           throw new Error("Aucune question n'est disponible pour cet examen.");
         }
 
-        const normalizedQuestions = fetchedQuestions.map(normalizeQuestion);
+        const normalizedQuestions = fetchedQuestions.map((question) => normalizeExamQuestion(question));
         const existingAnswers = typeof studentExam.answers === 'string'
           ? JSON.parse(studentExam.answers || '{}')
           : (studentExam.answers || {});
@@ -427,6 +475,7 @@ export const useQuiz = () => {
     submitQuiz,
     endQuiz: submitQuiz,
     reportCheatingAttempt: reportCheatingAttemptHandler,
-    calculateScore
+    calculateScore,
+    countCorrectAnswers
   };
 };

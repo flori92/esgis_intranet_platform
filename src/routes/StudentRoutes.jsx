@@ -41,22 +41,7 @@ const StudentRoutes = () => {
         <Route path="exams">
           <Route index element={<StudentExamsList />} />
           <Route path=":id/take" element={<TakeExamPage />} />
-          <Route
-            path=":id/results"
-            element={
-              <ExamResultsPage
-                examResult={{
-                  id: 0,
-                  exam_id: 0,
-                  student_id: '',
-                  score: 0,
-                  status: 'completed',
-                  submitted_at: new Date().toISOString(),
-                  answers: []
-                }}
-              />
-            }
-          />
+          <Route path=":id/results" element={<ExamResultsPage />} />
         </Route>
         
         {/* Routes pour l'emploi du temps */}

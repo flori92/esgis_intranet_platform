@@ -19,7 +19,8 @@ import {
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import { Offre } from '../types';
-import { supabase } from '@/services/supabase';
+import { getStageCompanies } from '@/api/stages';
+import { getDepartments } from '@/api/departments';
 
 interface AjouterOffreProps {
   onSubmit: (nouvelleOffre: Omit<Offre, "id">) => Promise<{ success: boolean; message: string; }>;
@@ -74,32 +75,26 @@ const AjouterOffre: React.FC<AjouterOffreProps> = ({ onSubmit, departementId }) 
   const chargerDonnees = async () => {
     try {
       // Charger les entreprises
-      const { data: entreprisesData, error: entreprisesError } = await supabase
-        .from('entreprises')
-        .select('*')
-        .order('nom');
-      
+      const { data: entreprisesData, error: entreprisesError } = await getStageCompanies();
+
       if (entreprisesError) {
         throw entreprisesError;
       }
       setEntreprises(entreprisesData || []);
 
       // Charger les départements
-      const { data: departementsData, error: departementsError } = await supabase
-        .from('departments')
-        .select('id, name')
-        .order('name');
-      
+      const { departments: departementsData, error: departementsError } = await getDepartments();
+
       if (departementsError) {
         throw departementsError;
       }
-      
+
       // Adapter les données pour correspondre à l'interface Departement
       const formattedDepartments = (departementsData || []).map(dept => ({
         id: dept.id,
         nom: dept.name
       }));
-      
+
       setDepartements(formattedDepartments);
     } catch (err) {
       console.error('Erreur lors du chargement des données:', err);

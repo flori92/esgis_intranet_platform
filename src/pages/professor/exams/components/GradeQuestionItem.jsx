@@ -22,6 +22,7 @@ import {
   Save as SaveIcon 
 } from '@mui/icons-material';
 import { supabase } from '@/supabase';
+import { formatExamAnswer, getExamCorrectAnswerLabel, normalizeExamQuestion } from '@/utils/examQuestionUtils';
 
 /**
  * Composant pour noter une question d'examen
@@ -60,6 +61,7 @@ const GradeQuestionItem = ({
   onGraded
 }) => {
   const currentAnswer = studentAnswer || answer || null;
+  const normalizedQuestion = normalizeExamQuestion(question);
 
   // États
   const [grade, setGrade] = useState(0);
@@ -182,57 +184,19 @@ const GradeQuestionItem = ({
     if (!currentAnswer) {
       return <Typography variant="body2" color="text.secondary">Pas de réponse</Typography>;
     }
-    
-    if (question.question_type === 'multiple_choice' && question.options && question.options.length > 0) {
-      const optionValues = question.options.map((opt) => typeof opt === 'string' ? { text: opt, value: opt } : { text: opt.text, value: opt.id ?? opt.text });
-      const selectedOption = optionValues.find((opt) => opt.value === currentAnswer.answer_value || opt.text === currentAnswer.answer_value);
-      
-      if (selectedOption) {
-        return <Typography variant="body1">{selectedOption.text}</Typography>;
-      }
-    }
-    
-    if (question.question_type === 'true_false') {
-      const boolValue = 
-        currentAnswer.answer_value === true || 
-        currentAnswer.answer_value === 'true';
-      
-      return <Typography variant="body1">{boolValue ? 'Vrai' : 'Faux'}</Typography>;
-    }
-    
-    return <Typography variant="body1">{String(currentAnswer.answer_value || '')}</Typography>;
+
+    return <Typography variant="body1">{formatExamAnswer(normalizedQuestion, currentAnswer.answer_value)}</Typography>;
   };
   
   /**
    * Afficher la réponse correcte pour les QCM
    */
   const renderCorrectAnswer = () => {
-    if (question.question_type === 'multiple_choice' && question.options && question.options.length > 0) {
-      const optionValues = question.options.map((opt) => typeof opt === 'string' ? { text: opt, value: opt } : { text: opt.text, value: opt.id ?? opt.text });
-      const correctOption = optionValues.find(
-        (opt) => opt.value === question.correct_answer || opt.text === question.correct_answer
-      );
-      
-      if (correctOption) {
-        return (
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="subtitle2" color="success.main">
-              Réponse correcte: {correctOption.text}
-            </Typography>
-          </Box>
-        );
-      }
-    }
-    
-    if (question.question_type === 'true_false' && question.correct_answer !== undefined) {
-      const correctValue = 
-        question.correct_answer === true || 
-        question.correct_answer === 'true';
-      
+    if (['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric'].includes(normalizedQuestion.question_type)) {
       return (
         <Box sx={{ mt: 1 }}>
           <Typography variant="subtitle2" color="success.main">
-            Réponse correcte: {correctValue ? 'Vrai' : 'Faux'}
+            Réponse correcte: {getExamCorrectAnswerLabel(normalizedQuestion)}
           </Typography>
         </Box>
       );
@@ -263,7 +227,7 @@ const GradeQuestionItem = ({
       <Grid container spacing={3}>
         <Grid item xs={12} md={8}>
           <Typography id="points-slider-label" gutterBottom>
-            Points attribués: <strong>{grade}</strong> / {question.points}
+            Points attribués: <strong>{grade}</strong> / {normalizedQuestion.points}
           </Typography>
           
           <Slider
@@ -274,7 +238,7 @@ const GradeQuestionItem = ({
             step={0.5}
             marks
             min={0}
-            max={question.points}
+            max={normalizedQuestion.points}
             sx={{ mb: 3 }}
           />
           
@@ -325,7 +289,7 @@ const GradeQuestionItem = ({
               </RadioGroup>
             </FormControl>
             
-            {question.question_type === 'multiple_choice' || question.question_type === 'true_false' ? (
+            {['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric'].includes(normalizedQuestion.question_type) ? (
               <Chip 
                 label="Notation automatique possible" 
                 color="primary" 

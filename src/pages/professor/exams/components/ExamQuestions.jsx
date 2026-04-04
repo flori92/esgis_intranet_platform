@@ -29,6 +29,7 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
+  Checkbox,
   Chip,
   CircularProgress,
   Tab,
@@ -46,6 +47,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { getProfessorQuestions, getSharedQuestions } from '@/api/questionBank';
+import { getExamCorrectAnswerLabel, normalizeExamQuestion, normalizeExamQuestionType } from '@/utils/examQuestionUtils';
 
 const QUESTION_TYPE_LABELS = {
   qcm_single: 'QCM unique',
@@ -57,14 +59,22 @@ const QUESTION_TYPE_LABELS = {
   matching: 'Association',
   ordering: 'Ordonnancement',
   fill_blank: 'Texte a trous',
-  image_question: 'Question sur image'
+  image_question: 'Question sur image',
+  multiple_choice: 'QCM unique',
+  multiple_select: 'QCM multiple',
+  essay: 'Reponse longue'
 };
 
 const IMPORTABLE_TYPE_MAP = {
-  qcm_single: 'multiple_choice',
+  qcm_single: 'qcm_single',
+  qcm_multiple: 'qcm_multiple',
   true_false: 'true_false',
   short_answer: 'short_answer',
-  long_answer: 'essay'
+  long_answer: 'long_answer',
+  numeric: 'numeric',
+  multiple_choice: 'qcm_single',
+  multiple_select: 'qcm_multiple',
+  essay: 'long_answer'
 };
 
 /**
@@ -76,7 +86,7 @@ const IMPORTABLE_TYPE_MAP = {
  * @property {number} [exam_id] ID de l'examen associé
  * @property {number} question_number Numéro de la question
  * @property {string} question_text Texte de la question
- * @property {string} question_type Type de question ('multiple_choice', 'true_false', 'short_answer', 'essay')
+ * @property {string} question_type Type de question
  * @property {number} points Points attribués à la question
  * @property {string[]} [options] Options pour les questions à choix multiples
  * @property {string} [correct_answer] Réponse correcte
@@ -101,12 +111,16 @@ const ExamQuestions = ({
   // État pour le formulaire d'édition de question
   const [editingQuestion, setEditingQuestion] = useState({
     question_text: '',
-    question_type: 'multiple_choice',
+    question_type: 'qcm_single',
     points: 1,
     options: ['', '', '', ''],
     correct_answer: '',
+    correct_answers: [],
     rubric: '',
-    explanation: ''
+    explanation: '',
+    tolerance: 0,
+    unit: '',
+    max_words: 500
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingErrors, setEditingErrors] = useState({});
@@ -193,12 +207,16 @@ const ExamQuestions = ({
     setEditingQuestion({
       question_number: questions.length + 1,
       question_text: '',
-      question_type: 'multiple_choice',
+      question_type: 'qcm_single',
       points: 1,
       options: ['', '', '', ''],
       correct_answer: '',
+      correct_answers: [],
       rubric: '',
-      explanation: ''
+      explanation: '',
+      tolerance: 0,
+      unit: '',
+      max_words: 500
     });
     setOptions(['', '', '', '']);
   };
@@ -208,7 +226,7 @@ const ExamQuestions = ({
    * @param {number} index Index de la question à éditer
    */
   const handleEditQuestion = (index) => {
-    const question = questions[index];
+    const question = normalizeExamQuestion(questions[index]);
     setEditingQuestion({
       ...question,
       options: question.options || ['', '', '', ''],
@@ -226,12 +244,16 @@ const ExamQuestions = ({
     setIsDialogOpen(false);
     setEditingQuestion({
       question_text: '',
-      question_type: 'multiple_choice',
+      question_type: 'qcm_single',
       points: 1,
       options: ['', '', '', ''],
       correct_answer: '',
+      correct_answers: [],
       rubric: '',
-      explanation: ''
+      explanation: '',
+      tolerance: 0,
+      unit: '',
+      max_words: 500
     });
     setEditingErrors({});
   };
@@ -256,13 +278,24 @@ const ExamQuestions = ({
     updatedOptions.splice(index, 1);
     setOptions(updatedOptions);
     
-    // Si l'option supprimée était la réponse correcte, réinitialiser
-    if (options[index] === editingQuestion.correct_answer) {
-      setEditingQuestion({
-        ...editingQuestion,
-        correct_answer: ''
-      });
+    const removedIndex = String(index);
+    const nextQuestion = { ...editingQuestion };
+
+    if (editingQuestion.question_type === 'qcm_single') {
+      if (String(editingQuestion.correct_answer) === removedIndex) {
+        nextQuestion.correct_answer = '';
+      } else if (editingQuestion.correct_answer !== '' && Number(editingQuestion.correct_answer) > index) {
+        nextQuestion.correct_answer = String(Number(editingQuestion.correct_answer) - 1);
+      }
     }
+
+    if (editingQuestion.question_type === 'qcm_multiple') {
+      nextQuestion.correct_answers = (editingQuestion.correct_answers || [])
+        .filter((value) => String(value) !== removedIndex)
+        .map((value) => (Number(value) > index ? String(Number(value) - 1) : String(value)));
+    }
+
+    setEditingQuestion(nextQuestion);
   };
   
   /**
@@ -291,16 +324,24 @@ const ExamQuestions = ({
       errors.points = 'Les points doivent être supérieurs à 0';
     }
     
-    if (editingQuestion.question_type === 'multiple_choice') {
+    if (editingQuestion.question_type === 'qcm_single' || editingQuestion.question_type === 'qcm_multiple') {
       const validOptions = options.filter(opt => opt.trim() !== '');
       
       if (validOptions.length < 2) {
         errors.options_count = 'Au moins 2 options sont requises';
       }
       
-      if (!editingQuestion.correct_answer) {
+      if (editingQuestion.question_type === 'qcm_single' && editingQuestion.correct_answer === '') {
         errors.correct_answer = 'Sélectionnez une réponse correcte';
       }
+
+      if (editingQuestion.question_type === 'qcm_multiple' && (editingQuestion.correct_answers || []).length === 0) {
+        errors.correct_answer = 'Sélectionnez au moins une réponse correcte';
+      }
+    }
+
+    if (editingQuestion.question_type === 'numeric' && editingQuestion.correct_answer === '') {
+      errors.correct_answer = 'La réponse correcte est obligatoire pour une question numérique';
     }
     
     setEditingErrors(errors);
@@ -321,11 +362,17 @@ const ExamQuestions = ({
     const question = {
       ...editingQuestion,
       question_number: editingIndex !== null ? questions[editingIndex].question_number : questions.length + 1,
-      options: editingQuestion.question_type === 'multiple_choice' ? filteredOptions : undefined,
-      // Ensure correct_answer is still valid after filtering options
-      correct_answer: editingQuestion.question_type === 'multiple_choice' 
-        ? (filteredOptions.includes(editingQuestion.correct_answer) ? editingQuestion.correct_answer : filteredOptions[0])
-        : editingQuestion.correct_answer
+      options: ['qcm_single', 'qcm_multiple'].includes(editingQuestion.question_type) ? filteredOptions : undefined,
+      correct_answer:
+        editingQuestion.question_type === 'qcm_single'
+          ? (editingQuestion.correct_answer === '' ? '0' : String(editingQuestion.correct_answer))
+          : editingQuestion.question_type === 'qcm_multiple'
+            ? (editingQuestion.correct_answers || []).map((value) => String(value))
+            : editingQuestion.correct_answer,
+      correct_answers:
+        editingQuestion.question_type === 'qcm_multiple'
+          ? (editingQuestion.correct_answers || []).map((value) => String(value))
+          : []
     };
     
     let nextQuestions = [];
@@ -414,58 +461,37 @@ const ExamQuestions = ({
    * @returns {string} Texte correspondant au type de question
    */
   const getQuestionTypeText = (type) => {
-    switch (type) {
-      case 'multiple_choice':
-        return 'Choix multiple';
-      case 'true_false':
-        return 'Vrai/Faux';
-      case 'short_answer':
-        return 'Réponse courte';
-      case 'essay':
-        return 'Rédaction';
-      default:
-        return type;
-    }
+    return QUESTION_TYPE_LABELS[normalizeExamQuestionType(type)] || type;
   };
 
   const isImportableQuestion = (question) => Boolean(IMPORTABLE_TYPE_MAP[question.question_type || question.type]);
 
   const mapQuestionBankToExamQuestion = (question) => {
-    const sourceType = question.question_type || question.type;
+    const sourceType = normalizeExamQuestionType(question.question_type || question.type);
     const mappedType = IMPORTABLE_TYPE_MAP[sourceType];
 
     if (!mappedType) {
       return null;
     }
 
-    const rawCorrectAnswer = question.correct_answer;
-    const optionsList = Array.isArray(question.options) ? question.options.filter(Boolean) : [];
-
-    let normalizedCorrectAnswer = '';
-
-    if (mappedType === 'multiple_choice') {
-      normalizedCorrectAnswer = Array.isArray(rawCorrectAnswer)
-        ? String(rawCorrectAnswer[0] || '')
-        : String(rawCorrectAnswer || optionsList[0] || '');
-    } else if (mappedType === 'true_false') {
-      normalizedCorrectAnswer = rawCorrectAnswer === true || String(rawCorrectAnswer).toLowerCase() === 'true'
-        ? 'true'
-        : 'false';
-    } else if (rawCorrectAnswer !== null && rawCorrectAnswer !== undefined) {
-      normalizedCorrectAnswer = Array.isArray(rawCorrectAnswer)
-        ? rawCorrectAnswer.join(', ')
-        : String(rawCorrectAnswer);
-    }
+    const normalizedSource = normalizeExamQuestion({
+      ...question,
+      question_type: sourceType
+    });
 
     return {
       question_number: questions.length + 1,
-      question_text: question.question_text || question.text || '',
+      question_text: normalizedSource.question_text,
       question_type: mappedType,
-      points: Number(question.points || 1),
-      options: mappedType === 'multiple_choice' ? optionsList : undefined,
-      correct_answer: normalizedCorrectAnswer,
-      rubric: mappedType === 'essay' ? question.explanation || question.rubric || '' : question.rubric || '',
+      points: Number(normalizedSource.points || 1),
+      options: ['qcm_single', 'qcm_multiple'].includes(mappedType) ? normalizedSource.options : undefined,
+      correct_answer: normalizedSource.correct_answer,
+      correct_answers: normalizedSource.correct_answers || [],
+      rubric: ['long_answer', 'short_answer'].includes(mappedType) ? question.explanation || question.rubric || '' : question.rubric || '',
       explanation: question.explanation || '',
+      tolerance: normalizedSource.tolerance || 0,
+      unit: normalizedSource.unit || '',
+      max_words: normalizedSource.max_words || 500,
       source_question_bank_id: question.id
     };
   };
@@ -494,12 +520,16 @@ const ExamQuestions = ({
   const resetForm = () => {
     setEditingQuestion({
       question_text: '',
-      question_type: 'multiple_choice',
+      question_type: 'qcm_single',
       points: 1,
       options: ['', '', '', ''],
       correct_answer: '',
+      correct_answers: [],
       rubric: '',
-      explanation: ''
+      explanation: '',
+      tolerance: 0,
+      unit: '',
+      max_words: 500
     });
     setOptions(['', '', '', '']);
     setEditingErrors({});
@@ -548,7 +578,9 @@ const ExamQuestions = ({
         </Typography>
       ) : (
         <List>
-          {questions.map((question, index) => (
+          {questions.map((question, index) => {
+            const displayQuestion = normalizeExamQuestion(question);
+            return (
             <React.Fragment key={index}>
               {index > 0 && <Divider />}
               <ListItem alignItems="flex-start" sx={{ py: 2 }}>
@@ -564,7 +596,7 @@ const ExamQuestions = ({
                     
                     <Box sx={{ display: 'flex', mt: 1 }}>
                       <Chip 
-                        label={getQuestionTypeText(question.question_type)} 
+                        label={getQuestionTypeText(displayQuestion.question_type)} 
                         size="small" 
                         sx={{ mr: 1 }} 
                       />
@@ -575,24 +607,39 @@ const ExamQuestions = ({
                       />
                     </Box>
                     
-                    {question.question_type === 'multiple_choice' && question.options && (
+                    {['qcm_single', 'qcm_multiple'].includes(displayQuestion.question_type) && displayQuestion.options && (
                       <Box sx={{ mt: 1 }}>
-                        {question.options.map((option, optIndex) => (
+                        {displayQuestion.options.map((option, optIndex) => {
+                          const isCorrect = displayQuestion.question_type === 'qcm_single'
+                            ? String(displayQuestion.correct_answer) === String(optIndex)
+                            : (displayQuestion.correct_answers || []).includes(String(optIndex));
+                          return (
                           <Typography 
                             key={optIndex} 
                             variant="body2" 
-                            color={option === question.correct_answer ? 'success.main' : 'text.secondary'}
+                            color={isCorrect ? 'success.main' : 'text.secondary'}
                             sx={{ 
                               display: 'flex', 
                               alignItems: 'center',
-                              fontWeight: option === question.correct_answer ? 'bold' : 'normal'
+                              fontWeight: isCorrect ? 'bold' : 'normal'
                             }}
                           >
-                            {option === question.correct_answer && '✓ '}
+                            {isCorrect && '✓ '}
                             {option}
                           </Typography>
-                        ))}
+                        );
+                        })}
                       </Box>
+                    )}
+                    {displayQuestion.question_type === 'true_false' && (
+                      <Typography variant="body2" sx={{ mt: 1 }} color="success.main">
+                        Reponse correcte : {getExamCorrectAnswerLabel(displayQuestion)}
+                      </Typography>
+                    )}
+                    {displayQuestion.question_type === 'numeric' && (
+                      <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
+                        Reponse correcte : {getExamCorrectAnswerLabel(displayQuestion)}
+                      </Typography>
                     )}
                   </Box>
                   
@@ -625,7 +672,8 @@ const ExamQuestions = ({
                 </Box>
               </ListItem>
             </React.Fragment>
-          ))}
+          );
+          })}
         </List>
       )}
       
@@ -667,14 +715,21 @@ const ExamQuestions = ({
                     value={editingQuestion.question_type}
                     onChange={(e) => setEditingQuestion({
                       ...editingQuestion,
-                      question_type: e.target.value
+                      question_type: e.target.value,
+                      correct_answer: '',
+                      correct_answers: [],
+                      tolerance: 0,
+                      unit: '',
+                      max_words: 500
                     })}
                     label="Type de question"
                   >
-                    <MenuItem value="multiple_choice">Choix multiple</MenuItem>
+                    <MenuItem value="qcm_single">QCM unique</MenuItem>
+                    <MenuItem value="qcm_multiple">QCM multiple</MenuItem>
                     <MenuItem value="true_false">Vrai/Faux</MenuItem>
                     <MenuItem value="short_answer">Réponse courte</MenuItem>
-                    <MenuItem value="essay">Rédaction</MenuItem>
+                    <MenuItem value="long_answer">Rédaction / Dissertation</MenuItem>
+                    <MenuItem value="numeric">Numérique</MenuItem>
                   </Select>
                   {editingErrors.question_type && (
                     <FormHelperText>{editingErrors.question_type}</FormHelperText>
@@ -715,7 +770,7 @@ const ExamQuestions = ({
               </Grid>
               
               {/* Options pour QCM */}
-              {editingQuestion.question_type === 'multiple_choice' && (
+              {['qcm_single', 'qcm_multiple'].includes(editingQuestion.question_type) && (
                 <Grid item xs={12}>
                   <Typography variant="subtitle1" gutterBottom>
                     Options de réponse
@@ -733,6 +788,7 @@ const ExamQuestions = ({
                     </Typography>
                   )}
                   
+                  {editingQuestion.question_type === 'qcm_single' ? (
                   <RadioGroup
                     value={editingQuestion.correct_answer || ''}
                     onChange={(e) => setEditingQuestion({
@@ -743,7 +799,7 @@ const ExamQuestions = ({
                     {options.map((option, index) => (
                       <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                         <FormControlLabel
-                          value={option}
+                          value={String(index)}
                           control={<Radio />}
                           label=""
                           sx={{ mr: 0 }}
@@ -765,6 +821,40 @@ const ExamQuestions = ({
                       </Box>
                     ))}
                   </RadioGroup>
+                  ) : (
+                    <Box>
+                      {options.map((option, index) => (
+                        <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          <Checkbox
+                            checked={(editingQuestion.correct_answers || []).includes(String(index))}
+                            onChange={(e) => {
+                              const nextValues = e.target.checked
+                                ? [...new Set([...(editingQuestion.correct_answers || []), String(index)])]
+                                : (editingQuestion.correct_answers || []).filter((value) => String(value) !== String(index));
+                              setEditingQuestion({
+                                ...editingQuestion,
+                                correct_answers: nextValues
+                              });
+                            }}
+                          />
+                          <TextField
+                            fullWidth
+                            value={option}
+                            onChange={(e) => handleOptionTextChange(index, e.target.value)}
+                            placeholder={`Option ${index + 1}`}
+                            size="small"
+                          />
+                          <IconButton
+                            size="small"
+                            onClick={() => handleRemoveOption(index)}
+                            disabled={options.length <= 2}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
                   
                   {editingErrors.correct_answer && (
                     <Typography color="error" variant="body2" sx={{ mt: 1 }}>
@@ -784,7 +874,95 @@ const ExamQuestions = ({
               )}
               
               {/* Barème pour les questions à réponse ouverte */}
-              {editingQuestion.question_type !== 'multiple_choice' && (
+              {editingQuestion.question_type === 'true_false' && (
+                <Grid item xs={12}>
+                  <FormControl component="fieldset">
+                    <RadioGroup
+                      row
+                      value={editingQuestion.correct_answer || ''}
+                      onChange={(e) => setEditingQuestion({
+                        ...editingQuestion,
+                        correct_answer: e.target.value
+                      })}
+                    >
+                      <FormControlLabel value="true" control={<Radio />} label="Vrai" />
+                      <FormControlLabel value="false" control={<Radio />} label="Faux" />
+                    </RadioGroup>
+                  </FormControl>
+                </Grid>
+              )}
+
+              {editingQuestion.question_type === 'short_answer' && (
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Réponse attendue"
+                    value={editingQuestion.correct_answer || ''}
+                    onChange={(e) => setEditingQuestion({
+                      ...editingQuestion,
+                      correct_answer: e.target.value
+                    })}
+                    helperText="Laissez vide pour une correction uniquement manuelle"
+                  />
+                </Grid>
+              )}
+
+              {editingQuestion.question_type === 'numeric' && (
+                <>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="Réponse correcte"
+                      type="number"
+                      value={editingQuestion.correct_answer || ''}
+                      onChange={(e) => setEditingQuestion({
+                        ...editingQuestion,
+                        correct_answer: e.target.value
+                      })}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="Tolérance"
+                      type="number"
+                      value={editingQuestion.tolerance || 0}
+                      onChange={(e) => setEditingQuestion({
+                        ...editingQuestion,
+                        tolerance: Number(e.target.value || 0)
+                      })}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="Unité"
+                      value={editingQuestion.unit || ''}
+                      onChange={(e) => setEditingQuestion({
+                        ...editingQuestion,
+                        unit: e.target.value
+                      })}
+                    />
+                  </Grid>
+                </>
+              )}
+
+              {editingQuestion.question_type === 'long_answer' && (
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Nombre maximum de mots"
+                    type="number"
+                    value={editingQuestion.max_words || 500}
+                    onChange={(e) => setEditingQuestion({
+                      ...editingQuestion,
+                      max_words: Number(e.target.value || 500)
+                    })}
+                  />
+                </Grid>
+              )}
+
+              {['short_answer', 'long_answer', 'numeric'].includes(editingQuestion.question_type) && (
                 <Grid item xs={12}>
                   <TextField
                     fullWidth

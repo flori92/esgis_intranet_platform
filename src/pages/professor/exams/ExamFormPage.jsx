@@ -28,8 +28,22 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { supabase } from '@/supabase';
 import { incrementUsedCount } from '@/api/questionBank';
+import {
+  getCoursesList,
+  getExamSessions,
+  getExamCenters,
+  getExamRaw,
+  getExamQuestions,
+  getStudentExamsByExamId,
+  updateExamDirect,
+  insertExam,
+  deleteExamQuestions,
+  insertExamQuestions,
+  deleteStudentExams,
+  insertStudentExams
+} from '@/api/exams';
+import { normalizeExamQuestion, serializeExamQuestion } from '@/utils/examQuestionUtils';
 
 // Composants du formulaire
 import ExamBasicInfo from './components/ExamBasicInfo';
@@ -131,41 +145,22 @@ const ExamFormPage = () => {
   // Référence aux fonctions fetchData pour éviter les recréations
   const fetchDataRef = useRef(async () => {
     try {
-      // Récupérer la liste des cours
-      const { data: coursesData, error: coursesError } = await supabase
-        .from('courses')
-        .select('id, name, code')
-        .order('name');
-      
-      if (coursesError) {
-        throw coursesError;
-      }
-      
+      const [
+        { data: coursesData, error: coursesError },
+        { data: sessionsData, error: sessionsError },
+        { data: centersData, error: centersError }
+      ] = await Promise.all([
+        getCoursesList(),
+        getExamSessions(),
+        getExamCenters()
+      ]);
+
+      if (coursesError) throw coursesError;
+      if (sessionsError) throw sessionsError;
+      if (centersError) throw centersError;
+
       setCourses(coursesData || []);
-      
-      // Récupérer les sessions d'examen
-      const { data: sessionsData, error: sessionsError } = await supabase
-        .from('exam_sessions')
-        .select('*')
-        .order('academic_year', { ascending: false })
-        .order('semester', { ascending: true });
-      
-      if (sessionsError) {
-        throw sessionsError;
-      }
-      
       setSessions(sessionsData || []);
-      
-      // Récupérer les centres d'examen
-      const { data: centersData, error: centersError } = await supabase
-        .from('exam_centers')
-        .select('*')
-        .order('name', { ascending: true });
-      
-      if (centersError) {
-        throw centersError;
-      }
-      
       setCenters(centersData || []);
       
     } catch (err) {
@@ -238,12 +233,15 @@ const ExamFormPage = () => {
   const fetchExamData = async (examId) => {
     setLoadingExam(true);
     try {
-      // Récupérer l'examen
-      const { data: examData, error: examError } = await supabase
-        .from('exams')
-        .select('*')
-        .eq('id', examId)
-        .single();
+      const [
+        { data: examData, error: examError },
+        { data: questionsData, error: questionsError },
+        { data: studentsData, error: studentsError }
+      ] = await Promise.all([
+        getExamRaw(examId),
+        getExamQuestions(examId),
+        getStudentExamsByExamId(examId)
+      ]);
       
       if (examError) {
         throw examError;
@@ -255,29 +253,13 @@ const ExamFormPage = () => {
       
       setExam(examData);
       
-      // Récupérer les questions
-      const { data: questionsData, error: questionsError } = await supabase
-        .from('exam_questions')
-        .select('*')
-        .eq('exam_id', examId)
-        .order('question_number');
-      
       if (questionsError) {
         throw questionsError;
       }
       
-      setQuestions(questionsData || []);
-      
-      // Récupérer les étudiants assignés
-      const { data: studentsData, error: studentsError } = await supabase
-        .from('student_exams')
-        .select('*')
-        .eq('exam_id', examId);
-      
-      if (studentsError) {
-        throw studentsError;
-      }
-      
+      setQuestions((questionsData || []).map((question) => normalizeExamQuestion(question)));
+
+      if (studentsError) throw studentsError;
       setAssignedStudents(studentsData || []);
       
     } catch (err) {
@@ -428,10 +410,7 @@ const ExamFormPage = () => {
       // Créer ou mettre à jour l'examen
       if (isEditing) {
         // Mise à jour
-        const { error: updateError } = await supabase
-          .from('exams')
-          .update(examData)
-          .eq('id', examId);
+        const { error: updateError } = await updateExamDirect(examId, examData);
         
         if (updateError) {
           throw updateError;
@@ -440,16 +419,13 @@ const ExamFormPage = () => {
         // Création
         examData.created_at = new Date().toISOString();
         
-        const { data: insertData, error: insertError } = await supabase
-          .from('exams')
-          .insert(examData)
-          .select();
+        const { data: insertData, error: insertError } = await insertExam(examData);
         
         if (insertError) {
           throw insertError;
         }
         
-        examId = insertData[0].id;
+        examId = insertData.id;
         setExam({ ...examData, id: examId });
       }
       
@@ -457,10 +433,7 @@ const ExamFormPage = () => {
       if (questions.length > 0) {
         // Supprimer les anciennes questions si en mode édition
         if (isEditing) {
-          const { error: deleteQuestionsError } = await supabase
-            .from('exam_questions')
-            .delete()
-            .eq('exam_id', examId);
+          const { error: deleteQuestionsError } = await deleteExamQuestions(examId);
           
           if (deleteQuestionsError) {
             throw deleteQuestionsError;
@@ -471,17 +444,10 @@ const ExamFormPage = () => {
         const questionsToInsert = questions.map((q, index) => ({
           exam_id: examId,
           question_number: index + 1,
-          question_text: q.question_text,
-          question_type: q.question_type,
-          points: q.points,
-          options: q.options || null,
-          correct_answer: q.correct_answer || null,
-          rubric: q.rubric || null
+          ...serializeExamQuestion(q)
         }));
         
-        const { error: insertQuestionsError } = await supabase
-          .from('exam_questions')
-          .insert(questionsToInsert);
+        const { error: insertQuestionsError } = await insertExamQuestions(questionsToInsert);
         
         if (insertQuestionsError) {
           throw insertQuestionsError;
@@ -507,10 +473,7 @@ const ExamFormPage = () => {
       if (assignedStudents.length > 0) {
         // Supprimer les anciennes assignations si en mode édition
         if (isEditing) {
-          const { error: deleteStudentsError } = await supabase
-            .from('student_exams')
-            .delete()
-            .eq('exam_id', examId);
+          const { error: deleteStudentsError } = await deleteStudentExams(examId);
           
           if (deleteStudentsError) {
             throw deleteStudentsError;
@@ -530,9 +493,7 @@ const ExamFormPage = () => {
           answers: studentAssignment.answers || null
         }));
         
-        const { error: insertStudentsError } = await supabase
-          .from('student_exams')
-          .insert(studentsToInsert);
+        const { error: insertStudentsError } = await insertStudentExams(studentsToInsert);
         
         if (insertStudentsError) {
           throw insertStudentsError;

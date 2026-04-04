@@ -514,3 +514,693 @@ export const savePracticeQuizAttempt = async (attemptData) => {
     return { data: null, error };
   }
 };
+
+// ============================================================
+// VALIDATION QUEUE
+// ============================================================
+
+/** Recupere la file de validation avec relations */
+export const getValidationQueue = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('validation_queue')
+      .select(`
+        *,
+        student:students(id, profile_id, level),
+        requester:profiles(id, first_name, last_name, email)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getValidationQueue:', error);
+    return { data: [], error };
+  }
+};
+
+/** Met a jour le statut d'un item de la file de validation */
+export const updateValidationQueueItem = async (id, updates) => {
+  try {
+    const { error } = await supabase
+      .from('validation_queue')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('updateValidationQueueItem:', error);
+    return { error };
+  }
+};
+
+/** Insere une entree dans le journal d'audit (simplifie) */
+export const insertAuditLogEntry = async (entry) => {
+  try {
+    const { error } = await supabase
+      .from('audit_log')
+      .insert(Array.isArray(entry) ? entry : [entry]);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('insertAuditLogEntry:', error);
+    return { error };
+  }
+};
+
+// ============================================================
+// ACCOUNT STATUS (Students)
+// ============================================================
+
+/** Recupere tous les etudiants avec leur profil */
+export const getStudentsWithProfiles = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .select('*, profiles(full_name, email), is_active:is_active')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getStudentsWithProfiles:', error);
+    return { data: [], error };
+  }
+};
+
+/** Met a jour le statut d'un etudiant */
+export const updateStudentStatus = async (id, updates) => {
+  try {
+    const { error } = await supabase
+      .from('students')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('updateStudentStatus:', error);
+    return { error };
+  }
+};
+
+// ============================================================
+// LEVELS & SEMESTERS
+// ============================================================
+
+/** Recupere les niveaux distincts des etudiants */
+export const getStudentLevels = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .select('level')
+      .not('level', 'is', null)
+      .order('level');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getStudentLevels:', error);
+    return { data: [], error };
+  }
+};
+
+/** Recupere les semestres distincts des notes */
+export const getGradeSemesters = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('grades')
+      .select('semester')
+      .not('semester', 'is', null)
+      .order('semester');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getGradeSemesters:', error);
+    return { data: [], error };
+  }
+};
+
+// ============================================================
+// ADMIN DASHBOARD (counts)
+// ============================================================
+
+/** Recupere les statistiques du dashboard admin */
+export const getAdminDashboardStats = async () => {
+  try {
+    const [
+      { count: studentsCount },
+      { count: professorsCount },
+      { count: departmentsCount },
+      { count: coursesCount },
+      { count: sessionsCount },
+      { count: correctionsCount },
+    ] = await Promise.all([
+      supabase.from('students').select('id', { count: 'exact', head: true }).eq('status', 'actif'),
+      supabase.from('professors').select('id', { count: 'exact', head: true }),
+      supabase.from('departments').select('id', { count: 'exact', head: true }),
+      supabase.from('courses').select('id', { count: 'exact', head: true }),
+      supabase.from('exam_sessions').select('id', { count: 'exact', head: true }).eq('status', 'in_progress'),
+      supabase.from('demandes_correction_notes').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    ]);
+
+    return {
+      data: {
+        totalStudents: studentsCount || 0,
+        totalProfessors: professorsCount || 0,
+        totalDepartments: departmentsCount || 0,
+        totalCourses: coursesCount || 0,
+        activeSessions: sessionsCount || 0,
+        pendingCorrections: correctionsCount || 0,
+      },
+      error: null,
+    };
+  } catch (error) {
+    console.error('getAdminDashboardStats:', error);
+    return { data: null, error };
+  }
+};
+
+/** Recupere l'activite recente du journal d'audit */
+export const getRecentAuditActivity = async (limit = 5) => {
+  try {
+    const { data, error } = await supabase
+      .from('audit_log')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getRecentAuditActivity:', error);
+    return { data: [], error };
+  }
+};
+
+// ============================================================
+// AUDIT LOG (page-level query with date filters)
+// ============================================================
+
+/** Recupere les logs d'audit avec filtres de dates */
+export const getAuditLogEntries = async ({ startDate, endDate, limit = 500 } = {}) => {
+  try {
+    let query = supabase
+      .from('audit_log')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (startDate) {
+      query = query.gte('created_at', new Date(startDate).toISOString());
+    }
+    if (endDate) {
+      const nextDay = new Date(endDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      query = query.lt('created_at', nextDay.toISOString());
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getAuditLogEntries:', error);
+    return { data: [], error };
+  }
+};
+
+// ============================================================
+// STUDENT IMPORT
+// ============================================================
+
+/** Verifie si un etudiant existe par student_id */
+export const getStudentByStudentId = async (studentIdValue) => {
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .select('id')
+      .eq('student_id', studentIdValue)
+      .single();
+
+    return { data, error: error || null };
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
+/** Cree un profil pour l'import */
+export const createProfileForImport = async (profileData) => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert(profileData)
+      .select();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('createProfileForImport:', error);
+    return { data: null, error };
+  }
+};
+
+/** Cree un etudiant pour l'import */
+export const createStudentForImport = async (studentData) => {
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .insert(studentData)
+      .select();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('createStudentForImport:', error);
+    return { data: null, error };
+  }
+};
+
+// ============================================================
+// DOCUMENT TEMPLATES
+// ============================================================
+
+/** Recupere tous les modeles de documents */
+export const getDocumentTemplates = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('document_templates')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getDocumentTemplates:', error);
+    return { data: [], error };
+  }
+};
+
+/** Cree un modele de document */
+export const createDocumentTemplate = async (templateData) => {
+  try {
+    const { error } = await supabase
+      .from('document_templates')
+      .insert(Array.isArray(templateData) ? templateData : [templateData]);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('createDocumentTemplate:', error);
+    return { error };
+  }
+};
+
+/** Met a jour un modele de document */
+export const updateDocumentTemplate = async (id, updates) => {
+  try {
+    const { error } = await supabase
+      .from('document_templates')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('updateDocumentTemplate:', error);
+    return { error };
+  }
+};
+
+/** Supprime un modele de document */
+export const deleteDocumentTemplate = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('document_templates')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('deleteDocumentTemplate:', error);
+    return { error };
+  }
+};
+
+// ============================================================
+// SUBJECTS (courses) — admin CRUD
+// ============================================================
+
+/** Recupere les cours avec les departements */
+export const getCoursesWithDepartments = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('courses')
+      .select('*, departments(name)')
+      .order('name');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getCoursesWithDepartments:', error);
+    return { data: [], error };
+  }
+};
+
+/** Cree un cours */
+export const createCourse = async (courseData) => {
+  try {
+    const { error } = await supabase
+      .from('courses')
+      .insert(Array.isArray(courseData) ? courseData : [courseData]);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('createCourse:', error);
+    return { error };
+  }
+};
+
+/** Met a jour un cours */
+export const updateCourse = async (id, updates) => {
+  try {
+    const { error } = await supabase
+      .from('courses')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('updateCourse:', error);
+    return { error };
+  }
+};
+
+/** Supprime un cours */
+export const deleteCourse = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('courses')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('deleteCourse:', error);
+    return { error };
+  }
+};
+
+// ============================================================
+// PROFESSORS — admin CRUD
+// ============================================================
+
+/** Recupere les professeurs avec departements */
+export const getProfessorsWithDepartments = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('professors')
+      .select('*, departments(name)');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getProfessorsWithDepartments:', error);
+    return { data: [], error };
+  }
+};
+
+/** Cree un professeur */
+export const createProfessor = async (profData) => {
+  try {
+    const { error } = await supabase
+      .from('professors')
+      .insert(Array.isArray(profData) ? profData : [profData]);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('createProfessor:', error);
+    return { error };
+  }
+};
+
+/** Met a jour un professeur */
+export const updateProfessor = async (id, updates) => {
+  try {
+    const { error } = await supabase
+      .from('professors')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('updateProfessor:', error);
+    return { error };
+  }
+};
+
+/** Supprime un professeur */
+export const deleteProfessor = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('professors')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('deleteProfessor:', error);
+    return { error };
+  }
+};
+
+/** Recupere la liste des professeurs (id, full_name) */
+export const getProfessorsList = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('professors')
+      .select('id, full_name')
+      .order('full_name');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getProfessorsList:', error);
+    return { data: [], error };
+  }
+};
+
+// ============================================================
+// STUDENT DETAILS
+// ============================================================
+
+/** Recupere un etudiant par ID */
+export const getStudentById = async (id) => {
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('getStudentById:', error);
+    return { data: null, error };
+  }
+};
+
+/** Recupere un profil par ID */
+export const getProfileByIdAdmin = async (id) => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('getProfileByIdAdmin:', error);
+    return { data: null, error };
+  }
+};
+
+/** Recupere les notes d'un etudiant avec les cours */
+export const getStudentGradesAdmin = async (studentId) => {
+  try {
+    const { data, error } = await supabase
+      .from('grades')
+      .select(`
+        *,
+        course:courses(name, code, credits, semester)
+      `)
+      .eq('student_id', studentId)
+      .order('courses.semester');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getStudentGradesAdmin:', error);
+    return { data: [], error };
+  }
+};
+
+/** Recupere l'assiduite d'un etudiant */
+export const getStudentAttendance = async (studentId) => {
+  try {
+    const { data, error } = await supabase
+      .from('grades')
+      .select('attendance')
+      .eq('student_id', studentId)
+      .not('attendance', 'is', null);
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getStudentAttendance:', error);
+    return { data: [], error };
+  }
+};
+
+/** Recupere les demandes de correction d'un etudiant */
+export const getStudentCorrections = async (studentId) => {
+  try {
+    const { data, error } = await supabase
+      .from('demandes_correction_notes')
+      .select('*')
+      .eq('student_id', studentId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getStudentCorrections:', error);
+    return { data: [], error };
+  }
+};
+
+/** Met a jour un etudiant */
+export const updateStudent = async (id, updates) => {
+  try {
+    const { error } = await supabase
+      .from('students')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('updateStudent:', error);
+    return { error };
+  }
+};
+
+/** Supprime un etudiant */
+export const deleteStudent = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('students')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('deleteStudent:', error);
+    return { error };
+  }
+};
+
+// ============================================================
+// DEPARTMENTS — admin CRUD
+// ============================================================
+
+/** Recupere les departements avec professeurs */
+export const getDepartmentsWithProfessors = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('departments')
+      .select('*, professors(full_name)');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getDepartmentsWithProfessors:', error);
+    return { data: [], error };
+  }
+};
+
+/** Cree un departement */
+export const createDepartmentAdmin = async (deptData) => {
+  try {
+    const { error } = await supabase
+      .from('departments')
+      .insert(Array.isArray(deptData) ? deptData : [deptData]);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('createDepartmentAdmin:', error);
+    return { error };
+  }
+};
+
+/** Met a jour un departement */
+export const updateDepartmentAdmin = async (id, updates) => {
+  try {
+    const { error } = await supabase
+      .from('departments')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('updateDepartmentAdmin:', error);
+    return { error };
+  }
+};
+
+/** Supprime un departement */
+export const deleteDepartmentAdmin = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('departments')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('deleteDepartmentAdmin:', error);
+    return { error };
+  }
+};
+
+/** Recupere la liste des departements */
+export const getDepartmentsList = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('departments')
+      .select('*')
+      .order('name');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getDepartmentsList:', error);
+    return { data: [], error };
+  }
+};

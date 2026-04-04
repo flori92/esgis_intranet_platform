@@ -1,21 +1,25 @@
 import React from "react";
-import { useQuiz } from "../hooks/useQuiz";
 
 /**
  * Composant de navigation dans le quiz
  * Permet de naviguer entre les questions et d'afficher la progression
+ * @param {Object} props
+ * @param {Array} props.questions
+ * @param {number} props.currentQuestionIndex
+ * @param {Object} props.userAnswers
+ * @param {Function} props.goToNextQuestion
+ * @param {Function} props.goToPreviousQuestion
+ * @param {Function} props.endQuiz
  * @returns {JSX.Element} Composant de navigation du quiz
  */
-const QuizNavigation = () => {
-  const { 
-    questions, 
-    currentQuestionIndex, 
-    userAnswers,
-    goToNextQuestion, 
-    goToPreviousQuestion,
-    endQuiz
-  } = useQuiz();
-  
+const QuizNavigation = ({
+  questions,
+  currentQuestionIndex,
+  userAnswers,
+  goToNextQuestion,
+  goToPreviousQuestion,
+  endQuiz
+}) => {
   const isFirstQuestion = currentQuestionIndex === 0;
   const isLastQuestion = currentQuestionIndex === questions.length - 1;
   const answeredCount = Object.values(userAnswers).filter((value) => {

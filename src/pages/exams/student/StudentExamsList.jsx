@@ -34,6 +34,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { format, parseISO, isBefore, isAfter } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { supabase } from '@/supabase';
 import { getExamsFromUserMetadata, filterExamsByStatus, searchExams } from '@/utils/examUtils';
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // Désactivation ciblée des vérifications TypeScript pour ce fichier
@@ -479,14 +480,18 @@ const StudentExamsList = () => {
   };
 
   // Gestionnaire pour afficher les détails d'un examen
-  const handleViewExam = (examId, examType) => {
-    // Si c'est un quiz, rediriger vers le composant QuizLauncher
-    if (examType === 'quiz') {
-      navigate(`/student/quiz/${examId}`);
-    } else {
-      // Sinon, rediriger vers la page de détails de l'examen standard
-      navigate(`/student/exams/${examId}`);
+  const handleViewExam = (exam) => {
+    if (exam.type === 'quiz' && exam.status === 'active') {
+      navigate('/student/practice');
+      return;
     }
+
+    if (exam.attempt_status === 'submitted' || new Date(exam?.date || new Date().toISOString()) < new Date()) {
+      navigate(`/student/exams/${exam.exam_id}/results`);
+      return;
+    }
+
+    navigate(`/student/exams/${exam.exam_id}/take`);
   };
 
   // Formatage de la date
@@ -559,7 +564,7 @@ const StudentExamsList = () => {
             size="small" 
             variant="outlined" 
             startIcon={<AssignmentIcon />}
-            onClick={() => handleViewExam(exam.exam_id, exam.type)}
+            onClick={() => handleViewExam(exam)}
           >
             Détails
           </Button>
@@ -570,7 +575,7 @@ const StudentExamsList = () => {
               color="primary" 
               startIcon={<PlayArrowIcon />}
               disabled={isPast}
-              onClick={() => handleViewExam(exam.exam_id, exam.type)}
+              onClick={() => handleViewExam(exam)}
             >
               {exam.type === 'quiz' ? 'Lancer le quiz' : 'Commencer'}
             </Button>

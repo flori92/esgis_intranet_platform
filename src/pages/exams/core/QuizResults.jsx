@@ -1,26 +1,34 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
 
 /**
  * Composant d'affichage des résultats du quiz
  * Affiche le score final, le nombre de réponses correctes et les tentatives de triche
+ * @param {Object} props
+ * @param {Array} props.questions
+ * @param {Object} props.userAnswers
+ * @param {Function} props.calculateScore
+ * @param {number} props.cheatingAttempts
+ * @param {Object|null} props.scoreSummary
+ * @param {number} props.correctAnswersCount
  * @returns {JSX.Element} Composant des résultats du quiz
  */
-const QuizResults = () => {
+const QuizResults = ({
+  questions,
+  userAnswers,
+  calculateScore,
+  cheatingAttempts,
+  scoreSummary,
+  correctAnswersCount
+}) => {
   const navigate = useNavigate();
-  const { questions, userAnswers, calculateScore, cheatingAttempts, scoreSummary } = useQuiz();
   const { appState } = useAuth();
 
   const score = scoreSummary?.score ?? calculateScore();
   const totalPossibleScore = scoreSummary?.maxScore ?? questions.reduce((total, question) => total + Number(question.points || 0), 0);
   const percentage = totalPossibleScore > 0 ? ((score / totalPossibleScore) * 100) : 0;
 
-  const correctAnswers = questions.filter((question) => {
-    return String(userAnswers[question.id] ?? '').trim().toLowerCase() === String(question.correctAnswer ?? '').trim().toLowerCase();
-  }).length;
-  
   /**
    * Détermine la couleur du score en fonction du pourcentage obtenu
    * @returns {string} Classe CSS pour la couleur du score
@@ -52,7 +60,7 @@ const QuizResults = () => {
             
             <div className="flex justify-between items-center mb-4">
               <p className="text-gray-700">Réponses correctes:</p>
-              <p className="font-medium">{correctAnswers} sur {questions.length}</p>
+              <p className="font-medium">{correctAnswersCount} sur {questions.length}</p>
             </div>
             
             {cheatingAttempts > 0 && (

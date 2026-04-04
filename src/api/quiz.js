@@ -3,6 +3,7 @@
  * Centralise toutes les opérations liées aux quiz
  */
 import { supabase } from '../supabase';
+import { normalizeExamQuestion, serializeExamQuestion } from '../utils/examQuestionUtils';
 
 /**
  * Types pour le module quiz - remplacés par des commentaires JSDoc
@@ -41,17 +42,7 @@ export const getExamQuestions = async (examId) => {
       return { data: [], questions: [], error };
     }
 
-    const formattedQuestions = (data || []).map((item) => {
-      const rawOptions = Array.isArray(item.options) ? item.options : [];
-      const optionTexts = rawOptions.map((option) => (typeof option === 'string' ? option : option?.text || ''));
-
-      return {
-        ...item,
-        text: item.question_text,
-        options: optionTexts,
-        correctAnswer: item.correct_answer,
-      };
-    });
+    const formattedQuestions = (data || []).map((item) => normalizeExamQuestion(item));
 
     return { data: formattedQuestions, questions: formattedQuestions, error: null };
   } catch (err) {
@@ -72,17 +63,15 @@ export const getExamQuestions = async (examId) => {
  */
 export const createQuestion = async (questionInputData, options) => {
   try {
-    const optionTexts = (options || []).map((option) => option.text);
-    const correctOption = (options || []).find((option) => option.is_correct);
     const questionPayload = {
       exam_id: questionInputData.exam_id,
       question_number: questionInputData.question_number || questionInputData.display_order || 1,
-      question_text: questionInputData.question_text || questionInputData.text || '',
-      question_type: questionInputData.question_type || 'multiple_choice',
-      points: questionInputData.points || 1,
-      options: optionTexts,
-      correct_answer: correctOption?.text || questionInputData.correct_answer || null,
-      rubric: questionInputData.rubric || null,
+      ...serializeExamQuestion({
+        ...questionInputData,
+        options: Array.isArray(options)
+          ? options.map((option) => option.text)
+          : questionInputData.options
+      })
     };
 
     const { data: questionResult, error: questionError } = await supabase
@@ -97,12 +86,7 @@ export const createQuestion = async (questionInputData, options) => {
     }
 
     return {
-      question: {
-        ...questionResult,
-        text: questionResult.question_text,
-        options: optionTexts,
-        correctAnswer: questionResult.correct_answer,
-      },
+      question: normalizeExamQuestion(questionResult),
       error: null
     };
   } catch (err) {
@@ -125,18 +109,10 @@ export const createQuestion = async (questionInputData, options) => {
  */
 export const updateQuestion = async (questionId, updates, options) => {
   try {
-    const optionTexts = Array.isArray(options) ? options.map((option) => option.text) : undefined;
-    const correctOption = Array.isArray(options) ? options.find((option) => option.is_correct) : null;
-    const payload = {
+    const payload = serializeExamQuestion({
       ...updates,
-    };
-
-    if (optionTexts) {
-      payload.options = optionTexts;
-    }
-    if (correctOption) {
-      payload.correct_answer = correctOption.text;
-    }
+      options: Array.isArray(options) ? options.map((option) => option.text) : updates.options
+    });
 
     const { data: updatedQuestion, error: questionError } = await supabase
       .from('exam_questions')
@@ -151,12 +127,7 @@ export const updateQuestion = async (questionId, updates, options) => {
     }
 
     return {
-      question: {
-        ...updatedQuestion,
-        text: updatedQuestion.question_text,
-        options: Array.isArray(updatedQuestion.options) ? updatedQuestion.options : [],
-        correctAnswer: updatedQuestion.correct_answer,
-      },
+      question: normalizeExamQuestion(updatedQuestion),
       error: null
     };
   } catch (err) {
