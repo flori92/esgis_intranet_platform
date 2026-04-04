@@ -98,7 +98,7 @@ const StudentsListPage = () => {
         .select(`
           id,
           profiles:profile_id(id, full_name, email, gender, date_of_birth, phone_number, address),
-          student_id,
+          student_number,
           department_id,
           level,
           academic_year,
@@ -117,7 +117,7 @@ const StudentsListPage = () => {
         return {
           id: student.id,
           profile_id: student.profiles?.id || '',
-          student_id: student.student_id,
+          student_id: student.student_number,
           full_name: student.profiles?.full_name || 'Nom inconnu',
           email: student.profiles?.email || 'Email inconnu',
           gender: student.profiles?.gender || '',

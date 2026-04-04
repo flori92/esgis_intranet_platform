@@ -1595,6 +1595,31 @@ export const createRealtimeChannel = (channelName, subscriptions) => {
 };
 
 /**
+ * Met à jour le ping d'activité d'un étudiant en examen
+ * @param {string} profileId 
+ * @param {number} examId 
+ * @param {boolean} isCompleted 
+ */
+export const updateActiveStudent = async (profileId, examId, isCompleted = false) => {
+  try {
+    const { error } = await supabase
+      .from('active_students')
+      .upsert({
+        student_id: profileId,
+        exam_id: examId,
+        last_ping: new Date().toISOString(),
+        is_completed: isCompleted
+      }, { onConflict: 'student_id,exam_id' });
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('updateActiveStudent:', error);
+    return { success: false, error };
+  }
+};
+
+/**
  * Supprime un canal Supabase Realtime.
  * @param {Object} channel
  */

@@ -101,7 +101,7 @@ const StudentFormPage = () => {
           .select(`
             id,
             profiles:profile_id(id, full_name, email, gender, date_of_birth, phone_number, address),
-            student_id,
+            student_number,
             department_id,
             filiere_id,
             level,
@@ -119,7 +119,7 @@ const StudentFormPage = () => {
           setStudent({
             id: studentData.id,
             profile_id: studentData.profiles?.id,
-            student_id: studentData.student_id,
+            student_id: studentData.student_number,
             full_name: studentData.profiles?.full_name || '',
             email: studentData.profiles?.email || '',
             gender: studentData.profiles?.gender || '',
@@ -303,7 +303,7 @@ const StudentFormPage = () => {
       // Préparer les données de l'étudiant
       const studentData = {
         profile_id: profileId,
-        student_id: student.student_id,
+        student_number: student.student_id,
         department_id: student.department_id,
         filiere_id: student.filiere_id,
         level: student.level,

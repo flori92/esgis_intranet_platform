@@ -101,7 +101,7 @@ const StudentDetailsPage = () => {
         .select(`
           id,
           profiles:profile_id(id, full_name, email, gender, date_of_birth, phone_number, address),
-          student_id,
+          student_number,
           departments:department_id(id, name, code),
           level,
           academic_year,
@@ -126,7 +126,7 @@ const StudentDetailsPage = () => {
       const transformedStudent = {
         id: studentData.id,
         profile_id: profile?.id || '',
-        student_id: studentData.student_id,
+        student_id: studentData.student_number,
         full_name: profile?.full_name || 'Nom inconnu',
         email: profile?.email || 'Email inconnu',
         gender: profile?.gender || '',
