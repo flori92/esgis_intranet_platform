@@ -27,7 +27,8 @@ export const getRecordsWithRelation = async (table, options = {}) => {
       query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending });
     }
     
-    if (options.limit) {
+    // Some adapters/versions may not expose the limit() method on the query object
+    if (options.limit && typeof query.limit === 'function') {
       query = query.limit(options.limit);
     }
     
