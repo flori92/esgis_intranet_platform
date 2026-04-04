@@ -4,11 +4,11 @@ import {
   TextField, Select, MenuItem, FormControl, InputLabel, Chip, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Card,
   CardContent, Tabs, Tab, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow
+  TableHead, TableRow, Stack
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon, Add as AddIcon, Edit as EditIcon,
-  Delete as DeleteIcon, Save as SaveIcon
+  Delete as DeleteIcon, Save as SaveIcon, FilterList as FilterIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -16,12 +16,14 @@ import {
   deleteScheduleEvent, getInstitutionalEvents, createInstitutionalEvent,
   deleteInstitutionalEvent
 } from '@/api/calendar';
+import { getDepartments } from '@/api/departments';
+import { getAcademicLevels } from '@/api/admin';
 import { supabase } from '@/supabase';
 
 const EVENT_TYPES = [
   { value: 'cours', label: 'Cours magistral', color: '#2196F3' },
   { value: 'tp', label: 'Travaux pratiques', color: '#4CAF50' },
-  { value: 'td', label: 'Travaux dirig��s', color: '#FFC107' },
+  { value: 'td', label: 'Travaux dirigés', color: '#FFC107' },
   { value: 'examen', label: 'Examen / Contrôle', color: '#F44336' },
   { value: 'evenement', label: 'Événement universitaire', color: '#FF9800' },
   { value: 'conge', label: 'Congé / Jour férié', color: '#212121' },
@@ -36,7 +38,8 @@ const JOURS_SEMAINE = [
 const CalendarManagerPage = () => {
   const { authState } = useAuth();
   const [events, setEvents] = useState([]);
-  const [institutionalEvents, setInstitutionalEvents] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [levels, setLevels] = useState([]);
   const [courses, setCourses] = useState([]);
   const [professors, setProfessors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,9 +48,17 @@ const CalendarManagerPage = () => {
   const [tabValue, setTabValue] = useState(0);
   const [editDialog, setEditDialog] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
+  
+  // Filters
+  const [filters, setFilters] = useState({
+    departmentId: '',
+    levelCode: ''
+  });
+
   const [eventForm, setEventForm] = useState({
     title: '', type: 'cours', jour: 1, heure_debut: '08:00', heure_fin: '10:00',
     salle: '', course_id: '', professor_id: '', groupe: '',
+    department_id: '', level_code: '',
     date_specifique: '', description: ''
   });
   const [saving, setSaving] = useState(false);
@@ -56,10 +67,12 @@ const CalendarManagerPage = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sessionsRes, eventsRes, coursesRes, profsRes] = await Promise.all([
-        getScheduleEvents(),
-        getInstitutionalEvents(),
-        supabase.from('courses').select('id, name, code').order('name'),
+      const [sessionsRes, eventsRes, deptsRes, levelsRes, coursesRes, profsRes] = await Promise.all([
+        getScheduleEvents(filters),
+        getInstitutionalEvents(filters),
+        getDepartments(),
+        getAcademicLevels(),
+        supabase.from('courses').select('id, name, code, department_id, level').order('name'),
         supabase.from('professors').select('id, profile_id, profiles:profile_id(full_name)').order('profiles(full_name)'),
       ]);
 
@@ -67,7 +80,7 @@ const CalendarManagerPage = () => {
         id: e.id,
         source: 'session',
         title: e.cours?.name || e.title || '',
-        type: 'cours',
+        type: e.type || 'cours',
         jour: e.jour_semaine,
         heure_debut: e.heure_debut,
         heure_fin: e.heure_fin,
@@ -75,6 +88,8 @@ const CalendarManagerPage = () => {
         professeur: e.professeur?.full_name || '',
         professor_id: e.professor_id,
         course_id: e.course_id,
+        department_id: e.department_id,
+        level_code: e.level_code,
         groupe: '',
       }));
 
@@ -89,12 +104,15 @@ const CalendarManagerPage = () => {
         salle: e.lieu || e.location || '',
         professeur: '-',
         groupe: 'Tous',
+        department_id: e.department_id,
+        level_code: e.level_code,
         description: e.description,
         date_specifique: e.start_date?.split('T')[0] || '',
       }));
 
       setEvents([...formatted, ...instFormatted]);
-      setInstitutionalEvents(eventsRes.data || []);
+      setDepartments(deptsRes.departments || []);
+      setLevels(levelsRes.data || []);
       setCourses(coursesRes.data || []);
       setProfessors((profsRes.data || []).map(p => ({
         id: p.id,
@@ -105,7 +123,7 @@ const CalendarManagerPage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -113,17 +131,27 @@ const CalendarManagerPage = () => {
     if (event) {
       setEditingEvent(event);
       setEventForm({
-        title: event.title || '', type: event.type || 'cours', jour: event.jour || 1,
-        heure_debut: event.heure_debut || '08:00', heure_fin: event.heure_fin || '10:00',
-        salle: event.salle || '', course_id: event.course_id || '',
-        professor_id: event.professor_id || '', groupe: event.groupe || '',
-        date_specifique: event.date_specifique || '', description: event.description || ''
+        title: event.title || '', 
+        type: event.type || 'cours', 
+        jour: event.jour || 1,
+        heure_debut: event.heure_debut || '08:00', 
+        heure_fin: event.heure_fin || '10:00',
+        salle: event.salle || '', 
+        course_id: event.course_id || '',
+        professor_id: event.professor_id || '', 
+        groupe: event.groupe || '',
+        department_id: event.department_id || '',
+        level_code: event.level_code || '',
+        date_specifique: event.date_specifique || '', 
+        description: event.description || ''
       });
     } else {
       setEditingEvent(null);
       setEventForm({
         title: '', type: 'cours', jour: 1, heure_debut: '08:00', heure_fin: '10:00',
         salle: '', course_id: '', professor_id: '', groupe: '',
+        department_id: filters.departmentId || '', 
+        level_code: filters.levelCode || '',
         date_specifique: '', description: ''
       });
     }
@@ -165,6 +193,8 @@ const CalendarManagerPage = () => {
           type: eventForm.type === 'conge' ? 'holiday' : 'institutional',
           start_date: `${baseDate}T${eventForm.heure_debut}:00`,
           end_date: `${baseDate}T${eventForm.heure_fin}:00`,
+          department_id: eventForm.department_id || null,
+          level_code: eventForm.level_code || null,
           created_by: authState.profile?.id,
         };
 
@@ -182,6 +212,8 @@ const CalendarManagerPage = () => {
         const payload = {
           course_id: eventForm.course_id || null,
           professor_id: eventForm.professor_id || null,
+          department_id: eventForm.department_id || null,
+          level_code: eventForm.level_code || null,
           date,
           duration,
           room: eventForm.salle,
@@ -221,25 +253,65 @@ const CalendarManagerPage = () => {
     }
   };
 
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
   const eventsByDay = JOURS_SEMAINE.map(j => ({
     ...j,
     events: events.filter(e => e.jour === j.value).sort((a, b) => (a.heure_debut || '').localeCompare(b.heure_debut || ''))
   }));
 
-  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
+  if (loading && events.length === 0) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
 
   return (
-    <Box sx={{ p: { xs: 1, md: 2 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+    <Box sx={{ p: { xs: 1, md: 3 } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <CalendarIcon sx={{ mr: 1, color: 'primary.main', fontSize: 32 }} />
-          <Typography variant="h5" fontWeight="bold">Calendrier Institutionnel</Typography>
+          <Typography variant="h5" fontWeight="bold">Gestion des Emplois du Temps</Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenEdit()}>Nouveau créneau</Button>
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       <Snackbar open={!!successMessage} autoHideDuration={3000} onClose={() => setSuccessMessage('')} message={successMessage} />
+
+      {/* Barre de Filtres */}
+      <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+          <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', mr: 1 }}>
+            <FilterIcon sx={{ mr: 1 }} />
+            <Typography variant="body2" fontWeight="bold">Filtres :</Typography>
+          </Box>
+          
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>Département / Filière</InputLabel>
+            <Select
+              value={filters.departmentId}
+              label="Département / Filière"
+              onChange={(e) => handleFilterChange('departmentId', e.target.value)}
+            >
+              <MenuItem value="">Tous les départements</MenuItem>
+              {departments.map(d => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Niveau</InputLabel>
+            <Select
+              value={filters.levelCode}
+              label="Niveau"
+              onChange={(e) => handleFilterChange('levelCode', e.target.value)}
+            >
+              <MenuItem value="">Tous les niveaux</MenuItem>
+              {levels.map(l => <MenuItem key={l.id} value={l.code}>{l.code} - {l.label}</MenuItem>)}
+            </Select>
+          </FormControl>
+
+          {loading && <CircularProgress size={20} />}
+        </Stack>
+      </Paper>
 
       <Paper elevation={1} sx={{ p: 1.5, mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
         {EVENT_TYPES.map(t => (
@@ -256,7 +328,7 @@ const CalendarManagerPage = () => {
         <Grid container spacing={1}>
           {eventsByDay.map(day => (
             <Grid item xs={12} sm={6} md={2} key={day.value}>
-              <Paper elevation={2} sx={{ minHeight: 300 }}>
+              <Paper elevation={2} sx={{ minHeight: 400 }}>
                 <Box sx={{ bgcolor: '#003366', color: 'white', p: 1, textAlign: 'center' }}>
                   <Typography variant="subtitle2" fontWeight="bold">{day.label}</Typography>
                 </Box>
@@ -264,14 +336,22 @@ const CalendarManagerPage = () => {
                   {day.events.length === 0 ? (
                     <Typography variant="caption" color="text.secondary" sx={{ p: 1, display: 'block', textAlign: 'center' }}>Aucun cours</Typography>
                   ) : day.events.map(ev => {
-                    const typeConfig = EVENT_TYPES.find(t => t.value === ev.type);
+                    const typeConfig = EVENT_TYPES.find(t => t.value === ev.type) || EVENT_TYPES[0];
                     return (
-                      <Card key={ev.id} variant="outlined" sx={{ mb: 0.5, borderLeft: `4px solid ${typeConfig?.color || '#ccc'}`, cursor: 'pointer', '&:hover': { bgcolor: 'grey.50' } }}
+                      <Card key={`${ev.source}-${ev.id}`} variant="outlined" sx={{ mb: 0.5, borderLeft: `4px solid ${typeConfig?.color || '#ccc'}`, cursor: 'pointer', '&:hover': { bgcolor: 'grey.50' } }}
                         onClick={() => handleOpenEdit(ev)}>
                         <CardContent sx={{ p: '8px !important' }}>
                           <Typography variant="caption" fontWeight="bold" sx={{ color: typeConfig?.color }}>{ev.heure_debut} - {ev.heure_fin}</Typography>
-                          <Typography variant="body2" fontWeight="bold" noWrap>{ev.title}</Typography>
-                          <Typography variant="caption" color="text.secondary" noWrap>{ev.salle} {ev.professeur !== '-' ? `• ${ev.professeur}` : ''}</Typography>
+                          <Typography variant="body2" fontWeight="bold" noWrap title={ev.title}>{ev.title}</Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap display="block">{ev.salle}</Typography>
+                          {ev.professeur !== '-' && (
+                            <Typography variant="caption" color="primary" noWrap display="block">{ev.professeur}</Typography>
+                          )}
+                          {(ev.level_code || ev.department_id) && (
+                            <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5 }}>
+                              {ev.level_code && <Chip label={ev.level_code} size="extraSmall" sx={{ fontSize: '9px', height: 16 }} />}
+                            </Box>
+                          )}
                         </CardContent>
                       </Card>
                     );
@@ -288,21 +368,32 @@ const CalendarManagerPage = () => {
           <Table size="small">
             <TableHead>
               <TableRow sx={{ bgcolor: '#003366' }}>
-                {['Jour', 'Horaire', 'Titre', 'Type', 'Salle', 'Professeur', 'Actions'].map(h => (
+                {['Jour', 'Horaire', 'Titre', 'Type', 'Salle', 'Filière/Niveau', 'Professeur', 'Actions'].map(h => (
                   <TableCell key={h} sx={{ color: 'white', fontWeight: 'bold' }}>{h}</TableCell>
                 ))}
               </TableRow>
             </TableHead>
             <TableBody>
-              {events.map(ev => {
-                const typeConfig = EVENT_TYPES.find(t => t.value === ev.type);
+              {events.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>Aucun événement trouvé pour ces filtres.</TableCell>
+                </TableRow>
+              ) : events.map(ev => {
+                const typeConfig = EVENT_TYPES.find(t => t.value === ev.type) || EVENT_TYPES[0];
+                const dept = departments.find(d => d.id === ev.department_id);
                 return (
-                  <TableRow key={ev.id} hover>
+                  <TableRow key={`${ev.source}-${ev.id}`} hover>
                     <TableCell>{JOURS_SEMAINE.find(j => j.value === ev.jour)?.label || '-'}</TableCell>
                     <TableCell>{ev.heure_debut} - {ev.heure_fin}</TableCell>
                     <TableCell><Typography variant="body2" fontWeight="bold">{ev.title}</Typography></TableCell>
                     <TableCell><Chip label={typeConfig?.label} size="small" sx={{ bgcolor: typeConfig?.color, color: 'white' }} /></TableCell>
                     <TableCell>{ev.salle}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5}>
+                        {dept && <Chip label={dept.code || dept.name} size="small" variant="outlined" />}
+                        {ev.level_code && <Chip label={ev.level_code} size="small" color="primary" variant="outlined" />}
+                      </Stack>
+                    </TableCell>
                     <TableCell>{ev.professeur}</TableCell>
                     <TableCell>
                       <IconButton size="small" onClick={() => handleOpenEdit(ev)}><EditIcon fontSize="small" /></IconButton>
@@ -321,12 +412,34 @@ const CalendarManagerPage = () => {
         <DialogTitle>{editingEvent ? 'Modifier le créneau' : 'Nouveau créneau'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0 }}>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Type</InputLabel>
                 <Select value={eventForm.type} label="Type"
                   onChange={(e) => setEventForm(p => ({ ...p, type: e.target.value }))}>
                   {EVENT_TYPES.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Département / Filière</InputLabel>
+                <Select value={eventForm.department_id} label="Département / Filière"
+                  onChange={(e) => setEventForm(p => ({ ...p, department_id: e.target.value }))}>
+                  <MenuItem value="">-- Commun --</MenuItem>
+                  {departments.map(d => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Niveau</InputLabel>
+                <Select value={eventForm.level_code} label="Niveau"
+                  onChange={(e) => setEventForm(p => ({ ...p, level_code: e.target.value }))}>
+                  <MenuItem value="">-- Tous --</MenuItem>
+                  {levels.map(l => <MenuItem key={l.id} value={l.code}>{l.code} - {l.label}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
@@ -339,10 +452,22 @@ const CalendarManagerPage = () => {
                     <Select value={eventForm.course_id} label="Cours"
                       onChange={(e) => {
                         const course = courses.find(c => c.id === e.target.value);
-                        setEventForm(p => ({ ...p, course_id: e.target.value, title: course?.name || p.title }));
+                        setEventForm(p => ({ 
+                          ...p, 
+                          course_id: e.target.value, 
+                          title: course?.name || p.title,
+                          department_id: course?.department_id || p.department_id,
+                          level_code: course?.level || p.level_code
+                        }));
                       }}>
                       <MenuItem value="">-- Aucun --</MenuItem>
-                      {courses.map(c => <MenuItem key={c.id} value={c.id}>{c.code} - {c.name}</MenuItem>)}
+                      {courses.filter(c => {
+                        const matchesDept = !eventForm.department_id || c.department_id === eventForm.department_id;
+                        const matchesLevel = !eventForm.level_code || c.level === eventForm.level_code;
+                        return matchesDept && matchesLevel;
+                      }).map(c => (
+                        <MenuItem key={c.id} value={c.id}>{c.code} - {c.name}</MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Grid>

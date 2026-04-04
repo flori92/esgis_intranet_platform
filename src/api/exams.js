@@ -589,6 +589,31 @@ export const markStudentExamStarted = async ({ studentExamId, examId }) => {
   }
 };
 
+/**
+ * Synchronise les réponses de l'étudiant en cours d'examen
+ * @param {Object} params
+ * @param {number} params.studentExamId
+ * @param {Object} params.answers
+ * @returns {Promise<{ success: boolean, error: Error|null }>}
+ */
+export const syncExamAnswers = async ({ studentExamId, answers }) => {
+  try {
+    const { error } = await supabase
+      .from('student_exams')
+      .update({
+        answers,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', studentExamId);
+
+    if (error) throw error;
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('syncExamAnswers:', error);
+    return { success: false, error };
+  }
+};
+
 export const finalizeStudentExamSubmission = async ({
   studentExamId,
   examId,
@@ -1422,21 +1447,51 @@ export const getCourseStudentsForExam = async (courseId) => {
         student_id,
         academic_year,
         status,
-        students:student_id(
+        profiles:student_id(
           id,
-          profile_id,
-          profiles:profile_id(full_name, email, department_id, departments:department_id(name)),
-          student_number,
-          level,
-          entry_year,
-          status
+          full_name,
+          email,
+          department_id,
+          departments:department_id(name),
+          students(
+            id,
+            student_number,
+            level,
+            entry_year,
+            status
+          )
         )
       `)
       .eq('course_id', courseId)
       .eq('status', 'enrolled');
 
     if (error) throw error;
-    return { data: data || [], error: null };
+    
+    const formattedData = (data || []).map((row) => {
+      const p = row.profiles || {};
+      const s = p.students || {};
+      return {
+        student_id: row.student_id,
+        academic_year: row.academic_year,
+        status: row.status,
+        students: {
+          id: s.id,
+          profile_id: p.id,
+          student_number: s.student_number,
+          level: s.level,
+          entry_year: s.entry_year,
+          status: s.status,
+          profiles: {
+            full_name: p.full_name,
+            email: p.email,
+            department_id: p.department_id,
+            departments: p.departments
+          }
+        }
+      };
+    });
+
+    return { data: formattedData, error: null };
   } catch (error) {
     console.error('Erreur getCourseStudentsForExam:', error);
     return { data: null, error };

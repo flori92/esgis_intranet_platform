@@ -7,38 +7,20 @@ const getAccessibleCourseIds = async (userId, role) => {
   if (!userId) return [];
 
   if (role === 'student') {
-    const { data: student, error } = await supabase
-      .from('students')
-      .select('id')
-      .eq('profile_id', userId)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!student) return [];
-
     const { data: enrollments, error: enrollmentError } = await supabase
       .from('student_courses')
       .select('course_id')
-      .eq('student_id', student.id);
+      .eq('student_id', userId);
 
     if (enrollmentError) throw enrollmentError;
     return [...new Set((enrollments || []).map((item) => item.course_id).filter(Boolean))];
   }
 
   if (role === 'professor') {
-    const { data: professor, error } = await supabase
-      .from('professors')
-      .select('id')
-      .eq('profile_id', userId)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!professor) return [];
-
     const { data: assignments, error: assignmentError } = await supabase
       .from('professor_courses')
       .select('course_id')
-      .eq('professor_id', professor.id);
+      .eq('professor_id', userId);
 
     if (assignmentError) throw assignmentError;
     return [...new Set((assignments || []).map((item) => item.course_id).filter(Boolean))];

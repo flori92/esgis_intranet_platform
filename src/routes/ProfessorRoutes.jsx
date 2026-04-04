@@ -16,6 +16,7 @@ const IntegrityReportPage = lazy(() => import('../pages/professor/exams/Integrit
 const GradesManagementPage = lazy(() => import('../pages/professor/grades/GradesManagementPage'));
 const GradeCorrectionPage = lazy(() => import('../pages/professor/grades/GradeCorrectionPage'));
 const QuestionBankPage = lazy(() => import('../pages/professor/questions/QuestionBankPage'));
+const AttendancesPage = lazy(() => import('../pages/professor/AttendancesPage'));
 
 /**
  * Routes pour les professeurs
@@ -51,6 +52,8 @@ const ProfessorRoutes = () => {
           <Route index element={<GradesManagementPage />} />
           <Route path="corrections" element={<GradeCorrectionPage />} />
         </Route>
+        {/* Présences / Appels */}
+        <Route path="attendances" element={<AttendancesPage />} />
         {/* Banque de questions */}
         <Route path="question-bank" element={<QuestionBankPage />} />
       </Routes>

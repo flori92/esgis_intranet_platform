@@ -5,6 +5,7 @@ import RouteLoader from '../components/common/RouteLoader';
 
 // Pages
 const AdminDashboardPage = lazy(() => import('../pages/admin/DashboardPage'));
+const AcademicManagerPage = lazy(() => import('../pages/admin/AcademicManagerPage'));
 const DepartmentManagerPage = lazy(() => import('../pages/admin/DepartmentManagerPage'));
 const ProfessorRolesPage = lazy(() => import('../pages/admin/ProfessorRolesPage'));
 const CoursesManagerPage = lazy(() => import('../pages/admin/CoursesManagerPage'));
@@ -21,7 +22,6 @@ const StudentImportPage = lazy(() => import('../pages/admin/StudentImportPage'))
 
 // Professor & Department Pages
 const ProfessorsListPage = lazy(() => import('../pages/admin/ProfessorsListPage'));
-const DepartmentsListPage = lazy(() => import('../pages/admin/DepartmentsListPage'));
 const AuditLogNewPage = lazy(() => import('../pages/admin/AuditLogPage'));
 const AccountStatusPage = lazy(() => import('../pages/admin/AccountStatusPage'));
 const LevelsAndSemestersPage = lazy(() => import('../pages/admin/LevelsAndSemestersPage'));
@@ -38,7 +38,7 @@ const AuditLogPage = lazy(() => import('../pages/admin/superadmin/AuditLogPage')
 const CalendarManagerPage = lazy(() => import('../pages/admin/CalendarManagerPage'));
 const BulkBulletinPage = lazy(() => import('../pages/admin/BulkBulletinPage'));
 const PaymentsPage = lazy(() => import('../pages/admin/PaymentsPage'));
-const PartnersPage = lazy(() => import('../pages/admin/PartnersPage'));
+const StagesPartnersPage = lazy(() => import('../pages/admin/StagesPartnersPage'));
 const AnnouncementsPage = lazy(() => import('../pages/admin/AnnouncementsPage'));
 const SystemConfigPage = lazy(() => import('../pages/admin/superadmin/SystemConfigPage'));
 
@@ -53,6 +53,7 @@ const AdminRoutes = () => {
     <Suspense fallback={<RouteLoader />}>
       <Routes>
         <Route index element={<AdminDashboardPage />} />
+        <Route path="academic-structure" element={<AcademicManagerPage />} />
         <Route path="departments" element={<DepartmentManagerPage />} />
         <Route path="professor-roles" element={<ProfessorRolesPage />} />
         <Route path="courses" element={<CoursesManagerPage />} />
@@ -73,7 +74,6 @@ const AdminRoutes = () => {
 
         {/* Professor & Department Routes */}
         <Route path="professors" element={<ProfessorsListPage />} />
-        <Route path="departments-list" element={<DepartmentsListPage />} />
         <Route path="audit-log-new" element={<AuditLogNewPage />} />
         <Route path="account-status" element={<AccountStatusPage />} />
         <Route path="levels-semesters" element={<LevelsAndSemestersPage />} />
@@ -88,7 +88,7 @@ const AdminRoutes = () => {
 
         {/* Paiements, Partenaires, Annonces */}
         <Route path="payments" element={<PaymentsPage />} />
-        <Route path="partners" element={<PartnersPage />} />
+        <Route path="partners" element={<StagesPartnersPage />} />
         <Route path="announcements" element={<AnnouncementsPage />} />
 
         {/* Super Admin Routes */}

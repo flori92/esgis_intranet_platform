@@ -4,7 +4,8 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import {
   finalizeStudentExamSubmission,
-  getStudentExamLaunchData
+  getStudentExamLaunchData,
+  syncExamAnswers
 } from '@/api/exams';
 import {
   getExamQuestions,
@@ -55,6 +56,7 @@ export const useQuiz = () => {
 
   const timerIntervalRef = useRef(null);
   const pingIntervalRef = useRef(null);
+  const syncIntervalRef = useRef(null);
   const endTimeRef = useRef(null);
   const cheatingAttemptsRef = useRef(0);
   const answersRef = useRef({});
@@ -72,6 +74,11 @@ export const useQuiz = () => {
     if (pingIntervalRef.current) {
       clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = null;
+    }
+
+    if (syncIntervalRef.current) {
+      clearInterval(syncIntervalRef.current);
+      syncIntervalRef.current = null;
     }
   }, []);
 
@@ -121,6 +128,9 @@ export const useQuiz = () => {
     }
 
     clearRuntimeIntervals();
+    
+    // Clear local backup on submission
+    localStorage.removeItem(`exam_backup_${examId}`);
 
     const currentQuestions = questionsRef.current;
     const currentAnswers = answersRef.current;
@@ -216,9 +226,15 @@ export const useQuiz = () => {
         }
 
         const normalizedQuestions = fetchedQuestions.map((question) => normalizeExamQuestion(question));
-        const existingAnswers = typeof studentExam.answers === 'string'
-          ? JSON.parse(studentExam.answers || '{}')
-          : (studentExam.answers || {});
+        
+        // Priority: Local Storage > DB Answers > Default Empty
+        const localBackup = localStorage.getItem(`exam_backup_${examId}`);
+        const existingAnswers = localBackup 
+          ? JSON.parse(localBackup) 
+          : (typeof studentExam.answers === 'string'
+            ? JSON.parse(studentExam.answers || '{}')
+            : (studentExam.answers || {}));
+            
         const initialAnswers = {};
 
         normalizedQuestions.forEach((question) => {
@@ -306,9 +322,20 @@ export const useQuiz = () => {
 
     syncTimer();
     timerIntervalRef.current = setInterval(syncTimer, 1000);
+    
     pingIntervalRef.current = setInterval(() => {
       updateActiveStudent(authState.profile.id, examId, true);
     }, 30000);
+
+    // Auto-sync answers to DB every 60 seconds
+    syncIntervalRef.current = setInterval(() => {
+      if (studentExamIdRef.current && Object.keys(answersRef.current).length > 0) {
+        syncExamAnswers({
+          studentExamId: studentExamIdRef.current,
+          answers: answersRef.current
+        });
+      }
+    }, 60000);
 
     return () => {
       clearRuntimeIntervals();
@@ -319,6 +346,7 @@ export const useQuiz = () => {
     examData,
     examId,
     quizStatus,
+    studentExamId,
     submitQuiz
   ]);
 
@@ -358,11 +386,18 @@ export const useQuiz = () => {
   }, [questions.length]);
 
   const saveAnswer = useCallback((questionId, answer) => {
-    setAnswers((previous) => ({
-      ...previous,
-      [questionId]: answer
-    }));
-  }, []);
+    setAnswers((previous) => {
+      const nextAnswers = {
+        ...previous,
+        [questionId]: answer
+      };
+      
+      // Immediate local backup
+      localStorage.setItem(`exam_backup_${examId}`, JSON.stringify(nextAnswers));
+      
+      return nextAnswers;
+    });
+  }, [examId]);
 
   const reportCheatingAttemptHandler = useCallback(async () => {
     if (quizStatus !== 'IN_PROGRESS' || !authState.profile?.id) {

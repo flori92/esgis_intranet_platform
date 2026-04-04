@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Typography, Paper, Grid, CircularProgress, Alert, Button,
   TextField, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   Card, CardContent, Divider, Snackbar, IconButton, Tooltip,
-  FormControl, InputLabel, Select, MenuItem, FormGroup, FormControlLabel,
-  Checkbox, Switch
+  FormControl, InputLabel, Select, MenuItem, FormControlLabel,
+  Switch, Stack
 } from '@mui/material';
 import {
   Campaign as CampaignIcon,
@@ -14,27 +14,14 @@ import {
   Save as SaveIcon,
   Send as SendIcon,
   Visibility as ViewIcon,
-  Schedule as ScheduleIcon,
-  People as PeopleIcon,
-  NotificationsActive as NotifIcon
+  People as PeopleIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { getAnnouncements as fetchAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement as removeAnnouncement } from '@/api/announcements';
-
-const TARGET_OPTIONS = [
-  { value: 'all', label: 'Tous les utilisateurs' },
-  { value: 'students', label: 'Tous les étudiants' },
-  { value: 'professors', label: 'Tous les professeurs' },
-  { value: 'L1 INFO', label: 'L1 Informatique' },
-  { value: 'L2 INFO', label: 'L2 Informatique' },
-  { value: 'L3 INFO', label: 'L3 Informatique' },
-  { value: 'M1 INFO', label: 'M1 Informatique' },
-  { value: 'M2 INFO', label: 'M2 Informatique' },
-  { value: 'L1 GEST', label: 'L1 Gestion' },
-  { value: 'L2 GEST', label: 'L2 Gestion' },
-];
+import { getDepartments } from '@/api/departments';
+import { getFilieres } from '@/api/admin';
 
 /**
  * Page de gestion des annonces ciblées — ESGIS Campus §5.8
@@ -42,6 +29,8 @@ const TARGET_OPTIONS = [
 const AnnouncementsPage = () => {
   const { authState } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [filieres, setFilieres] = useState([]);
   const [loading, setLoading] = useState(true);
   const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState(null);
@@ -54,28 +43,45 @@ const AnnouncementsPage = () => {
   const [saving, setSaving] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(null);
 
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [annRes, deptsRes, filieresRes] = await Promise.all([
+        fetchAnnouncements(),
+        getDepartments(),
+        getFilieres()
+      ]);
+
+      if (annRes.error) throw annRes.error;
+      
+      setAnnouncements((annRes.data || []).map((a) => ({
+        ...a,
+        author: a.author?.full_name || a.author || 'Administration',
+        views: a.views_count || 0,
+      })));
+      setDepartments(deptsRes.departments || []);
+      setFilieres(filieresRes.data || []);
+    } catch (err) {
+      console.error('load announcements:', err);
+      setError('Erreur lors du chargement des données.');
+    }
+    finally { setLoading(false); }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await fetchAnnouncements();
-        if (error) {
-          throw error;
-        }
-        setAnnouncements((data || []).map((a) => ({
-          ...a,
-          author: a.author?.full_name || a.author || 'Administration',
-          views: a.views_count || 0,
-        })));
-      } catch (err) {
-        console.error('load announcements:', err);
-        setAnnouncements([]);
-        setError('Erreur lors du chargement des annonces.');
-      }
-      finally { setLoading(false); }
-    };
     loadData();
   }, []);
+
+  const TARGET_OPTIONS = useMemo(() => {
+    const opts = [
+      { value: 'all', label: 'Tous les utilisateurs' },
+      { value: 'students', label: 'Tous les étudiants' },
+      { value: 'professors', label: 'Tous les professeurs' },
+    ];
+    departments.forEach(d => opts.push({ value: `DEPT:${d.id}`, label: `Dép: ${d.name}` }));
+    filieres.forEach(f => opts.push({ value: `FIL:${f.id}`, label: `Filière: ${f.name}` }));
+    return opts;
+  }, [departments, filieres]);
 
   const formatDate = (d) => { try { return format(new Date(d), "dd MMM yyyy 'à' HH:mm", { locale: fr }); } catch { return d || '-'; } };
 
@@ -115,14 +121,7 @@ const AnnouncementsPage = () => {
 
       if (response.error) throw response.error;
 
-      const { data, error } = await fetchAnnouncements();
-      if (error) throw error;
-
-      setAnnouncements((data || []).map((a) => ({
-        ...a,
-        author: a.author?.full_name || a.author || 'Administration',
-        views: a.views_count || 0,
-      })));
+      await loadData();
       setSuccessMessage(publish ? 'Annonce publiée.' : 'Brouillon sauvegardé.');
       setEditDialog(false);
     } catch (err) {
@@ -135,8 +134,8 @@ const AnnouncementsPage = () => {
 
   const handleDelete = async (ann) => {
     try {
-      const { error } = await removeAnnouncement(ann.id);
-      if (error) throw error;
+      const { error: delErr } = await removeAnnouncement(ann.id);
+      if (delErr) throw delErr;
       setAnnouncements(prev => prev.filter(a => a.id !== ann.id));
       setDeleteDialog(null);
       setSuccessMessage('Annonce supprimée.');
@@ -148,9 +147,17 @@ const AnnouncementsPage = () => {
 
   const handleTargetToggle = (value) => {
     setForm(prev => {
-      const targets = prev.target.includes(value)
-        ? prev.target.filter(t => t !== value)
-        : [...prev.target, value];
+      let targets = [...prev.target];
+      if (value === 'all') {
+        targets = ['all'];
+      } else {
+        targets = targets.filter(t => t !== 'all');
+        if (targets.includes(value)) {
+          targets = targets.filter(t => t !== value);
+        } else {
+          targets.push(value);
+        }
+      }
       return { ...prev, target: targets.length > 0 ? targets : ['all'] };
     });
   };
@@ -158,14 +165,14 @@ const AnnouncementsPage = () => {
   const published = announcements.filter(a => a.status === 'published');
   const drafts = announcements.filter(a => a.status === 'draft');
 
-  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
+  if (loading && announcements.length === 0) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
 
   return (
-    <Box sx={{ p: { xs: 1, md: 2 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <CampaignIcon sx={{ mr: 1, color: 'primary.main', fontSize: 32 }} />
-          <Typography variant="h5" fontWeight="bold">Annonces & Communication</Typography>
+          <Typography variant="h5" fontWeight="bold">Communication Institutionnelle</Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenEdit()}>Nouvelle annonce</Button>
       </Box>
@@ -173,32 +180,34 @@ const AnnouncementsPage = () => {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       <Snackbar open={!!successMessage} autoHideDuration={3000} onClose={() => setSuccessMessage('')} message={successMessage} />
 
-      {/* Stats */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={4}>
-          <Card elevation={1}><CardContent sx={{ textAlign: 'center', py: 1 }}>
+        <Grid item xs={12} sm={4}>
+          <Card elevation={1} sx={{ borderLeft: '4px solid #4caf50' }}><CardContent sx={{ textAlign: 'center', py: 1 }}>
             <Typography variant="h4" fontWeight="bold" color="success.main">{published.length}</Typography>
-            <Typography variant="caption">Publiées</Typography>
+            <Typography variant="caption" color="text.secondary">ANNONCES PUBLIÉES</Typography>
           </CardContent></Card>
         </Grid>
-        <Grid item xs={4}>
-          <Card elevation={1}><CardContent sx={{ textAlign: 'center', py: 1 }}>
+        <Grid item xs={12} sm={4}>
+          <Card elevation={1} sx={{ borderLeft: '4px solid #ff9800' }}><CardContent sx={{ textAlign: 'center', py: 1 }}>
             <Typography variant="h4" fontWeight="bold" color="warning.main">{drafts.length}</Typography>
-            <Typography variant="caption">Brouillons</Typography>
+            <Typography variant="caption" color="text.secondary">BROUILLONS</Typography>
           </CardContent></Card>
         </Grid>
-        <Grid item xs={4}>
-          <Card elevation={1}><CardContent sx={{ textAlign: 'center', py: 1 }}>
+        <Grid item xs={12} sm={4}>
+          <Card elevation={1} sx={{ borderLeft: '4px solid #2196f3' }}><CardContent sx={{ textAlign: 'center', py: 1 }}>
             <Typography variant="h4" fontWeight="bold" color="info.main">
               {announcements.reduce((s, a) => s + (a.views || 0), 0)}
             </Typography>
-            <Typography variant="caption">Vues totales</Typography>
+            <Typography variant="caption" color="text.secondary">LECTURES TOTALES</Typography>
           </CardContent></Card>
         </Grid>
       </Grid>
 
-      {/* Liste des annonces */}
-      {announcements.map(ann => (
+      {announcements.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography color="text.secondary">Aucune annonce pour le moment.</Typography>
+        </Paper>
+      ) : announcements.map(ann => (
         <Card key={ann.id} elevation={2} sx={{ mb: 2, borderLeft: '4px solid',
           borderColor: ann.status === 'published' ? 'success.main' : 'grey.400' }}>
           <CardContent>
@@ -210,18 +219,17 @@ const AnnouncementsPage = () => {
                     color={ann.status === 'published' ? 'success' : 'default'} />
                   {ann.priority === 'high' && <Chip label="Prioritaire" size="small" color="error" />}
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  {ann.content.substring(0, 150)}{ann.content.length > 150 ? '...' : ''}
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  {ann.content}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
                   <Typography variant="caption" color="text.secondary">
                     Par {ann.author} — {formatDate(ann.created_at)}
                   </Typography>
+                  <Divider orientation="vertical" flexItem />
                   <Chip icon={<ViewIcon />} label={`${ann.views} vues`} size="small" variant="outlined" />
-                  <Chip icon={<PeopleIcon />} label={ann.target?.join(', ')} size="small" variant="outlined" />
-                  {ann.send_push && <Chip label="Push" size="small" color="info" variant="outlined" />}
-                  {ann.send_email && <Chip label="Email" size="small" color="warning" variant="outlined" />}
-                </Box>
+                  <Chip icon={<PeopleIcon />} label={Array.isArray(ann.target) ? ann.target.join(', ') : ann.target} size="small" variant="outlined" />
+                </Stack>
               </Box>
               <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <Tooltip title="Modifier"><IconButton size="small" onClick={() => handleOpenEdit(ann)}><EditIcon fontSize="small" /></IconButton></Tooltip>
@@ -234,41 +242,45 @@ const AnnouncementsPage = () => {
 
       {/* Dialog Création/Édition */}
       <Dialog open={editDialog} onClose={() => setEditDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{editingAnnouncement ? 'Modifier l\'annonce' : 'Nouvelle annonce'}</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 0 }}>
+        <DialogTitle>{editingAnnouncement ? 'Modifier l\'annonce' : 'Nouvelle annonce institutionnelle'}</DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={3}>
             <Grid item xs={12}>
-              <TextField label="Titre *" fullWidth value={form.title}
+              <TextField label="Titre de l'annonce *" fullWidth variant="outlined" value={form.title}
                 onChange={(e) => setForm(p => ({ ...p, title: e.target.value }))} />
             </Grid>
             <Grid item xs={12}>
-              <TextField label="Contenu *" fullWidth multiline rows={4} value={form.content}
+              <TextField label="Contenu détaillé *" fullWidth multiline rows={6} value={form.content}
                 onChange={(e) => setForm(p => ({ ...p, content: e.target.value }))} />
             </Grid>
-            <Grid item xs={6}>
+            <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
-                <InputLabel>Priorité</InputLabel>
-                <Select value={form.priority} label="Priorité"
+                <InputLabel>Niveau de priorité</InputLabel>
+                <Select value={form.priority} label="Niveau de priorité"
                   onChange={(e) => setForm(p => ({ ...p, priority: e.target.value }))}>
                   <MenuItem value="normal">Normale</MenuItem>
-                  <MenuItem value="high">Haute</MenuItem>
+                  <MenuItem value="high">Haute / Urgente</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={6}>
-              <Typography variant="subtitle2" gutterBottom>Canaux de diffusion</Typography>
-              <FormControlLabel control={<Switch checked={form.send_push}
-                onChange={(e) => setForm(p => ({ ...p, send_push: e.target.checked }))} />}
-                label="Notification push" />
-              <FormControlLabel control={<Switch checked={form.send_email}
-                onChange={(e) => setForm(p => ({ ...p, send_email: e.target.checked }))} />}
-                label="E-mail" />
+            <Grid item xs={12} sm={6}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>Options de notification</Typography>
+                <Stack direction="row" spacing={2}>
+                  <FormControlLabel control={<Switch checked={form.send_push}
+                    onChange={(e) => setForm(p => ({ ...p, send_push: e.target.checked }))} />}
+                    label="Notification push" />
+                  <FormControlLabel control={<Switch checked={form.send_email}
+                    onChange={(e) => setForm(p => ({ ...p, send_email: e.target.checked }))} />}
+                    label="E-mail" />
+                </Stack>
+              </Paper>
             </Grid>
             <Grid item xs={12}>
-              <Typography variant="subtitle2" gutterBottom>Public cible</Typography>
-              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+              <Typography variant="subtitle2" gutterBottom>Ciblage (Public concerné)</Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
                 {TARGET_OPTIONS.map(opt => (
-                  <Chip key={opt.value} label={opt.label} size="small"
+                  <Chip key={opt.value} label={opt.label} 
                     variant={form.target.includes(opt.value) ? 'filled' : 'outlined'}
                     color={form.target.includes(opt.value) ? 'primary' : 'default'}
                     onClick={() => handleTargetToggle(opt.value)}
@@ -278,13 +290,13 @@ const AnnouncementsPage = () => {
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setEditDialog(false)}>Annuler</Button>
           <Button variant="outlined" startIcon={<SaveIcon />} onClick={() => handleSave(false)} disabled={saving}>
-            Sauvegarder comme brouillon
+            Enregistrer en brouillon
           </Button>
-          <Button variant="contained" startIcon={<SendIcon />} onClick={() => handleSave(true)} disabled={saving}>
-            Publier maintenant
+          <Button variant="contained" startIcon={<SendIcon />} onClick={() => handleSave(true)} disabled={saving} color="primary">
+            Publier immédiatement
           </Button>
         </DialogActions>
       </Dialog>
@@ -292,7 +304,7 @@ const AnnouncementsPage = () => {
       {/* Confirmation suppression */}
       <Dialog open={!!deleteDialog} onClose={() => setDeleteDialog(null)}>
         <DialogTitle>Supprimer l'annonce</DialogTitle>
-        <DialogContent><Typography>Supprimer « {deleteDialog?.title} » ?</Typography></DialogContent>
+        <DialogContent><Typography>Êtes-vous sûr de vouloir supprimer définitivement l'annonce « {deleteDialog?.title} » ?</Typography></DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialog(null)}>Annuler</Button>
           <Button variant="contained" color="error" onClick={() => handleDelete(deleteDialog)}>Supprimer</Button>

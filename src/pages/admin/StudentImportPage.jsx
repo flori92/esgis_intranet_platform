@@ -62,6 +62,7 @@ const StudentImportPage = () => {
     'phone',
     'level',
     'department_id',
+    'filiere_id',
   ];
 
   const handleFileSelect = (e) => {
@@ -172,9 +173,10 @@ const StudentImportPage = () => {
                 .insert({
                   profile_id: profileId,
                   student_id: student.student_id,
-                  level: parseInt(student.level) || 1,
+                  level: student.level || 'L1',
                   department_id: parseInt(student.department_id) || null,
-                  status: 'actif',
+                  filiere_id: parseInt(student.filiere_id) || null,
+                  status: 'active',
                 });
 
               if (studentError) throw studentError;
@@ -213,8 +215,8 @@ const StudentImportPage = () => {
   const handleDownloadTemplate = () => {
     const template = [
       EXPECTED_COLUMNS.join(','),
-      '123456,Dupont Jean,jean.dupont@esgis.net,+33612345678,1,1',
-      '123457,Martin Alice,alice.martin@esgis.net,+33612345679,2,1',
+      '123456,Dupont Jean,jean.dupont@esgis.net,+33612345678,L1,1,1',
+      '123457,Martin Alice,alice.martin@esgis.net,+33612345679,L2,1,2',
     ].join('\n');
 
     const element = document.createElement('a');
@@ -320,9 +322,11 @@ const StudentImportPage = () => {
                     primary={col}
                     secondary={
                       col === 'level'
-                        ? '1-5 (L1-M2)'
+                        ? 'Ex: L1, L2, M1...'
                         : col === 'department_id'
                         ? 'ID du département'
+                        : col === 'filiere_id'
+                        ? 'ID de la filière'
                         : undefined
                     }
                   />
@@ -338,9 +342,9 @@ const StudentImportPage = () => {
                   Exemple:
                 </Typography>
                 <Typography variant="caption" component="pre" sx={{ fontSize: '0.7rem' }}>
-{`student_id,full_name,email,phone,level,department_id
-123456,Dupont Jean,jean@esgis.net,+33612345678,1,1
-123457,Martin Alice,alice@esgis.net,+33612345679,2,1`}
+{`student_id,full_name,email,phone,level,department_id,filiere_id
+123456,Dupont Jean,jean@esgis.net,+33612345678,L1,1,1
+123457,Martin Alice,alice@esgis.net,+33612345679,L2,1,2`}
                 </Typography>
               </CardContent>
             </Card>

@@ -396,15 +396,14 @@ export const ensureSyllabusChapter = async (courseId, professorProfileId) =>
 /** Recupere les cours d'un etudiant via student_courses */
 export const getStudentCourses = async (studentProfileId) => {
   try {
-    const student = await getStudentRecord(studentProfileId);
-    if (!student) {
+    if (!studentProfileId) {
       return { data: [], error: null };
     }
 
     const { data: enrollments, error: enrollmentError } = await supabase
       .from('student_courses')
-      .select('course_id, academic_year, semester, status')
-      .eq('student_id', student.id)
+      .select('course_id, academic_year, grade, status')
+      .eq('student_id', studentProfileId)
       .order('academic_year', { ascending: false });
 
     if (enrollmentError) {

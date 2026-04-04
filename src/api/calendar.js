@@ -47,6 +47,8 @@ export const getScheduleEvents = async (filters = {}) => {
         id,
         course_id,
         professor_id,
+        department_id,
+        level_code,
         date,
         duration,
         room,
@@ -70,6 +72,13 @@ export const getScheduleEvents = async (filters = {}) => {
         )
       `)
       .order('date', { ascending: true });
+
+    if (filters.departmentId) {
+      query = query.eq('department_id', filters.departmentId);
+    }
+    if (filters.levelCode) {
+      query = query.eq('level_code', filters.levelCode);
+    }
 
     const professorIds = await getProfessorIdsByFilters(filters);
     if (professorIds && professorIds.length === 0) {
@@ -117,12 +126,21 @@ export const getScheduleEvents = async (filters = {}) => {
 };
 
 /** Recupere les evenements institutionnels */
-export const getInstitutionalEvents = async () => {
+export const getInstitutionalEvents = async (filters = {}) => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('events')
-      .select('id, title, description, location, start_date, end_date, type, created_by, created_at, updated_at')
+      .select('id, title, description, location, start_date, end_date, type, department_id, level_code, created_by, created_at, updated_at')
       .order('start_date', { ascending: true });
+
+    if (filters.departmentId) {
+      query = query.eq('department_id', filters.departmentId);
+    }
+    if (filters.levelCode) {
+      query = query.eq('level_code', filters.levelCode);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 

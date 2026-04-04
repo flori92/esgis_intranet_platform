@@ -33,6 +33,13 @@ CREATE TABLE IF NOT EXISTS generated_documents (
 ALTER TABLE document_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE generated_documents ENABLE ROW LEVEL SECURITY;
 
+-- Supprimer les politiques existantes
+DROP POLICY IF EXISTS document_templates_select_policy ON document_templates;
+DROP POLICY IF EXISTS document_templates_insert_update_delete_policy ON document_templates;
+DROP POLICY IF EXISTS generated_documents_select_policy ON generated_documents;
+DROP POLICY IF EXISTS generated_documents_insert_policy ON generated_documents;
+DROP POLICY IF EXISTS generated_documents_update_delete_policy ON generated_documents;
+
 -- Trigger pour mettre à jour le champ updated_at
 CREATE TRIGGER update_document_templates_modtime
 BEFORE UPDATE ON document_templates

@@ -1,4 +1,17 @@
 import React from "react";
+import {
+  Box,
+  Button,
+  Stack,
+  Typography,
+  LinearProgress,
+  Paper
+} from '@mui/material';
+import {
+  NavigateBefore as PreviousIcon,
+  NavigateNext as NextIcon,
+  CheckCircle as DoneIcon
+} from '@mui/icons-material';
 
 /**
  * Composant de navigation dans le quiz
@@ -31,59 +44,66 @@ const QuizNavigation = ({
   }).length;
   
   // Calcul du pourcentage de progression
-  const progress = questions.length > 0 
-    ? ((answeredCount / questions.length) * 100).toFixed(0) 
-    : "0";
+  const progressPercent = questions.length > 0 
+    ? (answeredCount / questions.length) * 100
+    : 0;
   
   return (
-    <div className="mt-8">
-      <div className="flex justify-between items-center mb-4">
-        <div className="text-sm text-gray-600">
-          Question {currentQuestionIndex + 1} sur {questions.length}
-        </div>
-        <div className="text-sm text-gray-600">
-          Progression: {progress}%
-        </div>
-      </div>
+    <Paper elevation={0} variant="outlined" sx={{ p: 3, bgcolor: 'white', borderRadius: 2 }}>
+      <Box sx={{ mb: 3 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+          <Typography variant="body2" color="text.secondary" fontWeight="medium">
+            Réponses saisies : {answeredCount} / {questions.length}
+          </Typography>
+          <Typography variant="body2" color="primary" fontWeight="bold">
+            {Math.round(progressPercent)}% complété
+          </Typography>
+        </Stack>
+        <LinearProgress 
+          variant="determinate" 
+          value={progressPercent} 
+          sx={{ height: 8, borderRadius: 4, bgcolor: 'grey.200' }} 
+        />
+      </Box>
       
-      {/* Barre de progression */}
-      <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
-        <div 
-          className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-in-out" 
-          style={{ width: `${progress}%` }}
-        ></div>
-      </div>
-      
-      <div className="flex justify-between">
-        <button
+      <Stack direction="row" justifyContent="space-between">
+        <Button
+          variant="outlined"
+          startIcon={<PreviousIcon />}
           onClick={goToPreviousQuestion}
           disabled={isFirstQuestion}
-          className={`px-4 py-2 rounded-md ${
-            isFirstQuestion
-              ? "bg-gray-300 cursor-not-allowed"
-              : "bg-gray-600 hover:bg-gray-700 text-white"
-          } transition-colors duration-200`}
+          sx={{ minWidth: 120 }}
         >
           Précédent
-        </button>
+        </Button>
         
         {isLastQuestion ? (
-          <button
-            onClick={endQuiz}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
+          <Button
+            variant="contained"
+            color="success"
+            endIcon={<DoneIcon />}
+            onClick={() => {
+              if (window.confirm('Êtes-vous sûr de vouloir soumettre votre copie ? Cette action est définitive.')) {
+                endQuiz();
+              }
+            }}
+            sx={{ minWidth: 150, fontWeight: 'bold' }}
           >
-            Terminer
-          </button>
+            Soumettre ma copie
+          </Button>
         ) : (
-          <button
+          <Button
+            variant="contained"
+            color="primary"
+            endIcon={<NextIcon />}
             onClick={goToNextQuestion}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+            sx={{ minWidth: 120 }}
           >
             Suivant
-          </button>
+          </Button>
         )}
-      </div>
-    </div>
+      </Stack>
+    </Paper>
   );
 };
 

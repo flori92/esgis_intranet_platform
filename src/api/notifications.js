@@ -164,22 +164,35 @@ export const deleteReadNotifications = async (profileId, role) => {
   }
 };
 
-export const subscribeToNotifications = (profileId, onChange) => {
+export const subscribeToNotifications = (profileId, role, onChange) => {
   if (!profileId) {
     return null;
   }
 
+  // On crée un canal unique pour l'utilisateur
+  // Note: Supabase Realtime ne supporte pas encore les filtres complexes OR en mode 'filter'
+  // On écoute donc tous les changements de la table notifications et on filtre côté client si nécessaire,
+  // ou on s'abonne plus largement.
   return supabase
-    .channel(`notifications:${profileId}`)
+    .channel(`notifications-live-${profileId}`)
     .on(
       'postgres_changes',
       {
-        event: '*',
+        event: 'INSERT',
         schema: 'public',
-        table: 'notifications',
-        filter: `recipient_id=eq.${profileId}`
+        table: 'notifications'
       },
-      onChange
+      (payload) => {
+        const newNotif = payload.new;
+        // Filtrage côté client pour s'assurer que la notification concerne l'utilisateur
+        if (
+          newNotif.recipient_id === profileId || 
+          newNotif.recipient_role === role || 
+          newNotif.recipient_role === 'all'
+        ) {
+          onChange(payload);
+        }
+      }
     )
     .subscribe();
 };

@@ -35,22 +35,26 @@ import {
   Info as InfoIcon,
   Visibility as VisibilityIcon,
 } from '@mui/icons-material';
-import { getValidationQueue, reviewValidationQueueItem } from '@/api/admin';
+import { getValidationQueue } from '@/api/admin';
+import { updateRequestStatus } from '@/api/requests';
 import { useAuth } from '../../hooks/useAuth';
 
 const VALIDATION_STATUSES = [
-  { value: 'pending', label: 'En attente', color: 'warning' },
-  { value: 'approved', label: 'Approuvé', color: 'success' },
-  { value: 'rejected', label: 'Rejeté', color: 'error' },
+  { value: 'received', label: 'Reçue', color: 'info' },
+  { value: 'processing', label: 'En cours', color: 'warning' },
+  { value: 'approved', label: 'Approuvée', color: 'success' },
+  { value: 'rejected', label: 'Rejetée', color: 'error' },
+  { value: 'ready', label: 'Prête (Disponible)', color: 'secondary' },
 ];
 
 const REQUEST_TYPES = [
-  { value: 'transcript', label: 'Relevé de notes' },
   { value: 'certificate', label: 'Certificat de scolarité' },
-  { value: 'attestation', label: 'Attestation' },
-  { value: 'diploma', label: 'Diplôme' },
-  { value: 'grade_correction', label: 'Correction de note' },
-  { value: 'document_upload', label: 'Dépôt de document' },
+  { value: 'attestation', label: 'Attestation d\'inscription' },
+  { value: 'transcript', label: 'Relevé de notes' },
+  { value: 'correction', label: 'Correction d\'informations' },
+  { value: 'duplicate', label: 'Duplicata' },
+  { value: 'access_reset', label: 'Réinitialisation d\'accès' },
+  { value: 'other', label: 'Autre demande' },
 ];
 
 const getRequestLabel = (value) => REQUEST_TYPES.find((item) => item.value === value)?.label || value;
@@ -133,13 +137,13 @@ export default function ValidationQueuePage() {
     setActionDialogOpen(true);
   };
 
-  const handleReview = async () => {
+  const handleReview = async (newStatus) => {
     if (!selectedItem) {
       return;
     }
 
-    if (actionType === 'reject' && !reviewComment.trim()) {
-      setError('Un commentaire est requis pour rejeter une demande.');
+    if (newStatus === 'rejected' && !reviewComment.trim()) {
+      setError('Un motif est requis pour rejeter une demande.');
       return;
     }
 
@@ -147,32 +151,28 @@ export default function ValidationQueuePage() {
       setLoading(true);
       setError('');
 
-      const actor = {
-        id: authState.profile?.id || authState.user?.id || null,
-        full_name: authState.profile?.full_name || authState.user?.email || 'Admin ESGIS',
-        role: authState.profile?.role || 'admin',
-      };
+      const reviewerId = authState.profile?.id || null;
 
-      const { error: reviewError } = await reviewValidationQueueItem(selectedItem.id, {
-        decision: actionType,
+      const { error: reviewError } = await updateRequestStatus(selectedItem.id, {
+        status: newStatus,
         comment: reviewComment,
-        reviewerId: actor.id,
-        actor,
+        reviewerId
       });
 
       if (reviewError) {
         throw reviewError;
       }
 
-      setSuccess(actionType === 'approve' ? 'Demande approuvée.' : 'Demande rejetée.');
+      setSuccess(`La demande est passée au statut : ${getStatusLabel(newStatus)}`);
       setActionDialogOpen(false);
+      setDetailsDialogOpen(false);
       setSelectedItem(null);
       setReviewComment('');
       await fetchQueue();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('handleReview:', err);
-      setError(`Erreur lors de la revue: ${err.message}`);
+      setError(`Erreur lors de la mise à jour: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -295,25 +295,11 @@ export default function ValidationQueuePage() {
                       </TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          <Tooltip title="Détails">
-                            <IconButton size="small" onClick={() => openDetails(item)}>
+                          <Tooltip title="Détails & Actions">
+                            <IconButton size="small" color="primary" onClick={() => openDetails(item)}>
                               <VisibilityIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          {item.status === 'pending' && (
-                            <>
-                              <Tooltip title="Approuver">
-                                <IconButton size="small" color="success" onClick={() => openReviewDialog(item, 'approve')}>
-                                  <CheckIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Rejeter">
-                                <IconButton size="small" color="error" onClick={() => openReviewDialog(item, 'reject')}>
-                                  <CloseIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </>
-                          )}
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -326,30 +312,63 @@ export default function ValidationQueuePage() {
       </Card>
 
       <Dialog open={detailsDialogOpen} onClose={() => setDetailsDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Détails de la demande</DialogTitle>
+        <DialogTitle>Traitement de la demande</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {selectedItem && (
             <Stack spacing={2}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Demandeur</Typography>
-                <Typography variant="body2">{getRequesterName(selectedItem.requester)}</Typography>
-                <Typography variant="caption" color="text.secondary">{selectedItem.requester?.email || '-'}</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Demandeur</Typography>
+                  <Typography variant="body1" fontWeight="bold">{getRequesterName(selectedItem.requester)}</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="caption" color="text.secondary">Statut Actuel</Typography>
+                  <Box>
+                    <Chip 
+                      label={getStatusLabel(selectedItem.status)} 
+                      color={getStatusColor(selectedItem.status)} 
+                      size="small" 
+                    />
+                  </Box>
+                </Box>
               </Box>
+              
               <Box>
                 <Typography variant="caption" color="text.secondary">Type de demande</Typography>
                 <Typography variant="body2">{getRequestLabel(selectedItem.request_type)}</Typography>
               </Box>
+
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                label="Commentaire de traitement / Motif de rejet"
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+              />
+
+              <Divider />
+              
+              <Typography variant="subtitle2">Changer le statut :</Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {VALIDATION_STATUSES.map(s => (
+                  <Button
+                    key={s.value}
+                    size="small"
+                    variant={selectedItem.status === s.value ? "contained" : "outlined"}
+                    color={s.color}
+                    onClick={() => handleReview(s.value)}
+                    disabled={loading || selectedItem.status === s.value}
+                    sx={{ mb: 1 }}
+                  >
+                    {s.label}
+                  </Button>
+                ))}
+              </Stack>
+
               <Box>
-                <Typography variant="caption" color="text.secondary">Objet</Typography>
-                <Typography variant="body2">{selectedItem.details?.title || selectedItem.details?.document_name || '-'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Commentaire de revue</Typography>
-                <Typography variant="body2">{selectedItem.review_comment || '-'}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Détails</Typography>
-                <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, p: 1.5, backgroundColor: '#f8f9fb', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary">Détails techniques</Typography>
+                <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 11, p: 1, backgroundColor: '#f8f9fb', borderRadius: 1 }}>
                   {JSON.stringify(selectedItem.details || {}, null, 2)}
                 </Typography>
               </Box>

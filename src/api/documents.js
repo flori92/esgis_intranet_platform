@@ -24,8 +24,8 @@ const normalizeUploadedDocument = (document, tagsByDocumentId = {}) => {
 
 const normalizeGeneratedDocument = (document) => {
   const template = getRelation(document.document_templates);
-  const student = getRelation(document.students);
-  const studentProfile = getRelation(student?.profiles);
+  const profile = getRelation(document.profiles);
+  const student = getRelation(profile?.students);
 
   return {
     id: document.id,
@@ -34,7 +34,7 @@ const normalizeGeneratedDocument = (document) => {
     template_name: template?.name || 'Modèle inconnu',
     template_type: template?.type || 'other',
     student_id: document.student_id,
-    student_name: studentProfile?.full_name || 'Étudiant inconnu',
+    student_name: profile?.full_name || 'Étudiant inconnu',
     student_number: student?.student_number || '',
     file_path: document.file_path,
     status: document.status,
@@ -319,10 +319,11 @@ export const getGeneratedDocuments = async ({
         created_at,
         updated_at,
         document_templates:template_id(id, name, type),
-        students:student_id(
+        profiles:student_id(
           id,
-          student_number,
-          profiles:profile_id(full_name, email)
+          full_name,
+          email,
+          students(id, student_number)
         )
       `)
       .order('created_at', { ascending: false });

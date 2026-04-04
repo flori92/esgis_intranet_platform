@@ -80,7 +80,12 @@ const DocumentGeneratorPage = () => {
       const templates = await fetchRecords('document_templates');
       
       if (templates) {
-        setTemplates(templates);
+        // Map required_fields to variables for compatibility
+        const formatted = templates.map(t => ({
+          ...t,
+          variables: t.required_fields || []
+        }));
+        setTemplates(formatted);
       }
     } catch (err) {
       console.error('Erreur lors du chargement des modèles:', err);

@@ -215,8 +215,9 @@ const normalizeGradePayload = async (gradeData, professorIdCache = new Map()) =>
  */
 export const getProfessorCourses = async (professorProfileId) => {
   try {
-    const { data: professor, error: professorError } = await resolveProfessorEntity(professorProfileId);
-    if (professorError) throw professorError;
+    if (!professorProfileId) {
+      return { data: null, error: new Error('Professeur non identifié') };
+    }
 
     const { data, error } = await supabase
       .from('professor_courses')
@@ -233,7 +234,7 @@ export const getProfessorCourses = async (professorProfileId) => {
           departments:department_id(id, code, name)
         )
       `)
-      .eq('professor_id', professor.id)
+      .eq('professor_id', professorProfileId)
       .order('academic_year', { ascending: false });
 
     if (error) throw error;
@@ -271,16 +272,15 @@ export const getStudentsByCourse = async (courseId) => {
       .select(`
         id,
         academic_year,
-        students:student_id(
+        profiles:student_id(
           id,
-          profile_id,
-          student_number,
-          level,
-          profiles:profile_id(
+          full_name,
+          avatar_url,
+          email,
+          students(
             id,
-            full_name,
-            avatar_url,
-            email
+            student_number,
+            level
           )
         )
       `)
@@ -289,11 +289,22 @@ export const getStudentsByCourse = async (courseId) => {
 
     if (error) throw error;
 
-    const students = (data || []).map((row) => ({
-      id: row.id,
-      academic_year: row.academic_year || null,
-      etudiant: mapStudentProfile(row.students)
-    }));
+    const students = (data || []).map((row) => {
+      const p = row.profiles || {};
+      const s = p.students || {};
+      const studentObj = {
+        id: s.id || null,
+        profile_id: p.id || null,
+        student_number: s.student_number || null,
+        level: s.level || null,
+        profiles: p
+      };
+      return {
+        id: row.id,
+        academic_year: row.academic_year || null,
+        etudiant: mapStudentProfile(studentObj)
+      };
+    });
 
     return { data: students, error: null };
   } catch (error) {

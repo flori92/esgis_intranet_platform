@@ -5,6 +5,24 @@ import QuestionCard from "./QuestionCard";
 import QuizNavigation from "./QuizNavigation";
 import QuizResults from "./QuizResults";
 import { Toaster } from 'react-hot-toast';
+import {
+  Box,
+  Typography,
+  AppBar,
+  Toolbar,
+  Container,
+  Paper,
+  CircularProgress,
+  Button,
+  Stack,
+  LinearProgress,
+  Divider
+} from '@mui/material';
+import {
+  Timer as TimerIcon,
+  Person as PersonIcon,
+  GppBad as WarningIcon
+} from '@mui/icons-material';
 
 /**
  * Composant principal du quiz/examen
@@ -50,7 +68,6 @@ const Quiz = () => {
    * @param {string} message - Message à afficher dans l'alerte
    */
   const showCustomAlert = (message) => {
-    console.log("Affichage de l'alerte personnalisée:", message);
     if (alertRef.current && document.body.contains(alertRef.current)) {
       document.body.removeChild(alertRef.current);
       alertRef.current = null;
@@ -61,7 +78,7 @@ const Quiz = () => {
     alertDiv.style.left = '0';
     alertDiv.style.width = '100%';
     alertDiv.style.height = '100%';
-    alertDiv.style.backgroundColor = 'rgba(255, 0, 0, 0.9)';
+    alertDiv.style.backgroundColor = 'rgba(211, 47, 47, 0.95)';
     alertDiv.style.color = 'white';
     alertDiv.style.display = 'flex';
     alertDiv.style.flexDirection = 'column';
@@ -69,19 +86,32 @@ const Quiz = () => {
     alertDiv.style.alignItems = 'center';
     alertDiv.style.zIndex = '99999';
     alertDiv.style.fontWeight = 'bold';
-    alertDiv.style.fontSize = '24px';
+    alertDiv.style.fontFamily = 'Roboto, Helvetica, Arial, sans-serif';
     alertDiv.style.textAlign = 'center';
-    alertDiv.style.padding = '20px';
+    alertDiv.style.padding = '40px';
+
+    const iconElement = document.createElement('div');
+    iconElement.innerHTML = '<svg style="width:100px;height:100px" viewBox="0 0 24 24"><path fill="currentColor" d="M13,13H11V7H13M13,17H11V15H13M12,2L1,21H23L12,2Z" /></svg>';
+    iconElement.style.marginBottom = '20px';
+
+    const titleElement = document.createElement('div');
+    titleElement.textContent = 'TRICHE DÉTECTÉE';
+    titleElement.style.fontSize = '48px';
+    titleElement.style.marginBottom = '20px';
+
     const messageElement = document.createElement('div');
-    messageElement.innerHTML = message.replace(/\n/g, '<br>');
-    messageElement.style.marginBottom = '30px';
+    messageElement.innerHTML = message.replace('🚨 TRICHE DÉTECTÉE 🚨\n\n', '').replace(/\n/g, '<br>');
+    messageElement.style.marginBottom = '40px';
+    messageElement.style.fontSize = '24px';
+    messageElement.style.maxWidth = '800px';
+
     const closeButton = document.createElement('button');
-    closeButton.textContent = 'FERMER';
-    closeButton.style.padding = '12px 24px';
+    closeButton.textContent = 'JE COMPRENDS ET JE REVIENS À L\'ÉPREUVE';
+    closeButton.style.padding = '16px 32px';
     closeButton.style.backgroundColor = 'white';
-    closeButton.style.color = 'red';
+    closeButton.style.color = '#d32f47';
     closeButton.style.border = 'none';
-    closeButton.style.borderRadius = '5px';
+    closeButton.style.borderRadius = '4px';
     closeButton.style.fontWeight = 'bold';
     closeButton.style.fontSize = '18px';
     closeButton.style.cursor = 'pointer';
@@ -92,6 +122,9 @@ const Quiz = () => {
         alertRef.current = null;
       }
     };
+
+    alertDiv.appendChild(iconElement);
+    alertDiv.appendChild(titleElement);
     alertDiv.appendChild(messageElement);
     alertDiv.appendChild(closeButton);
     document.body.appendChild(alertDiv);
@@ -101,59 +134,32 @@ const Quiz = () => {
     }
   };
 
-  // Référence stable qui ne sera pas recréée entre les rendus
-  const detectCheatingRef = useRef(() => {
-    // Implémentation par défaut vide
-  });
-  
-  // Mise à jour de l'implémentation à chaque rendu
+  // Référence stable mise à jour à chaque rendu
+  const detectCheatingRef = useRef(() => {});
   detectCheatingRef.current = () => {
     if (quizStatus !== 'IN_PROGRESS') return;
-    console.log("Triche détectée! Visibilité:", document.visibilityState);
     if (cheatingDetectedRef.current) return;
     cheatingDetectedRef.current = true;
-    showCustomAlert('🚨 TRICHE DÉTECTÉE 🚨\n\nVous avez quitté l\'onglet ou changé de fenêtre pendant l\'examen.\n\nVotre tentative a été enregistrée.');
+    showCustomAlert('🚨 TRICHE DÉTECTÉE 🚨\n\nVous avez quitté l\'onglet ou changé de fenêtre pendant l\'examen.\n\nCet incident a été enregistré et transmis au surveillant. Au bout de 3 tentatives, votre copie sera automatiquement soumise.');
     reportCheatingAttempt();
     setTimeout(() => {
       cheatingDetectedRef.current = false;
     }, 5000);
   };
   
-  // Setup du hook useEffect avec une référence stable
   useEffect(() => {
-    console.log("Configuration de la détection de changement d'onglet");
-    
-    /**
-     * Gère les changements de visibilité du document
-     */
     const handleVisibilityChange = () => {
-      console.log("Changement de visibilité détecté:", document.visibilityState);
-      
       if (document.visibilityState === "hidden" && quizStatus === 'IN_PROGRESS') {
-        console.log("Tentative de triche détectée - changement d'onglet");
-        // Sécurisation avec vérification de nullité
-        if (detectCheatingRef.current) {
-          detectCheatingRef.current();
-        }
+        detectCheatingRef.current();
       }
     };
     
-    /**
-     * Gère les événements de perte de focus de la fenêtre
-     */
     const handleBlur = () => {
-      console.log("Événement blur détecté");
       if (quizStatus === 'IN_PROGRESS') {
-        console.log("Tentative de triche détectée - perte de focus");
-        if (detectCheatingRef.current) {
-          detectCheatingRef.current();
-        }
+        detectCheatingRef.current();
       }
     };
 
-    /**
-     * Empêche de tricher via la complétion du cache ou click-droit/copier
-     */
     const preventAction = (e) => {
       if (quizStatus === 'IN_PROGRESS') {
         e.preventDefault();
@@ -167,15 +173,6 @@ const Quiz = () => {
     document.addEventListener('cut', preventAction);
     document.addEventListener('paste', preventAction);
     
-    const intervalCheck = setInterval(() => {
-      if (document.visibilityState === "hidden" && quizStatus === 'IN_PROGRESS') {
-        console.log("Tentative de triche détectée - vérification périodique");
-        if (detectCheatingRef.current) {
-          detectCheatingRef.current();
-        }
-      }
-    }, 2000);
-    
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
@@ -183,7 +180,6 @@ const Quiz = () => {
       document.removeEventListener('copy', preventAction);
       document.removeEventListener('cut', preventAction);
       document.removeEventListener('paste', preventAction);
-      clearInterval(intervalCheck);
       if (alertRef.current && document.body.contains(alertRef.current)) {
         document.body.removeChild(alertRef.current);
         alertRef.current = null;
@@ -191,14 +187,12 @@ const Quiz = () => {
     };
   }, [quizStatus, reportCheatingAttempt]);
 
-  // Démarrage du quiz lorsque le composant est monté
   useEffect(() => {
     if (quizStatus === 'NOT_STARTED') {
       startQuiz();
     }
   }, [quizStatus, startQuiz]);
 
-  // Affichage des résultats si le quiz est terminé
   if (quizStatus === 'COMPLETED') {
     return (
       <QuizResults
@@ -214,67 +208,85 @@ const Quiz = () => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
-        <div className="max-w-xl bg-white rounded-lg shadow-md p-8 text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Examen indisponible</h1>
-          <p className="text-gray-700">{error}</p>
-        </div>
-      </div>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: 'grey.50', px: 2 }}>
+        <Paper elevation={3} sx={{ maxWidth: 500, p: 4, textAlign: 'center' }}>
+          <Typography variant="h5" color="error" gutterBottom fontWeight="bold">Examen indisponible</Typography>
+          <Typography variant="body1" color="text.secondary">{error}</Typography>
+        </Paper>
+      </Box>
     );
   }
 
-  // État de chargement pendant l'initialisation du quiz
   if (loading || questions.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement des questions...</p>
-        </div>
-      </div>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: 'grey.50' }}>
+        <Stack alignItems="center" spacing={2}>
+          <CircularProgress size={60} />
+          <Typography color="text.secondary">Chargement de l'épreuve...</Typography>
+        </Stack>
+      </Box>
     );
   }
 
   const currentQuestion = questions[currentQuestionIndex];
+  const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          duration: 5000,
-          style: {
-            zIndex: 9999,
-          },
-        }}
-      />
-      <div className="max-w-3xl mx-auto">
-        <header className="mb-8">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">
-              {examData?.title || 'Examen en ligne'}
-            </h1>
-            <div className="flex items-center gap-4">
-              <div className={`text-lg font-semibold ${
-                timer.minutes < 30 ? 'text-red-600' : 'text-gray-600'
-              }`}>
-                Temps restant: {String(timer.minutes).padStart(2, '0')}:{String(timer.seconds).padStart(2, '0')}
-              </div>
-              <div className="text-gray-600">
-                {appState.currentUser?.name}
-              </div>
-            </div>
-          </div>
-        </header>
-        {/* Bouton de test pour déclencher l'alerte manuellement - visible uniquement pour les administrateurs */}
-        {appState.isAdmin && (
-          <button 
-            onClick={() => detectCheatingRef.current && detectCheatingRef.current()} 
-            className="mb-4 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded"
-          >
-            Tester l'alerte de triche
-          </button>
-        )}
+    <Box sx={{ minHeight: '100vh', bgcolor: 'grey.100', display: 'flex', flexDirection: 'column' }}>
+      <Toaster position="top-center" />
+      
+      <AppBar position="sticky" color="default" elevation={2} sx={{ bgcolor: 'white' }}>
+        <Toolbar>
+          <Container maxWidth="lg">
+            <Stack direction="row" justifyContent="space-between" alignItems="center" width="100%">
+              <Box>
+                <Typography variant="h6" fontWeight="bold" noWrap sx={{ maxWidth: { xs: 200, sm: '100%' } }}>
+                  {examData?.title}
+                </Typography>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <PersonIcon fontSize="small" color="action" />
+                  <Typography variant="caption" color="text.secondary">
+                    {appState.currentUser?.name || appState.profile?.full_name}
+                  </Typography>
+                </Stack>
+              </Box>
+
+              <Stack direction="row" spacing={3} alignItems="center">
+                {cheatingAttempts > 0 && (
+                  <Chip 
+                    icon={<WarningIcon />} 
+                    label={`${cheatingAttempts} alertes`} 
+                    color="error" 
+                    variant="outlined" 
+                    size="small" 
+                  />
+                )}
+                
+                <Paper variant="outlined" sx={{ px: 2, py: 0.5, bgcolor: timer.minutes < 5 ? 'error.light' : 'grey.50', borderColor: timer.minutes < 5 ? 'error.main' : 'divider' }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <TimerIcon color={timer.minutes < 5 ? 'error' : 'action'} />
+                    <Typography variant="h6" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 'bold', color: timer.minutes < 5 ? 'error.main' : 'text.primary' }}>
+                      {String(timer.minutes).padStart(2, '0')}:{String(timer.seconds).padStart(2, '0')}
+                    </Typography>
+                  </Stack>
+                </Paper>
+              </Stack>
+            </Stack>
+          </Container>
+        </Toolbar>
+        <LinearProgress variant="determinate" value={progress} sx={{ height: 4 }} />
+      </AppBar>
+
+      <Container maxWidth="md" sx={{ py: 4, flexGrow: 1 }}>
+        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle2" color="text.secondary">
+            Question {currentQuestionIndex + 1} sur {questions.length}
+          </Typography>
+          <Typography variant="subtitle2" color="primary" fontWeight="bold">
+            {currentQuestion.points} points
+          </Typography>
+        </Box>
+
         <QuestionCard
           question={currentQuestion}
           answer={userAnswers[currentQuestion.id]}
@@ -282,16 +294,25 @@ const Quiz = () => {
           questionNumber={currentQuestionIndex + 1}
           totalQuestions={questions.length}
         />
-        <QuizNavigation
-          questions={questions}
-          currentQuestionIndex={currentQuestionIndex}
-          userAnswers={userAnswers}
-          goToNextQuestion={goToNextQuestion}
-          goToPreviousQuestion={goToPreviousQuestion}
-          endQuiz={endQuiz}
-        />
-      </div>
-    </div>
+        
+        <Box sx={{ mt: 4 }}>
+          <QuizNavigation
+            questions={questions}
+            currentQuestionIndex={currentQuestionIndex}
+            userAnswers={userAnswers}
+            goToNextQuestion={goToNextQuestion}
+            goToPreviousQuestion={goToPreviousQuestion}
+            endQuiz={endQuiz}
+          />
+        </Box>
+      </Container>
+
+      <Box component="footer" sx={{ py: 2, textAlign: 'center', bgcolor: 'grey.200', mt: 'auto' }}>
+        <Typography variant="caption" color="text.secondary">
+          ESGIS Campus - Session d'examen sécurisée. Vos réponses sont sauvegardées automatiquement.
+        </Typography>
+      </Box>
+    </Box>
   );
 };
 

@@ -49,6 +49,7 @@ const StudentFormPage = () => {
     phone_number: '',
     address: '',
     department_id: null,
+    filiere_id: null,
     level: '',
     academic_year: '',
     status: 'active'
@@ -56,6 +57,7 @@ const StudentFormPage = () => {
   
   const [student, setStudent] = useState(initialStudentState);
   const [departments, setDepartments] = useState([]);
+  const [filieres, setFilieres] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(isEditMode);
   const [error, setError] = useState(null);
@@ -80,16 +82,17 @@ const StudentFormPage = () => {
     setError(null);
     
     try {
-      // Récupérer les départements
-      const { data: departmentsData, error: departmentsError } = await supabase
-        .from('departments')
-        .select('id, name, code')
-        .order('name');
+      // Récupérer les départements et filières
+      const [deptsRes, filieresRes] = await Promise.all([
+        supabase.from('departments').select('id, name, code').order('name'),
+        supabase.from('filieres').select('id, name, code, department_id').order('name')
+      ]);
       
-      if (departmentsError) {
-        throw departmentsError;
-      }
-      setDepartments(departmentsData || []);
+      if (deptsRes.error) throw deptsRes.error;
+      if (filieresRes.error) throw filieresRes.error;
+
+      setDepartments(deptsRes.data || []);
+      setFilieres(filieresRes.data || []);
       
       // Si en mode édition, récupérer les données de l'étudiant
       if (isEditMode && id) {
@@ -100,6 +103,7 @@ const StudentFormPage = () => {
             profiles:profile_id(id, full_name, email, gender, date_of_birth, phone_number, address),
             student_id,
             department_id,
+            filiere_id,
             level,
             academic_year,
             status
@@ -123,6 +127,7 @@ const StudentFormPage = () => {
             phone_number: studentData.profiles?.phone_number || '',
             address: studentData.profiles?.address || '',
             department_id: studentData.department_id,
+            filiere_id: studentData.filiere_id,
             level: studentData.level,
             academic_year: studentData.academic_year,
             status: studentData.status
@@ -300,6 +305,7 @@ const StudentFormPage = () => {
         profile_id: profileId,
         student_id: student.student_id,
         department_id: student.department_id,
+        filiere_id: student.filiere_id,
         level: student.level,
         academic_year: student.academic_year,
         status: student.status
@@ -520,7 +526,11 @@ const StudentFormPage = () => {
                 <Select
                   name="department_id"
                   value={student.department_id || ''}
-                  onChange={handleSelectChange}
+                  onChange={(e) => {
+                    handleSelectChange(e);
+                    // Reset filiere if department changes
+                    setStudent(prev => ({ ...prev, filiere_id: '' }));
+                  }}
                   label="Département *"
                 >
                   {departments.map((dept) => (
@@ -530,6 +540,29 @@ const StudentFormPage = () => {
                   ))}
                 </Select>
                 {formErrors.department_id && <FormHelperText>{formErrors.department_id}</FormHelperText>}
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Filière</InputLabel>
+                <Select
+                  name="filiere_id"
+                  value={student.filiere_id || ''}
+                  onChange={handleSelectChange}
+                  label="Filière"
+                  disabled={!student.department_id}
+                >
+                  <MenuItem value=""><em>Aucune (Commun)</em></MenuItem>
+                  {filieres
+                    .filter(f => f.department_id === student.department_id)
+                    .map((f) => (
+                      <MenuItem key={f.id} value={f.id}>
+                        {f.name} ({f.code})
+                      </MenuItem>
+                    ))
+                  }
+                </Select>
               </FormControl>
             </Grid>
             

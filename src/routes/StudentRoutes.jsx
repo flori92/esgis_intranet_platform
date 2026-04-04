@@ -14,6 +14,9 @@ const StudentMessagesPage = lazy(() => import('../pages/student/MessagesPage'));
 const StudentInternshipsPage = lazy(() => import('../pages/student/InternshipsPage'));
 const StudentGroupsPage = lazy(() => import('../pages/student/GroupsPage'));
 const StudentCertificatePage = lazy(() => import('../pages/student/CertificatePage'));
+const AdministrativeRequestsPage = lazy(() => import('../pages/student/AdministrativeRequestsPage'));
+const LibraryPage = lazy(() => import('../pages/student/LibraryPage'));
+const ThesesPage = lazy(() => import('../pages/student/ThesesPage'));
 const StudentCoursesPage = lazy(() => import('../pages/student/CoursesPage'));
 const PracticeQuizPage = lazy(() => import('../pages/exams/student/PracticeQuizPage'));
 const TranscriptPage = lazy(() => import('../pages/student/TranscriptPage'));
@@ -64,6 +67,15 @@ const StudentRoutes = () => {
         
         {/* Route pour le certificat de scolarité */}
         <Route path="certificate" element={<StudentCertificatePage />} />
+        
+        {/* Démarches administratives */}
+        <Route path="requests" element={<AdministrativeRequestsPage />} />
+        
+        {/* Bibliothèque numérique */}
+        <Route path="library" element={<LibraryPage />} />
+        
+        {/* Soutenances & Mémoires */}
+        <Route path="theses" element={<ThesesPage />} />
         
         {/* Espace Cours & Ressources */}
         <Route path="courses" element={<StudentCoursesPage />} />

@@ -34,6 +34,9 @@ const TakeExamPage = () => {
   const [exam, setExam] = useState(null);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [examStarted, setExamStarted] = useState(false);
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+  const [otpValue, setOtpValue] = useState('');
+  const [otpError, setOtpValueError] = useState(false);
   
   useEffect(() => {
     const fetchExam = async () => {
@@ -106,11 +109,21 @@ const TakeExamPage = () => {
       // Marquer l'examen comme commencé
       setExamStarted(true);
       
-      // Fermer la boîte de dialogue de confirmation
+      // Fermer les boîtes de dialogue
       setConfirmDialogOpen(false);
+      setOtpDialogOpen(false);
     } catch (error) {
       console.error('Erreur lors du démarrage de l\'examen:', error);
       setError('Impossible de démarrer l\'examen. Veuillez réessayer.');
+    }
+  };
+
+  const handleOtpSubmit = () => {
+    if (otpValue.toLowerCase() === "esgis2026") {
+      setOtpValueError(false);
+      setConfirmDialogOpen(true);
+    } else {
+      setOtpValueError(true);
     }
   };
   
@@ -205,21 +218,48 @@ const TakeExamPage = () => {
               <Button 
                 variant="contained" 
                 color="primary"
-                onClick={() => {
-                  const userCode = window.prompt("Veuillez saisir le code OTP confidentiel fourni par le surveillant (Indice: ESGIS2026):");
-                  if (userCode === "ESGIS2026" || userCode === "esgis2026") {
-                    handleConfirmStart();
-                  } else if (userCode !== null) {
-                    alert("Code OTP incorrect.");
-                  }
-                }}
+                onClick={() => setOtpDialogOpen(true)}
               >
-                Saisir le code OTP et commencer
+                Commencer l'examen
               </Button>
             </Box>
           </Box>
         </Paper>
       )}
+      
+      {/* Dialogue OTP */}
+      <Dialog
+        open={otpDialogOpen}
+        onClose={() => setOtpDialogOpen(false)}
+      >
+        <DialogTitle>
+          Code d'accès requis
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Veuillez saisir le code confidentiel (OTP) fourni par le surveillant pour déverrouiller l'épreuve.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Code OTP"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={otpValue}
+            onChange={(e) => setOtpValue(e.target.value)}
+            error={otpError}
+            helperText={otpError ? "Code incorrect. Veuillez réessayer." : "Indice: ESGIS2026"}
+            onKeyPress={(e) => e.key === 'Enter' && handleOtpSubmit()}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOtpDialogOpen(false)}>Annuler</Button>
+          <Button onClick={handleOtpSubmit} variant="contained" color="primary">
+            Valider le code
+          </Button>
+        </DialogActions>
+      </Dialog>
       
       {/* Dialogue de confirmation */}
       <Dialog

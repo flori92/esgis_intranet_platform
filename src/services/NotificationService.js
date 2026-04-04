@@ -229,11 +229,12 @@ class NotificationService {
   /**
    * Souscrit aux notifications en temps réel via Supabase Realtime
    * @param {string} userId - ID de l'utilisateur
+   * @param {string} role - Rôle de l'utilisateur (student, professor, admin)
    * @param {Function} callback - Fonction appelée à chaque nouvelle notification
    * @returns {Object} Subscription (appeler .unsubscribe() pour arrêter)
    */
-  subscribeRealtime(userId, callback) {
-    return subscribeToNotifications(userId, (payload) => {
+  subscribeRealtime(userId, role, callback) {
+    return subscribeToNotifications(userId, role, (payload) => {
       const notification = payload?.new;
       callback(notification);
 

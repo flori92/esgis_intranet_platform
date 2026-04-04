@@ -47,19 +47,14 @@ const resolveProfessorEntityId = async (profileId) => {
  */
 export const getStudentCourseIds = async (studentProfileId) => {
   try {
-    const { studentId, error: studentError } = await resolveStudentEntityId(studentProfileId);
-    if (studentError) {
-      return { courseIds: [], error: studentError };
-    }
-
-    if (!studentId) {
+    if (!studentProfileId) {
       return { courseIds: [], error: null };
     }
 
     const { data, error } = await supabase
       .from('student_courses')
       .select('course_id')
-      .eq('student_id', studentId);
+      .eq('student_id', studentProfileId);
 
     if (error) {
       return { courseIds: [], error };
@@ -81,9 +76,11 @@ export const getStudentCourseIds = async (studentProfileId) => {
  * @param {string[]} [options.courseIds] - Limiter aux cours donnés
  * @param {string} [options.professorId] - Limiter au professeur donné
  * @param {string} [options.courseId] - Filtrer sur un cours unique ('all' = pas de filtre)
+ * @param {number} [options.departmentId] - Filtrer par département
+ * @param {string} [options.levelCode] - Filtrer par niveau
  * @returns {Promise<{ sessions: Array, error: Error|null }>}
  */
-export const getScheduleSessions = async ({ courseIds, professorId, courseId } = {}) => {
+export const getScheduleSessions = async ({ courseIds, professorId, courseId, departmentId, levelCode } = {}) => {
   try {
     let professorEntityId = null;
 
@@ -105,7 +102,7 @@ export const getScheduleSessions = async ({ courseIds, professorId, courseId } =
     let query = supabase
       .from('course_sessions')
       .select(`
-        id, date, duration, room, status, course_id, professor_id,
+        id, date, duration, room, status, course_id, professor_id, department_id, level_code,
         courses:course_id (id, name, code, semester),
         professors:professor_id (
           id,
@@ -129,6 +126,14 @@ export const getScheduleSessions = async ({ courseIds, professorId, courseId } =
       query = query.eq('course_id', courseId);
     }
 
+    if (departmentId) {
+      query = query.eq('department_id', departmentId);
+    }
+
+    if (levelCode) {
+      query = query.eq('level_code', levelCode);
+    }
+
     const { data, error } = await query;
 
     if (error) {
@@ -139,5 +144,34 @@ export const getScheduleSessions = async ({ courseIds, professorId, courseId } =
   } catch (error) {
     console.error('getScheduleSessions:', error);
     return { sessions: [], error };
+  }
+};
+
+/**
+ * Récupère les événements du calendrier académique (jours fériés, événements ESGIS).
+ * @param {Object} filters
+ * @returns {Promise<{ events: Array, error: Error|null }>}
+ */
+export const getInstitutionalCalendar = async (filters = {}) => {
+  try {
+    let query = supabase
+      .from('events')
+      .select('id, title, description, location, start_date, end_date, type, department_id, level_code')
+      .order('start_date', { ascending: true });
+
+    if (filters.departmentId) {
+      query = query.eq('department_id', filters.departmentId);
+    }
+    if (filters.levelCode) {
+      query = query.eq('level_code', filters.levelCode);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return { events: data || [], error: null };
+  } catch (error) {
+    console.error('getInstitutionalCalendar:', error);
+    return { events: [], error };
   }
 };

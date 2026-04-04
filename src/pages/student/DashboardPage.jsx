@@ -24,8 +24,14 @@ import {
   CalendarToday as CalendarTodayIcon,
   Event as EventIcon,
   Grade as GradeIcon,
-  School as SchoolIcon
+  School as SchoolIcon,
+  Assignment as RequestIcon,
+  Warning as WarningIcon,
+  CheckCircle as SuccessIcon,
+  Description as DocumentIcon,
+  TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
+import { Stack, Table, TableBody, TableRow, TableCell, Chip } from '@mui/material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
@@ -71,8 +77,18 @@ const DashboardPage = () => {
     recent_grades: [],
     schedule: [],
     news: [],
-    events: []
+    events: [],
+    requests: [],
+    upcoming_exams: []
   });
+
+  const stats = useMemo(() => {
+    return {
+      pendingRequests: dashboardData.requests.filter(r => r.status !== 'ready' && r.status !== 'rejected').length,
+      upcomingExams: dashboardData.upcoming_exams.length,
+      recentNews: dashboardData.news.length
+    };
+  }, [dashboardData]);
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -155,160 +171,163 @@ const DashboardPage = () => {
         </Alert>
       )}
 
-      <Typography variant="h4" component="h1" gutterBottom>
-        Tableau de bord
-      </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h4" component="h1" fontWeight="bold">
+          Bonjour, {authState.profile?.full_name?.split(' ')[0] || 'Étudiant'} 👋
+        </Typography>
+        <Typography variant="subtitle1" color="text.secondary">
+          {format(new Date(), 'PPPP', { locale: fr })}
+        </Typography>
+      </Stack>
+
+      {/* Barre d'Actions Urgentes */}
+      {(stats.upcomingExams > 0 || stats.pendingRequests > 0) && (
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h6" gutterBottom color="error.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WarningIcon fontSize="small" /> Actions prioritaires
+          </Typography>
+          <Grid container spacing={2}>
+            {dashboardData.upcoming_exams.map(exam => (
+              <Grid item xs={12} md={6} key={exam.id}>
+                <Alert 
+                  severity="warning" 
+                  action={
+                    <Button color="inherit" size="small" component={Link} to={`/student/exams`}>
+                      Voir l'examen
+                    </Button>
+                  }
+                >
+                  <Typography variant="body2" fontWeight="bold">Examen imminent : {exam.title}</Typography>
+                  <Typography variant="caption">Début à {formatTime(exam.start_time)}</Typography>
+                </Alert>
+              </Grid>
+            ))}
+            {dashboardData.requests.filter(r => r.status === 'ready').map(req => (
+              <Grid item xs={12} md={6} key={req.id}>
+                <Alert 
+                  severity="success" 
+                  action={
+                    <Button color="inherit" size="small" component={Link} to="/student/requests">
+                      Télécharger
+                    </Button>
+                  }
+                >
+                  <Typography variant="body2" fontWeight="bold">Document disponible : {req.request_type}</Typography>
+                  <Typography variant="caption">Votre demande a été finalisée.</Typography>
+                </Alert>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      )}
 
       <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader title="Prochain cours" avatar={<SchoolIcon color="primary" />} />
-            <CardContent>
-              {dashboardData.next_course ? (
-                <>
-                  <Typography variant="h6">{dashboardData.next_course.name}</Typography>
-                  <Typography variant="body1" color="text.secondary">
-                    {formatDate(dashboardData.next_course.time)} à {formatTime(dashboardData.next_course.time)}
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    component={Link}
-                    to="/schedule"
-                    sx={{ mt: 2 }}
-                    startIcon={<CalendarTodayIcon />}
-                  >
-                    Voir l'emploi du temps complet
-                  </Button>
-                </>
-              ) : (
-                <Typography variant="body1">Aucun cours à venir</Typography>
-              )}
-            </CardContent>
-          </Card>
+        {/* Résumé de situation */}
+        <Grid item xs={12} md={8}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Card sx={{ height: '100%', borderLeft: '4px solid #003366' }}>
+                <CardHeader title="Prochain cours" avatar={<SchoolIcon color="primary" />} />
+                <CardContent>
+                  {dashboardData.next_course ? (
+                    <>
+                      <Typography variant="h6">{dashboardData.next_course.name}</Typography>
+                      <Typography variant="body1" color="text.secondary">
+                        {formatDate(dashboardData.next_course.time)} à {formatTime(dashboardData.next_course.time)}
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        component={Link}
+                        to="/student/schedule"
+                        sx={{ mt: 2 }}
+                        startIcon={<CalendarTodayIcon />}
+                        size="small"
+                      >
+                        Mon emploi du temps
+                      </Button>
+                    </>
+                  ) : (
+                    <Typography variant="body1">Aucun cours à venir</Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Card sx={{ height: '100%', borderLeft: '4px solid #CC0000' }}>
+                <CardHeader title="Dernières notes" avatar={<GradeIcon color="error" />} />
+                <CardContent>
+                  {dashboardData.recent_grades.length > 0 ? (
+                    <List dense sx={{ py: 0 }}>
+                      {dashboardData.recent_grades.map((grade) => (
+                        <ListItem key={grade.id} sx={{ px: 0 }}>
+                          <ListItemText
+                            primary={grade.course_name}
+                            secondary={`Note: ${grade.value}/${grade.max_value}`}
+                          />
+                        </ListItem>
+                      ))}
+                      <Button variant="text" component={Link} to="/student/grades" fullWidth size="small">
+                        Voir tous mes résultats
+                      </Button>
+                    </List>
+                  ) : (
+                    <Typography variant="body1">Aucune note publiée récemment</Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader 
+                  title="Suivi des Demandes" 
+                  avatar={<RequestIcon color="secondary" />} 
+                  action={<Button size="small" component={Link} to="/student/requests">Voir tout</Button>}
+                />
+                <CardContent sx={{ pt: 0 }}>
+                  {dashboardData.requests.length > 0 ? (
+                    <Table size="small">
+                      <TableBody>
+                        {dashboardData.requests.map(req => (
+                          <TableRow key={req.id}>
+                            <TableCell sx={{ pl: 0 }}>{req.request_type}</TableCell>
+                            <TableCell align="right">
+                              <Chip 
+                                label={req.status} 
+                                size="small" 
+                                color={req.status === 'ready' ? 'secondary' : req.status === 'approved' ? 'success' : 'default'} 
+                                variant="outlined" 
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">Aucune demande en cours.</Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
         </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader title="Notes récentes" avatar={<GradeIcon color="primary" />} />
+        {/* Colonne latérale événements */}
+        <Grid item xs={12} md={4}>
+          <Card sx={{ height: '100%' }}>
+            <CardHeader title="Agenda" avatar={<EventIcon color="primary" />} />
             <CardContent>
-              {dashboardData.recent_grades.length > 0 ? (
-                <List>
-                  {dashboardData.recent_grades.map((grade) => (
-                    <ListItem key={grade.id}>
-                      <ListItemText
-                        primary={grade.course_name}
-                        secondary={`Note: ${grade.value}/${grade.max_value}`}
-                      />
-                    </ListItem>
-                  ))}
-                  <Divider />
-                  <ListItem>
-                    <Button variant="outlined" component={Link} to="/grades" fullWidth>
-                      Voir toutes les notes
-                    </Button>
-                  </ListItem>
-                </List>
-              ) : (
-                <Typography variant="body1">Aucune note publiée récemment</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader
-              title="Emploi du temps"
-              avatar={<CalendarTodayIcon color="primary" />}
-              action={
-                <FormControl variant="outlined" size="small" sx={{ minWidth: 140 }}>
-                  <InputLabel id="day-of-week-filter-label">Jour</InputLabel>
-                  <Select
-                    labelId="day-of-week-filter-label"
-                    value={dayOfWeekFilter}
-                    onChange={(event) => setDayOfWeekFilter(event.target.value)}
-                    label="Jour"
-                  >
-                    <MenuItem value="all">Tous les jours</MenuItem>
-                    <MenuItem value="lundi">Lundi</MenuItem>
-                    <MenuItem value="mardi">Mardi</MenuItem>
-                    <MenuItem value="mercredi">Mercredi</MenuItem>
-                    <MenuItem value="jeudi">Jeudi</MenuItem>
-                    <MenuItem value="vendredi">Vendredi</MenuItem>
-                    <MenuItem value="samedi">Samedi</MenuItem>
-                  </Select>
-                </FormControl>
-              }
-            />
-            <CardContent>
-              {filteredSchedule.length > 0 ? (
-                <List>
-                  {filteredSchedule.map((item) => (
-                    <ListItem key={item.id}>
-                      <ListItemText
-                        primary={item.course_name}
-                        secondary={
-                          <>
-                            <Typography component="span" variant="body2">
-                              {getDayOfWeekName(item.day_of_week)} • {formatTime(item.start_time)} - {formatTime(item.end_time)}
-                            </Typography>
-                            <br />
-                            <Typography component="span" variant="body2">
-                              {item.room ? `Salle: ${item.room}` : 'Salle non renseignée'}
-                              {item.professor_name ? ` • Prof: ${item.professor_name}` : ''}
-                            </Typography>
-                          </>
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              ) : (
-                <Typography variant="body1">Aucun cours planifié</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader
-              title="Événements à venir"
-              avatar={<EventIcon color="primary" />}
-              action={
-                <FormControl variant="outlined" size="small" sx={{ minWidth: 160 }}>
-                  <InputLabel id="event-type-filter-label">Type</InputLabel>
-                  <Select
-                    labelId="event-type-filter-label"
-                    value={eventTypeFilter}
-                    onChange={(event) => setEventTypeFilter(event.target.value)}
-                    label="Type"
-                  >
-                    <MenuItem value="all">Tous les types</MenuItem>
-                    <MenuItem value="general">Général</MenuItem>
-                    <MenuItem value="exam">Examen</MenuItem>
-                    <MenuItem value="conference">Conférence</MenuItem>
-                    <MenuItem value="workshop">Atelier</MenuItem>
-                  </Select>
-                </FormControl>
-              }
-            />
-            <CardContent>
-              {filteredEvents.length > 0 ? (
-                <List>
-                  {filteredEvents.map((event) => (
-                    <ListItem key={event.id}>
+              {dashboardData.events.length > 0 ? (
+                <List dense>
+                  {dashboardData.events.map((event) => (
+                    <ListItem key={event.id} alignItems="flex-start" sx={{ px: 0 }}>
                       <ListItemText
                         primary={event.title}
                         secondary={
                           <>
-                            <Typography component="span" variant="body2">
-                              {formatDate(event.start_date)}
-                              {event.end_date && event.start_date !== event.end_date ? ` - ${formatDate(event.end_date)}` : ''}
-                            </Typography>
-                            <br />
-                            <Typography component="span" variant="body2">
-                              {event.location ? `Lieu: ${event.location}` : 'Lieu non renseigné'}
+                            <Typography component="span" variant="caption" display="block">
+                              {formatDate(event.start_date)} • {event.location}
                             </Typography>
                           </>
                         }
@@ -317,37 +336,32 @@ const DashboardPage = () => {
                   ))}
                 </List>
               ) : (
-                <Typography variant="body1">Aucun événement à venir</Typography>
+                <Typography variant="body2">Aucun événement à venir</Typography>
               )}
             </CardContent>
           </Card>
         </Grid>
 
         <Grid item xs={12}>
-          <Typography variant="h5" component="h2" gutterBottom sx={{ mt: 3 }}>
-            Actualités
+          <Typography variant="h5" component="h2" gutterBottom sx={{ mt: 3, fontWeight: 'bold' }}>
+            Actualités ESGIS
           </Typography>
           <Grid container spacing={3}>
             {dashboardData.news.length > 0 ? (
               dashboardData.news.map((item) => (
                 <Grid item xs={12} md={4} key={item.id || item.title}>
-                  <Card>
+                  <Card sx={{ height: '100%' }}>
                     {item.image_url && (
                       <CardMedia component="img" height="140" image={item.image_url} alt={item.title} />
                     )}
                     <CardContent>
-                      <Typography variant="h6">{item.title}</Typography>
+                      <Typography variant="h6" gutterBottom>{item.title}</Typography>
                       <Typography variant="caption" color="text.secondary" display="block">
                         {formatDate(item.published_at)}
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                         {item.content}
                       </Typography>
-                      {item.author && (
-                        <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                          Par: {item.author}
-                        </Typography>
-                      )}
                     </CardContent>
                   </Card>
                 </Grid>

@@ -56,8 +56,8 @@ const normalizeGradeItem = (grade) => ({
 const normalizeNewsItem = (item) => ({
   id: item.id,
   title: item.title,
-  content: item.content,
-  published_at: item.published_at || item.created_at || null,
+  content: item.description || item.content || '',
+  published_at: item.date || item.published_at || item.created_at || null,
   author: item.author || '',
   image_url: item.image_url || null
 });
@@ -82,27 +82,45 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
       { courseIds, error: courseIdsError },
       { data: grades, error: gradesError },
       { data: news, error: newsError },
-      { data: events, error: eventsError }
+      { data: events, error: eventsError },
+      { data: requests, error: requestsError },
+      { data: exams, error: examsError }
     ] = await Promise.all([
       getStudentCourseIds(profileId),
       getStudentPublishedGrades(studentId),
       supabase
         .from('news')
-        .select('id, title, content, published_at, author, image_url, created_at')
-        .order('published_at', { ascending: false })
+        .select('id, title, description, date, image_url, created_at')
+        .order('date', { ascending: false })
         .limit(3),
       supabase
         .from('events')
         .select('id, title, description, start_date, end_date, location, type')
         .gte('start_date', new Date().toISOString())
         .order('start_date', { ascending: true })
-        .limit(5)
+        .limit(5),
+      supabase
+        .from('validation_queue')
+        .select('id, request_type, status, created_at')
+        .eq('requester_id', profileId)
+        .order('created_at', { ascending: false })
+        .limit(3),
+      supabase
+        .from('student_exams')
+        .select('*, exams:exam_id(id, title, start_time, duration)')
+        .eq('student_id', profileId)
+        .eq('attempt_status', 'not_started')
+        .gte('exams.start_time', new Date().toISOString())
+        .order('created_at', { ascending: true })
+        .limit(2)
     ]);
 
     if (courseIdsError) throw courseIdsError;
     if (gradesError) throw gradesError;
     if (newsError) throw newsError;
     if (eventsError) throw eventsError;
+    if (requestsError) throw requestsError;
+    if (examsError) throw examsError;
 
     const { sessions, error: sessionsError } = courseIds?.length
       ? await getScheduleSessions({ courseIds })
@@ -129,7 +147,14 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
         recent_grades: recentGrades,
         schedule: upcomingSchedule.slice(0, 8),
         news: (news || []).map(normalizeNewsItem),
-        events: (events || []).map(normalizeEventItem)
+        events: (events || []).map(normalizeEventItem),
+        requests: (requests || []),
+        upcoming_exams: (exams || []).map(e => ({
+          id: e.exams?.id,
+          title: e.exams?.title,
+          start_time: e.exams?.start_time,
+          duration: e.exams?.duration
+        }))
       },
       error: null
     };

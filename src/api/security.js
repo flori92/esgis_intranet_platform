@@ -116,10 +116,13 @@ export const generateIntegrityReport = async (examId, generatedBy) => {
           attempt_status,
           answers,
           updated_at,
-          students:student_id(
+          profiles:student_id(
             id,
-            profile_id,
-            profiles:profile_id(full_name, email)
+            full_name,
+            students(
+              id,
+              student_number
+            )
           )
         `)
         .eq('exam_id', numericExamId),
@@ -354,18 +357,28 @@ export const processDataAccessRequest = async (requestId, status, response, proc
 /** Exporte toutes les données d'un utilisateur (droit d'accès RGPD) */
 export const exportUserData = async (userId) => {
   try {
-    const [profileRes, gradesRes, docsRes, notifRes, messagesRes] = await Promise.all([
+    const { data: student } = await supabase.from('students').select('id').eq('profile_id', userId).maybeSingle();
+    const studentIntegerId = student?.id;
+
+    const promises = [
       supabase.from('profiles').select('*').eq('id', userId).single(),
-      supabase.from('grades').select('*, course:courses(name, code)').eq('student_id', userId),
       supabase.from('generated_documents').select('*').eq('student_id', userId),
       supabase.from('notifications').select('*').or(`recipient_id.eq.${userId},sender_id.eq.${userId}`).limit(100),
       supabase.from('messages').select('*').or(`sender_id.eq.${userId},recipient_id.eq.${userId}`).limit(100),
-    ]);
+    ];
+
+    if (studentIntegerId) {
+      promises.push(supabase.from('grades').select('*, course:courses(name, code)').eq('student_id', studentIntegerId));
+    } else {
+      promises.push(Promise.resolve({ data: [] }));
+    }
+
+    const [profileRes, docsRes, notifRes, messagesRes, gradesRes] = await Promise.all(promises);
 
     return {
       data: {
         profile: profileRes.data,
-        grades: gradesRes.data || [],
+        grades: gradesRes?.data || [],
         documents: docsRes.data || [],
         notifications: notifRes.data || [],
         messages: messagesRes.data || [],

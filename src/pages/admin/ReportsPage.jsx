@@ -1,14 +1,15 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import Paper from '@mui/material/Paper';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import Tab from '@mui/material/Tab';
-import Tabs from '@mui/material/Tabs';
-import CircularProgress from '@mui/material/CircularProgress';
+import { Suspense, lazy, useEffect, useState, useMemo } from 'react';
+import {
+  Box, Typography, Paper, FormControl, InputLabel, Select,
+  MenuItem, Tab, Tabs, CircularProgress, Grid, Card, CardContent,
+  Stack, Divider, Button
+} from '@mui/material';
+import {
+  TrendingUp as TrendingUpIcon,
+  People as PeopleIcon,
+  Description as DescriptionIcon,
+  Assignment as AssignmentIcon
+} from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { getReportsData } from '../../api/reports';
 import { triggerDownload } from '@/utils/DownloadLinkUtil';
@@ -21,32 +22,12 @@ const ExamReportsTab = lazy(() => import('@/components/reports/ExamReportsTab'))
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
-
   return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`simple-tabpanel-${index}`}
-      aria-labelledby={`simple-tab-${index}`}
-      {...other}
-    >
-      {value === index && (
-        <Box sx={{ p: 3 }}>
-          {children}
-        </Box>
-      )}
+    <div role="tabpanel" hidden={value !== index} id={`tabpanel-${index}`} {...other}>
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
     </div>
   );
 }
-
-function a11yProps(index) {
-  return {
-    id: `simple-tab-${index}`,
-    'aria-controls': `simple-tabpanel-${index}`,
-  };
-}
-
-const TabContentFallback = () => <RouteLoader label="Chargement des graphiques..." />;
 
 const ReportsPage = () => {
   const { user } = useAuth();
@@ -54,249 +35,149 @@ const ReportsPage = () => {
   const [tabValue, setTabValue] = useState(0);
   const [academicYear, setAcademicYear] = useState('2023-2024');
 
-  // États pour les statistiques
-  const [departmentStatsData, setDepartmentStatsData] = useState([]);
-  const [studentStatsData, setStudentStatsData] = useState([]);
-  const [professorStatsData, setProfessorStatsData] = useState([]);
-  const [examStatsData, setExamStatsData] = useState([]);
-  
-  // État pour le filtre d'année
-  const [availableYears, setAvailableYears] = useState(['2022-2023', '2023-2024', '2024-2025']);
-
-  useEffect(() => {
-    // Vérifier si l'utilisateur est authentifié
-    if (user) {
-      fetchData();
-    }
-  }, [user, academicYear]);
-
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-  };
-
-  const handleYearChange = (event) => {
-    setAcademicYear(event.target.value);
-  };
+  const [stats, setStats] = useState({
+    departments: [],
+    students: [],
+    professors: [],
+    exams: [],
+    filieres: [],
+    kpis: { successRate: 0, docVolume: 0, totalStudents: 0 }
+  });
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: rawData, error: fetchError } = await getReportsData();
+      const { data: rawData, error } = await getReportsData();
+      if (error) throw error;
 
-      if (fetchError) throw fetchError;
+      const { departments, filieres, students, professors, exams, grades, documents } = rawData;
 
-      const { departments, students, professors, exams } = rawData;
+      // KPI: Success Rate (Grades >= 10/20)
+      const validGrades = grades.filter(g => g.note !== null);
+      const successCount = validGrades.filter(g => (g.note / (g.max_value || 20)) * 20 >= 10).length;
+      const successRate = validGrades.length > 0 ? (successCount / validGrades.length) * 100 : 0;
 
-      // Calcul des statistiques par département
-      const deptStats = departments.map(dept => {
-        const studentsInDept = students.filter(student => student.department_id === dept.id);
-        const professorsInDept = professors.filter(prof => prof.department_id === dept.id);
-        
-        return {
-          name: dept.name,
-          étudiants: studentsInDept.length,
-          professeurs: professorsInDept.length,
-          id: dept.id
-        };
-      });
-
-      // Calcul des statistiques pour les étudiants
-      // Grouper les étudiants par année
-      const studentsByYear = {};
-      students.forEach(student => {
-        const year = student.academic_year || 'Inconnu';
-        if (!studentsByYear[year]) {
-          studentsByYear[year] = 0;
-        }
-        studentsByYear[year]++;
-      });
-
-      const studentStats = Object.keys(studentsByYear).map(year => ({
-        name: year,
-        value: studentsByYear[year]
+      // Dept Stats
+      const deptStats = departments.map(d => ({
+        name: d.name,
+        étudiants: students.filter(s => s.department_id === d.id).length,
+        professeurs: professors.filter(p => p.department_id === d.id).length
       }));
 
-      // Calcul des statistiques pour les professeurs
-      // Grouper les professeurs par département
-      const profsByDept = {};
-      professors.forEach(prof => {
-        const deptName = prof.departments?.name || 'Inconnu';
-        if (!profsByDept[deptName]) {
-          profsByDept[deptName] = 0;
+      // Student Year Stats
+      const yearMap = {};
+      students.forEach(s => { yearMap[s.level || 'N/A'] = (yearMap[s.level || 'N/A'] || 0) + 1; });
+      const studentStats = Object.keys(yearMap).map(k => ({ name: k, value: yearMap[k] }));
+
+      setStats({
+        departments: deptStats,
+        students: studentStats,
+        professors: [], // can add more detail if needed
+        exams: exams.map(e => ({ name: e.courses?.name || 'Examen', value: 1 })),
+        filieres: filieres.map(f => ({ name: f.name, value: students.filter(s => s.filiere_id === f.id).length })),
+        kpis: {
+          successRate: Math.round(successRate),
+          docVolume: documents.length,
+          totalStudents: students.length
         }
-        profsByDept[deptName]++;
       });
-
-      const professorStats = Object.keys(profsByDept).map(dept => ({
-        name: dept,
-        value: profsByDept[dept]
-      }));
-
-      // Calcul des statistiques pour les examens
-      // Grouper les examens par cours
-      const examsByCourse = {};
-      exams.forEach(exam => {
-        const courseName = exam.courses?.name || 'Inconnu';
-        if (!examsByCourse[courseName]) {
-          examsByCourse[courseName] = 0;
-        }
-        examsByCourse[courseName]++;
-      });
-
-      const examStats = Object.keys(examsByCourse).map(course => ({
-        name: course,
-        value: examsByCourse[course]
-      }));
-
-      setDepartmentStatsData(deptStats);
-      setStudentStatsData(studentStats);
-      setProfessorStatsData(professorStats);
-      setExamStatsData(examStats);
-
-    } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const exportCSV = (event) => {
-    // Fonction pour exporter les données en CSV
-    const dataType = event.currentTarget.dataset.type;
-    let data = [];
-    let fileName = '';
-    let header = [];
+  useEffect(() => { if (user) fetchData(); }, [user, academicYear]);
 
-    switch (dataType) {
-      case 'departments':
-        data = departmentStatsData;
-        fileName = `departements_${academicYear}.csv`;
-        header = ['Nom', 'Étudiants', 'Professeurs'];
-        break;
-      case 'students':
-        data = studentStatsData;
-        fileName = `etudiants_${academicYear}.csv`;
-        header = ['Année', 'Nombre'];
-        break;
-      case 'professors':
-        data = professorStatsData;
-        fileName = `professeurs_${academicYear}.csv`;
-        header = ['Département', 'Nombre'];
-        break;
-      case 'exams':
-        data = examStatsData;
-        fileName = `examens_${academicYear}.csv`;
-        header = ['Cours', 'Nombre'];
-        break;
-      default:
-        return;
-    }
-
-    // Convertir les données en format CSV
-    const csvRows = [];
-    csvRows.push(header.join(','));
-
-    for (const entry of data) {
-      const values = header.map(key => {
-        const value = entry[key.toLowerCase()] || entry.value;
-        return `"${value}"`;
-      });
-      csvRows.push(values.join(','));
-    }
-
-    const csvString = csvRows.join('\n');
-    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-
-    // Utilisation de l'utilitaire mutualisé
-    triggerDownload({ url, filename: fileName });
-
-    // Nettoyage de l'URL Blob après téléchargement
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-  };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress /></Box>;
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Rapports et Statistiques
-        </Typography>
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel id="academic-year-select-label">Année Académique</InputLabel>
-          <Select
-            labelId="academic-year-select-label"
-            id="academic-year-select"
-            value={academicYear}
-            label="Année Académique"
-            onChange={handleYearChange}
-          >
-            {availableYears.map((year) => (
-              <MenuItem key={year} value={year}>{year}</MenuItem>
-            ))}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={4}>
+        <Typography variant="h4" fontWeight="bold">Pilotage & Performance</Typography>
+        <FormControl size="small" sx={{ minWidth: 150 }}>
+          <Select value={academicYear} onChange={(e) => setAcademicYear(e.target.value)}>
+            <MenuItem value="2023-2024">2023-2024</MenuItem>
+            <MenuItem value="2024-2025">2024-2025</MenuItem>
           </Select>
         </FormControl>
-      </Box>
+      </Stack>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
-        <Tabs value={tabValue} onChange={handleTabChange} aria-label="statistiques tabs">
-          <Tab label="Vue d'ensemble" {...a11yProps(0)} />
-          <Tab label="Étudiants" {...a11yProps(1)} />
-          <Tab label="Professeurs" {...a11yProps(2)} />
-          <Tab label="Examens" {...a11yProps(3)} />
+      <Grid container spacing={3} mb={4}>
+        <Grid item xs={12} sm={4}>
+          <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}><TrendingUpIcon /></Avatar>
+                <Box>
+                  <Typography variant="h4" fontWeight="bold">{stats.kpis.successRate}%</Typography>
+                  <Typography variant="body2">Taux de réussite global</Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={4}>
+          <Card sx={{ bgcolor: 'secondary.main', color: 'white' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}><DescriptionIcon /></Avatar>
+                <Box>
+                  <Typography variant="h4" fontWeight="bold">{stats.kpis.docVolume}</Typography>
+                  <Typography variant="body2">Documents officiels générés</Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={4}>
+          <Card sx={{ bgcolor: 'success.main', color: 'white' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}><PeopleIcon /></Avatar>
+                <Box>
+                  <Typography variant="h4" fontWeight="bold">{stats.kpis.totalStudents}</Typography>
+                  <Typography variant="body2">Étudiants inscrits</Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Paper>
+        <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tab label="Vue d'ensemble" />
+          <Tab label="Par Filière" />
+          <Tab label="Détails" />
         </Tabs>
-      </Box>
-
-      <TabPanel value={tabValue} index={0}>
-        <Suspense fallback={<TabContentFallback />}>
-          <OverviewReportsTab
-            departmentStatsData={departmentStatsData}
-            studentStatsData={studentStatsData}
-            examStatsData={examStatsData}
-          />
-        </Suspense>
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={1}>
-        <Suspense fallback={<TabContentFallback />}>
-          <StudentReportsTab
-            departmentStatsData={departmentStatsData}
-            studentStatsData={studentStatsData}
-            exportCSV={exportCSV}
-          />
-        </Suspense>
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={2}>
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h5" gutterBottom>
-            Statistiques des professeurs
-          </Typography>
-        </Box>
-
-        <Suspense fallback={<TabContentFallback />}>
-          <ProfessorReportsTab
-            professorStatsData={professorStatsData}
-            exportCSV={exportCSV}
-          />
-        </Suspense>
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={3}>
-        <Suspense fallback={<TabContentFallback />}>
-          <ExamReportsTab
-            examStatsData={examStatsData}
-            exportCSV={exportCSV}
-          />
-        </Suspense>
-      </TabPanel>
+        <TabPanel value={tabValue} index={0}>
+          <Suspense fallback={<CircularProgress />}>
+            <OverviewReportsTab 
+              departmentStatsData={stats.departments} 
+              studentStatsData={stats.students} 
+              examStatsData={stats.filieres} 
+            />
+          </Suspense>
+        </TabPanel>
+        <TabPanel value={tabValue} index={1}>
+          <Typography variant="h6" gutterBottom>Analyse par filière</Typography>
+          <Divider sx={{ mb: 3 }} />
+          <Grid container spacing={3}>
+            {stats.filieres.map(f => (
+              <Grid item xs={12} sm={6} md={4} key={f.name}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="subtitle2" color="text.secondary">{f.name}</Typography>
+                    <Typography variant="h5" fontWeight="bold">{f.value} étudiants</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </TabPanel>
+      </Paper>
     </Box>
   );
 };

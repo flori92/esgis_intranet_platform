@@ -87,7 +87,7 @@ const NotificationsPage = () => {
     setError(null);
     loadNotifications();
 
-    const subscription = subscribeToNotifications(currentProfileId, () => {
+    const subscription = subscribeToNotifications(currentProfileId, currentRole, () => {
       loadNotifications();
     });
 

@@ -579,21 +579,14 @@ export const saveBulletin = async (bulletinData) => {
 /** Récupère les quiz d'entraînement accessibles à un étudiant */
 export const getPracticeQuizzes = async (studentId) => {
   try {
-    const { data: student, error: studentError } = await supabase
-      .from('students')
-      .select('id')
-      .eq('profile_id', studentId)
-      .maybeSingle();
-
-    if (studentError) throw studentError;
-    if (!student) {
+    if (!studentId) {
       return { data: [], error: null };
     }
 
     const { data: studentCourses, error: courseError } = await supabase
       .from('student_courses')
       .select('course_id')
-      .eq('student_id', student.id);
+      .eq('student_id', studentId);
 
     if (courseError) throw courseError;
 
@@ -1793,6 +1786,80 @@ export const deleteStudent = async (id) => {
     return { error: null };
   } catch (error) {
     console.error('deleteStudent:', error);
+    return { error };
+  }
+};
+
+// ============================================================
+// FILIERES (Study Programs) — admin CRUD
+// ============================================================
+
+/** Recupere toutes les filières avec leurs départements */
+export const getFilieres = async (filters = {}) => {
+  try {
+    let query = supabase
+      .from('filieres')
+      .select('*, departments:department_id(id, name, code)')
+      .order('name');
+
+    if (filters.department_id) {
+      query = query.eq('department_id', filters.department_id);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getFilieres:', error);
+    return { data: [], error };
+  }
+};
+
+/** Cree une filière */
+export const createFiliere = async (filiereData) => {
+  try {
+    const { data, error } = await supabase
+      .from('filieres')
+      .insert(filiereData)
+      .select();
+
+    if (error) throw error;
+    return { data: data?.[0], error: null };
+  } catch (error) {
+    console.error('createFiliere:', error);
+    return { data: null, error };
+  }
+};
+
+/** Met a jour une filière */
+export const updateFiliere = async (id, updates) => {
+  try {
+    const { data, error } = await supabase
+      .from('filieres')
+      .update(updates)
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    return { data: data?.[0], error: null };
+  } catch (error) {
+    console.error('updateFiliere:', error);
+    return { data: null, error };
+  }
+};
+
+/** Supprime une filière */
+export const deleteFiliere = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('filieres')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    console.error('deleteFiliere:', error);
     return { error };
   }
 };

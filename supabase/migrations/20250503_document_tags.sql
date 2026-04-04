@@ -17,30 +17,15 @@ CREATE INDEX IF NOT EXISTS idx_document_tags_tag ON document_tags(tag);
 -- Activer Row Level Security
 ALTER TABLE document_tags ENABLE ROW LEVEL SECURITY;
 
--- Politique pour les tags de documents: même politique que pour les documents
+-- Supprimer les politiques existantes si elles existent
+DROP POLICY IF EXISTS document_tags_select_policy ON document_tags;
+DROP POLICY IF EXISTS document_tags_insert_policy ON document_tags;
+DROP POLICY IF EXISTS document_tags_update_policy ON document_tags;
+DROP POLICY IF EXISTS document_tags_delete_policy ON document_tags;
+
+-- Politique simplifiée pour les tags de documents
 CREATE POLICY document_tags_select_policy ON document_tags
-FOR SELECT USING (
-  EXISTS (
-    SELECT 1 FROM documents d
-    WHERE d.id = document_tags.document_id
-    AND (
-      d.visibility = 'public' OR
-      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin') OR
-      (d.visibility = 'department' AND EXISTS (
-        SELECT 1 FROM profiles p JOIN courses c ON p.department_id = c.department_id
-        WHERE p.id = auth.uid() AND c.id = d.course_id
-      )) OR
-      (d.visibility = 'course' AND EXISTS (
-        SELECT 1 FROM profiles p 
-        LEFT JOIN students s ON p.id = s.profile_id
-        LEFT JOIN student_courses sc ON s.id = sc.student_id
-        LEFT JOIN professors pr ON p.id = pr.profile_id
-        LEFT JOIN professor_courses pc ON pr.id = pc.professor_id
-        WHERE p.id = auth.uid() AND (sc.course_id = d.course_id OR pc.course_id = d.course_id)
-      ))
-    )
-  )
-);
+FOR SELECT USING (true);
 
 CREATE POLICY document_tags_insert_policy ON document_tags
 FOR INSERT WITH CHECK (
@@ -49,6 +34,11 @@ FOR INSERT WITH CHECK (
     WHERE d.id = document_tags.document_id
     AND d.uploaded_by = auth.uid()
   ) OR
+  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+CREATE POLICY document_tags_update_policy ON document_tags
+FOR UPDATE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
@@ -66,12 +56,3 @@ FOR DELETE USING (
 CREATE TRIGGER update_document_tags_modtime
 BEFORE UPDATE ON document_tags
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
--- Ajouter quelques tags pour tester
-INSERT INTO document_tags (document_id, tag) VALUES
-(1, 'important'),
-(1, 'examen'),
-(2, 'cours'),
-(2, 'exercice'),
-(3, 'projet'),
-(3, 'référence');

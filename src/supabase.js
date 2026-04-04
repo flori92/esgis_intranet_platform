@@ -2,8 +2,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Configuration - utilise les variables d'environnement Vite
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// On utilise .trim() pour supprimer les retours à la ligne (%0A) ou espaces accidentels
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.trim();
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error(

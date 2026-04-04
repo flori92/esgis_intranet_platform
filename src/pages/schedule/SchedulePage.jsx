@@ -31,10 +31,13 @@ import {
   CalendarMonth as CalendarSyncIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
-import { getScheduleSessions, getStudentCourseIds } from '../../api/schedule';
+import { getScheduleSessions, getStudentCourseIds, getInstitutionalCalendar } from '../../api/schedule';
+import { getDepartments } from '../../api/departments';
+import { getAcademicLevels } from '../../api/admin';
 import { format, parseISO, isBefore, isAfter, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { styled } from '@mui/material/styles';
+import Stack from '@mui/material/Stack';
 import { downloadICalFile, convertSessionsToICalEvents, generateICalContent } from '../../utils/icalExport';
 
 /**
@@ -144,9 +147,41 @@ const SchedulePage = () => {
   const [tabValue, setTabValue] = useState(0);
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('all');
+  
+  // Nouveaux filtres
+  const [departments, setDepartments] = useState([]);
+  const [levels, setLevels] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedLevel, setSelectedLevel] = useState('');
 
   // Déterminer le rôle de l'utilisateur
-  const { isAdmin, isProfessor, isStudent } = authState;
+  const { isAdmin, isProfessor, isStudent, profile } = authState;
+
+  // Initialiser les filtres à partir du profil si c'est un étudiant
+  useEffect(() => {
+    if (isStudent && profile && profile.department_id) {
+      setSelectedDepartment(profile.department_id);
+    }
+  }, [isStudent, profile]);
+
+  /**
+   * Chargement des données initiales (départements, niveaux)
+   */
+  useEffect(() => {
+    const loadMetadata = async () => {
+      try {
+        const [deptsRes, levelsRes] = await Promise.all([
+          getDepartments(),
+          getAcademicLevels()
+        ]);
+        setDepartments(deptsRes.departments || []);
+        setLevels(levelsRes.data || []);
+      } catch (err) {
+        console.error('Erreur chargement metadonnées:', err);
+      }
+    };
+    loadMetadata();
+  }, []);
 
   /**
    * Chargement des sessions de cours depuis Supabase
@@ -156,7 +191,11 @@ const SchedulePage = () => {
     setError(null);
     try {
       // Construire les filtres selon le rôle
-      const filters = { courseId: selectedCourse };
+      const filters = { 
+        courseId: selectedCourse,
+        departmentId: selectedDepartment || null,
+        levelCode: selectedLevel || null
+      };
 
       if (isStudent) {
         const { courseIds, error: courseIdsError } = await getStudentCourseIds(authState.user.id);
@@ -170,11 +209,15 @@ const SchedulePage = () => {
         filters.professorId = authState.user.id;
       }
 
-      const { sessions: sessionsData, error: sessionsError } = await getScheduleSessions(filters);
+      const [sessionsResult, institutionalRes] = await Promise.all([
+        getScheduleSessions(filters),
+        getInstitutionalCalendar(filters)
+      ]);
 
-      if (sessionsError) {
-        throw sessionsError;
-      }
+      if (sessionsResult.error) throw sessionsResult.error;
+      if (institutionalRes.error) throw institutionalRes.error;
+
+      const sessionsData = sessionsResult.sessions;
 
       // Transformer les données pour l'affichage
       const formattedSessions = sessionsData.map(session => {
@@ -201,6 +244,7 @@ const SchedulePage = () => {
         // Construction de l'objet session formaté
         return {
           id: session.id,
+          type: 'course',
           date: session.date,
           duration: session.duration,
           room: session.room,
@@ -222,7 +266,20 @@ const SchedulePage = () => {
         };
       });
 
-      setSessions(formattedSessions);
+      const formattedInstitutional = institutionalRes.events.map(event => ({
+        id: `inst-${event.id}`,
+        type: event.type === 'holiday' ? 'holiday' : 'event',
+        date: event.start_date,
+        duration: event.end_date ? (new Date(event.end_date) - new Date(event.start_date)) / 60000 : 60,
+        room: event.location,
+        status: 'scheduled',
+        course: { name: event.title, code: 'INST' },
+        professor: { name: 'ESGIS' },
+        description: event.description
+      }));
+
+      const allEvents = [...formattedSessions, ...formattedInstitutional].sort((a, b) => a.date.localeCompare(b.date));
+      setSessions(allEvents);
       
       // Extraire la liste des cours uniques pour le filtre
       const uniqueCourses = [...new Set(formattedSessions.map(s => JSON.stringify({
@@ -244,7 +301,7 @@ const SchedulePage = () => {
    */
   useEffect(() => {
     fetchSessions();
-  }, [authState.user, selectedCourse]);
+  }, [authState.user, selectedCourse, selectedDepartment, selectedLevel]);
 
   /**
    * Changement de vue (semaine, jour, liste)
@@ -554,8 +611,32 @@ const SchedulePage = () => {
         </Box>
       </Box>
 
-      <Box sx={{ mb: 3 }}>
-        <FormControl sx={{ minWidth: 200, mr: 2 }}>
+      <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+        <FormControl size="small" sx={{ minWidth: 200 }}>
+          <InputLabel>Département / Filière</InputLabel>
+          <Select
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
+            label="Département / Filière"
+          >
+            <MenuItem value="">Tous les départements</MenuItem>
+            {departments.map(d => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
+          </Select>
+        </FormControl>
+
+        <FormControl size="small" sx={{ minWidth: 150 }}>
+          <InputLabel>Niveau</InputLabel>
+          <Select
+            value={selectedLevel}
+            onChange={(e) => setSelectedLevel(e.target.value)}
+            label="Niveau"
+          >
+            <MenuItem value="">Tous les niveaux</MenuItem>
+            {levels.map(l => <MenuItem key={l.id} value={l.code}>{l.code} - {l.label}</MenuItem>)}
+          </Select>
+        </FormControl>
+
+        <FormControl size="small" sx={{ minWidth: 200 }}>
           <InputLabel id="course-select-label">Cours</InputLabel>
           <Select
             labelId="course-select-label"
@@ -573,11 +654,14 @@ const SchedulePage = () => {
           </Select>
         </FormControl>
 
+        <Box sx={{ flexGrow: 1 }} />
+
         <ViewToggle
           value={view}
           exclusive
           onChange={handleViewChange}
           aria-label="vue emploi du temps"
+          size="small"
         >
           <ToggleButton value="week" aria-label="vue semaine">
             <ViewWeek sx={{ mr: 1 }} />
