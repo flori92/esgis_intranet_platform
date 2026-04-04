@@ -30,8 +30,11 @@ import {
 import { format, formatDistanceToNowStrict, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getProfessorExamMonitoringData } from '@/api/exams';
-import { supabase } from '@/supabase';
+import {
+  createRealtimeChannel,
+  getProfessorExamMonitoringData,
+  removeRealtimeChannel
+} from '@/api/exams';
 
 const getRelation = (value) => (Array.isArray(value) ? value[0] : value);
 
@@ -153,30 +156,32 @@ const ExamMonitoringPage = () => {
       return undefined;
     }
 
-    const channel = supabase
-      .channel(`exam-monitor-${examId}`)
-      .on('postgres_changes', {
+    const channel = createRealtimeChannel(`exam-monitor-${examId}`, [
+      {
         event: '*',
         schema: 'public',
         table: 'student_exams',
-        filter: `exam_id=eq.${examId}`
-      }, () => loadMonitoringData())
-      .on('postgres_changes', {
+        filter: `exam_id=eq.${examId}`,
+        callback: () => loadMonitoringData()
+      },
+      {
         event: '*',
         schema: 'public',
         table: 'active_students',
-        filter: `exam_id=eq.${examId}`
-      }, () => loadMonitoringData())
-      .on('postgres_changes', {
+        filter: `exam_id=eq.${examId}`,
+        callback: () => loadMonitoringData()
+      },
+      {
         event: '*',
         schema: 'public',
         table: 'cheating_attempts',
-        filter: `exam_id=eq.${examId}`
-      }, () => loadMonitoringData())
-      .subscribe();
+        filter: `exam_id=eq.${examId}`,
+        callback: () => loadMonitoringData()
+      }
+    ]);
 
     return () => {
-      supabase.removeChannel(channel);
+      removeRealtimeChannel(channel);
     };
   }, [examId, loadMonitoringData]);
 
@@ -218,6 +223,13 @@ const ExamMonitoringPage = () => {
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadMonitoringData}>
             Actualiser
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<WarningAmberIcon />}
+            onClick={() => navigate(`/professor/exams/${examId}/integrity`)}
+          >
+            Rapport d'integrite
           </Button>
           <Button
             variant="contained"

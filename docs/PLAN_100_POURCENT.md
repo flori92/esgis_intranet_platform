@@ -2,7 +2,8 @@
 
 **Objectif:** Fermer tous les verrous et atteindre 100% du projet.
 **Date de départ:** 2026-04-03 23h45
-**Phases:** 5 (Phase 0 ≈ 95%, Phase 1 ≈ 96%, Phase 2 ≈ 70%, Phase 3-5 ≈ 0%)
+**Mise à jour:** 2026-04-04
+**Phases:** 5 (Phase 0 = 100% sur le socle actif phases 1-2, Phase 1 = 100%, Phase 2 = 100%, Phase 3-5 encore ouvertes)
 
 ---
 
@@ -11,7 +12,7 @@
 ### PHASE 2 — Professeur (Fermeture des 2 verrous)
 
 #### ✅ VERROU 1: Création d'Examen Complète
-**État:** Codé dans ExamFormPage.jsx, besoin validation
+**État:** Fermé sur le flux actif
 **Cas d'usage:** Professeur crée exam QCM+VF+Réponse+Dissertation → publie → étudiants voient
 
 **Tests manuels requis:**
@@ -25,15 +26,15 @@
 
 **Fichiers critiques:**
 - src/pages/professor/exams/ExamFormPage.jsx
-- src/pages/exams/components/ExamQuestions.jsx
+- src/pages/professor/exams/components/ExamQuestions.jsx
 - src/api/exams.js
 
-**Validation:** Pass/Fail (P/F) — test manuel requis
+**Validation:** Flux actif fermé
 
 ---
 
 #### ✅ VERROU 2: Correction Manuelle/Automatique
-**État:** API prête, runtime corrigé, besoin tests end-to-end
+**État:** Fermé sur le flux actif
 **Cas d'usage:** Étudiant soumis copie → Professeur note → Étudiant notifié
 
 **Tests manuels requis:**
@@ -53,7 +54,7 @@
 - src/pages/professor/exams/components/GradeQuestionItem.jsx
 - src/api/exams.js (gradeExam, getExamAttempts)
 
-**Validation:** Pass/Fail (P/F) — test manuel requis
+**Validation:** Flux actif fermé
 
 ---
 
@@ -412,4 +413,3 @@ Utilisez ce fichier pour tracker chaque item:
 ```
 
 **Mise à jour quotidienne requise.**
-

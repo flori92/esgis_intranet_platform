@@ -12,6 +12,7 @@ const ExamsListPage = lazy(() => import('../pages/professor/exams/ExamsListPage'
 const ExamFormPage = lazy(() => import('../pages/professor/exams/ExamFormPage'));
 const ExamGradingPage = lazy(() => import('../pages/professor/exams/ExamGradingPage'));
 const ExamMonitoringPage = lazy(() => import('../pages/professor/exams/ExamMonitoringPage'));
+const IntegrityReportPage = lazy(() => import('../pages/professor/exams/IntegrityReportPage'));
 const GradesManagementPage = lazy(() => import('../pages/professor/grades/GradesManagementPage'));
 const GradeCorrectionPage = lazy(() => import('../pages/professor/grades/GradeCorrectionPage'));
 const QuestionBankPage = lazy(() => import('../pages/professor/questions/QuestionBankPage'));
@@ -42,6 +43,7 @@ const ProfessorRoutes = () => {
           <Route path=":id" element={<ExamFormPage />} />
           <Route path=":id/edit" element={<ExamFormPage />} />
           <Route path=":id/monitor" element={<ExamMonitoringPage />} />
+          <Route path=":id/integrity" element={<IntegrityReportPage />} />
           <Route path=":id/grade" element={<ExamGradingPage />} />
         </Route>
         {/* Routes pour la gestion des notes */}

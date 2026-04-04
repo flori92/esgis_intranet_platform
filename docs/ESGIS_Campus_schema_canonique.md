@@ -180,7 +180,7 @@ Cas identifies:
 - `schedule` dans `supabase/migrations/20250504102629_add_missing_tables.sql`
 - `course_sessions` dans `supabase/migrations/20250503_initial_schema.sql`
 
-- `exam_students` dans `src/pages/exams/professor/ExamFormPage.jsx` et `src/pages/exams/professor/ExamsListPage.jsx`
+- `exam_students` dans les anciennes copies legacy `src/pages/exams/professor/*` maintenant supprimees
 - `student_exams` dans `supabase/migrations/20250503_student_courses.sql`
 
 Decision:
@@ -248,8 +248,8 @@ Interpretation:
 Les prochains correctifs schema/front doivent cibler en premier:
 
 - `src/pages/admin/InitializeDataPage.jsx`
-- `src/pages/exams/professor/ExamFormPage.jsx`
-- `src/pages/exams/professor/ExamsListPage.jsx`
+- `src/pages/professor/exams/ExamFormPage.jsx`
+- `src/pages/professor/exams/ExamsListPage.jsx`
 - `src/pages/professor/exams/ExamGradingPage.jsx`
 - `src/pages/messages/MessagesPage.jsx`
 - `src/pages/documents/DocumentsPage.jsx`

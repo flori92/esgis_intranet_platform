@@ -374,6 +374,30 @@ const normalizeExamRecord = (record) => {
   };
 };
 
+const normalizeStudentRecord = (record) => {
+  if (!record) {
+    return null;
+  }
+
+  const profile = getRelation(record.profiles);
+  const department = getRelation(profile?.departments);
+
+  return {
+    id: record.id,
+    profile_id: record.profile_id || null,
+    name: profile?.full_name || 'Etudiant inconnu',
+    email: profile?.email || '',
+    profile_image: profile?.avatar_url || null,
+    full_name: profile?.full_name || 'Etudiant inconnu',
+    department_id: profile?.department_id ?? null,
+    department_name: department?.name || 'N/A',
+    student_number: record.student_number || '',
+    level: record.level || '',
+    academic_year: record.entry_year ? `${record.entry_year}-${Number(record.entry_year) + 1}` : '',
+    status: record.status || null
+  };
+};
+
 export const getStudentExamLaunchData = async ({ examId, studentId }) => {
   try {
     const numericExamId = Number(examId);
@@ -450,6 +474,81 @@ export const getStudentExamLaunchData = async ({ examId, studentId }) => {
   } catch (error) {
     console.error('Erreur getStudentExamLaunchData:', error);
     return { exam: null, studentExam: null, error };
+  }
+};
+
+export const getStudentExamsListData = async (studentId) => {
+  try {
+    const { data, error } = await supabase
+      .from('student_exams')
+      .select(`
+        id,
+        exam_id,
+        student_id,
+        seat_number,
+        attendance,
+        attempt_status,
+        status,
+        grade,
+        comments,
+        created_at,
+        updated_at,
+        exams:exam_id(
+          id,
+          title,
+          description,
+          course_id,
+          professor_id,
+          exam_session_id,
+          exam_center_id,
+          date,
+          duration,
+          type,
+          room,
+          total_points,
+          passing_grade,
+          status,
+          courses:course_id(id, name, code),
+          professors:professor_id(id, profile_id, profiles:profile_id(full_name, email))
+        )
+      `)
+      .eq('student_id', studentId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    const exams = (data || [])
+      .map((row) => {
+        const exam = normalizeExamRecord(getRelation(row.exams));
+
+        if (!exam) {
+          return null;
+        }
+
+        return {
+          id: row.id,
+          exam_id: row.exam_id,
+          student_id: row.student_id,
+          seat_number: row.seat_number,
+          attendance_status: row.attendance || null,
+          attempt_status: row.attempt_status || 'not_started',
+          result_status: row.status || 'pending',
+          grade: row.grade ?? null,
+          comments: row.comments || null,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          ...exam
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime());
+
+    return { data: exams, error: null };
+  } catch (error) {
+    console.error('Erreur getStudentExamsListData:', error);
+    return { data: null, error };
   }
 };
 
@@ -748,6 +847,65 @@ export const getProfessorExamMonitoringData = async (examId) => {
   } catch (error) {
     console.error('Erreur getProfessorExamMonitoringData:', error);
     return { exam: null, participants: [], activeStudents: [], incidents: [], summary: null, error };
+  }
+};
+
+export const getExamGradingData = async (examId) => {
+  try {
+    const [
+      { data: examData, error: examError },
+      { data: questionRows, error: questionsError },
+      { data: studentExamRows, error: studentExamsError }
+    ] = await Promise.all([
+      getExamWithDetails(examId),
+      getExamQuestions(examId),
+      getStudentExamsByExamId(examId)
+    ]);
+
+    if (examError) {
+      throw examError;
+    }
+
+    if (questionsError) {
+      throw questionsError;
+    }
+
+    if (studentExamsError) {
+      throw studentExamsError;
+    }
+
+    const studentIds = [...new Set((studentExamRows || []).map((item) => item.student_id).filter(Boolean))];
+    const { data: studentRows, error: studentsError } = await getStudentsByIds(studentIds);
+
+    if (studentsError) {
+      throw studentsError;
+    }
+
+    return {
+      exam: examData ? {
+        id: examData.id,
+        title: examData.title,
+        course_id: examData.course_id,
+        course_name: getRelation(examData.courses)?.name || 'Cours inconnu',
+        course_code: getRelation(examData.courses)?.code || '',
+        professor_id: examData.professor_id,
+        date: examData.date,
+        duration: examData.duration,
+        type: examData.type,
+        room: examData.room,
+        total_points: examData.total_points,
+        passing_grade: examData.passing_grade,
+        status: examData.status,
+        description: examData.description || ''
+      } : null,
+      questions: (questionRows || []).map((question) => normalizeExamQuestion(question)),
+      studentExams: studentExamRows || [],
+      students: (studentRows || []).map((student) => normalizeStudentRecord(student)),
+      error: null
+    };
+  } catch (error) {
+    console.error('Erreur getExamGradingData:', error);
+    return { exam: null, questions: [], studentExams: [], students: [], error };
   }
 };
 

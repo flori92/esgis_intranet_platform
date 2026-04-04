@@ -43,56 +43,17 @@ import { fr } from 'date-fns/locale';
 
 import GradeQuestionItem from './components/GradeQuestionItem';
 import { useAuth } from '@/context/AuthContext';
+import {
+  getExamGradesByStudentExam,
+  getExamGradingData,
+  updateStudentExam
+} from '@/api/exams';
 import { createNotification } from '@/api/notifications';
-import { supabase } from '@/supabase';
-import { normalizeExamQuestion } from '@/utils/examQuestionUtils';
-
-const AUTO_GRADED_TYPES = new Set(['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric']);
-
-const normalizeString = (value) => String(value ?? '').trim().toLowerCase();
-
-const normalizeChoiceArray = (values = []) => [...values].map((value) => String(value)).sort();
-
-const computeAutoGrade = (question, answerValue) => {
-  if (
-    answerValue === null ||
-    answerValue === undefined ||
-    answerValue === '' ||
-    (Array.isArray(answerValue) && answerValue.length === 0)
-  ) {
-    return null;
-  }
-
-  if (question.question_type === 'qcm_single') {
-    return normalizeString(answerValue) === normalizeString(question.correct_answer) ? Number(question.points || 0) : 0;
-  }
-
-  if (question.question_type === 'qcm_multiple') {
-    const expected = normalizeChoiceArray(question.correct_answers || question.correct_answer || []);
-    const received = normalizeChoiceArray(Array.isArray(answerValue) ? answerValue : []);
-    return expected.length > 0 && expected.length === received.length && expected.every((value, index) => value === received[index])
-      ? Number(question.points || 0)
-      : 0;
-  }
-
-  if (question.question_type === 'true_false' || question.question_type === 'short_answer') {
-    return normalizeString(answerValue) === normalizeString(question.correct_answer) ? Number(question.points || 0) : 0;
-  }
-
-  if (question.question_type === 'numeric') {
-    const expected = Number(question.correct_answer);
-    const received = Number(answerValue);
-    const tolerance = Number(question.tolerance || 0);
-
-    if (Number.isFinite(expected) && Number.isFinite(received) && Math.abs(expected - received) <= tolerance) {
-      return Number(question.points || 0);
-    }
-
-    return 0;
-  }
-
-  return null;
-};
+import {
+  computeExamQuestionScore,
+  isExamQuestionAutoGradable,
+  normalizeExamQuestion
+} from '@/utils/examQuestionUtils';
 
 /**
  * @typedef {Object} Exam - Informations sur un examen
@@ -209,104 +170,21 @@ const ExamGradingPage = () => {
       setError(null);
       
       try {
-        // Récupérer les informations de l'examen
-        const { data: examData, error: examError } = await supabase
-          .from('exams')
-          .select(`
-            id,
-            title,
-            course_id,
-            courses(name, code),
-            professor_id,
-            professors(profiles(full_name)),
-            date,
-            duration,
-            type,
-            room,
-            total_points,
-            passing_grade,
-            status,
-            description
-          `)
-          .eq('id', examId)
-          .single();
-        
-        if (examError) {
-          throw examError;
+        const { exam: examData, questions: questionsData, studentExams: studentExamsData, students, error: gradingError } =
+          await getExamGradingData(examId);
+
+        if (gradingError) {
+          throw gradingError;
         }
-        
+
         if (!examData) {
           throw new Error('Examen non trouvé');
         }
-        
-        // Transformer les données de l'examen
-        const formattedExam = {
-          id: examData.id,
-          title: examData.title,
-          course_id: examData.course_id,
-          course_name: examData.courses?.name || 'Cours inconnu',
-          course_code: examData.courses?.code || '',
-          professor_id: examData.professor_id,
-          date: examData.date,
-          duration: examData.duration,
-          type: examData.type,
-          total_points: examData.total_points,
-          passing_grade: examData.passing_grade
-        };
-        
-        setExam(formattedExam);
-        
-        // Récupérer les questions de l'examen
-        const { data: questionsData, error: questionsError } = await supabase
-          .from('exam_questions')
-          .select('*')
-          .eq('exam_id', examId)
-          .order('question_number', { ascending: true });
-        
-        if (questionsError) {
-          throw questionsError;
-        }
-        
-        setQuestions((questionsData || []).map((question) => normalizeExamQuestion(question)));
-        
-        // Récupérer les étudiants inscrits à l'examen
-        const { data: studentExamsData, error: studentExamsError } = await supabase
-          .from('student_exams')
-          .select('*')
-          .eq('exam_id', examId);
-        
-        if (studentExamsError) {
-          throw studentExamsError;
-        }
-        
-        setStudentExams(studentExamsData || []);
-        
-        // Charger la liste des étudiants
-        const studentIds = studentExamsData.map(se => se.student_id);
-        
-        if (studentIds.length > 0) {
-          const { data: students, error: studentsError } = await supabase
-            .from('students')
-            .select('id, profile_id, profiles:profile_id(full_name, email, avatar_url)')
-            .in('id', studentIds);
-          
-          if (studentsError) {
-            throw studentsError;
-          }
-          
-          const normalizedStudents = (students || []).map((student) => {
-            const profile = Array.isArray(student.profiles) ? student.profiles[0] : student.profiles;
-            return {
-              id: student.id,
-              profile_id: student.profile_id,
-              name: profile?.full_name || 'Étudiant inconnu',
-              email: profile?.email || '',
-              profile_image: profile?.avatar_url || null
-            };
-          });
 
-          setStudentsData(normalizedStudents);
-        }
+        setExam(examData);
+        setQuestions((questionsData || []).map((question) => normalizeExamQuestion(question)));
+        setStudentExams(studentExamsData || []);
+        setStudentsData(students || []);
         
         examDataRef.current = {
           examId,
@@ -360,10 +238,7 @@ const ExamGradingPage = () => {
         ? JSON.parse(studentExam.answers || '{}')
         : (studentExam.answers || {});
 
-      const { data: gradeRows, error: gradesError } = await supabase
-        .from('exam_grades')
-        .select('id, question_id, points_earned, feedback')
-        .eq('student_exam_id', studentExamId);
+      const { data: gradeRows, error: gradesError } = await getExamGradesByStudentExam(studentExamId);
       
       if (gradesError) {
         throw gradesError;
@@ -374,8 +249,8 @@ const ExamGradingPage = () => {
         const normalizedQuestion = normalizeExamQuestion(question);
         const gradeRow = (gradeRows || []).find((row) => row.question_id === question.id);
         const answerValue = rawAnswers?.[question.id] ?? null;
-        const autoGrade = !gradeRow && AUTO_GRADED_TYPES.has(normalizedQuestion.question_type)
-          ? computeAutoGrade(normalizedQuestion, answerValue)
+        const autoGrade = !gradeRow && isExamQuestionAutoGradable(normalizedQuestion)
+          ? computeExamQuestionScore(normalizedQuestion, answerValue)
           : null;
         return {
           id: gradeRow?.id || `temp-${question.id}`,
@@ -454,14 +329,11 @@ const ExamGradingPage = () => {
     
     try {
       // Mettre à jour l'examen de l'étudiant
-      const { error: updateError } = await supabase
-        .from('student_exams')
-        .update({
+      const { error: updateError } = await updateStudentExam(selectedStudentExam.id, {
           grade: totalScore,
           status: isPassing ? 'passed' : 'failed',
           comments: gradingNote || null
-        })
-        .eq('id', selectedStudentExam.id);
+        });
       
       if (updateError) {
         throw updateError;

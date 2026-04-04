@@ -38,7 +38,7 @@ import {
   Clear as ClearIcon,
   FilterList as FilterListIcon
 } from '@mui/icons-material';
-import { supabase } from '@/supabase';
+import { getAllActiveStudents, getCourseStudentsForExam } from '@/api/exams';
 
 /**
  * Composant pour la gestion des étudiants assignés à un examen
@@ -100,6 +100,25 @@ const ExamStudents = ({
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState(null);
+
+  const mapStudentRow = (item) => {
+    const student = item?.students || item;
+    const profile = Array.isArray(student?.profiles) ? student.profiles[0] : student?.profiles;
+    const department = Array.isArray(profile?.departments) ? profile.departments[0] : profile?.departments;
+
+    return {
+      id: student?.id,
+      profile_id: student?.profile_id || null,
+      full_name: profile?.full_name || 'Nom inconnu',
+      email: profile?.email || '',
+      student_number: student?.student_number || '',
+      department_id: profile?.department_id || null,
+      department_name: department?.name || 'N/A',
+      level: student?.level || '',
+      academic_year: item?.academic_year || (student?.entry_year ? `${student.entry_year}-${student.entry_year + 1}` : ''),
+      status: student?.status || item?.status || ''
+    };
+  };
   
   /**
    * Obtenir les étudiants inscrits au cours
@@ -117,40 +136,12 @@ const ExamStudents = ({
       setError(null);
       
       try {
-        const { data, error } = await supabase
-          .from('student_courses')
-          .select(`
-            student_id,
-            academic_year,
-            status,
-            students:student_id(
-              id,
-              profile_id,
-              profiles:profile_id(full_name, email, department_id, departments:department_id(name)),
-              student_number,
-              level,
-              entry_year,
-              status
-            )
-          `)
-          .eq('course_id', courseId)
-          .eq('status', 'enrolled');
+        const { data, error } = await getCourseStudentsForExam(courseId);
         
         if (error) throw error;
         
         if (data) {
-          const students = data.map(item => ({
-            id: item.students.id,
-            profile_id: item.students.profile_id,
-            full_name: item.students.profiles?.full_name || 'Nom inconnu',
-            email: item.students.profiles?.email || '',
-            student_number: item.students.student_number,
-            department_id: item.students.profiles?.department_id || null,
-            department_name: item.students.profiles?.departments?.name || 'N/A',
-            level: item.students.level,
-            academic_year: item.academic_year || '',
-            status: item.students.status
-          }));
+          const students = data.map(mapStudentRow);
           
           setCourseStudents(students);
           setFilteredStudents(students);
@@ -209,35 +200,12 @@ const ExamStudents = ({
     setError(null);
     
     try {
-      const { data, error } = await supabase
-        .from('students')
-        .select(`
-          id,
-          profile_id,
-          profiles:profile_id(full_name, email, department_id, departments:department_id(name)),
-          student_number,
-          level,
-          entry_year,
-          status
-        `)
-        .eq('status', 'active')
-        .order('full_name', { foreignTable: 'profiles' });
+      const { data, error } = await getAllActiveStudents();
       
       if (error) throw error;
       
       if (data) {
-        const students = data.map(item => ({
-          id: item.id,
-          profile_id: item.profile_id,
-          full_name: item.profiles?.full_name || 'Nom inconnu',
-          email: item.profiles?.email || '',
-          student_number: item.student_number,
-          department_id: item.profiles?.department_id || null,
-          department_name: item.profiles?.departments?.name || 'N/A',
-          level: item.level,
-          academic_year: item.entry_year ? `${item.entry_year}-${item.entry_year + 1}` : '',
-          status: item.status
-        }));
+        const students = data.map(mapStudentRow);
         
         setAllStudents(students);
         setFilteredAddStudents(students);

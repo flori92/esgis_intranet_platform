@@ -42,15 +42,25 @@ import {
   Search as SearchIcon,
   FilterList as FilterListIcon,
   Event as EventIcon,
-  MoreVert as MoreVertIcon,
   Refresh as RefreshIcon,
-  School as SchoolIcon
+  School as SchoolIcon,
+  Security as SecurityIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { supabase } from '@/supabase';
+import {
+  deleteExamDirect,
+  getCoursesList,
+  getExamCenters,
+  getExamQuestions,
+  getExamSessions,
+  getProfessorExams,
+  getStudentExamsCount,
+  insertExam,
+  insertExamQuestions
+} from '@/api/exams';
 
 /**
  * @typedef {Object} ExamWithCourse
@@ -156,24 +166,10 @@ const ExamsListPage = () => {
         { data: sessionsData, error: sessionsError },
         { data: centersData, error: centersError }
       ] = await Promise.all([
-        supabase
-          .from('exams')
-          .select('id, title, description, course_id, exam_session_id, exam_center_id, professor_id, date, duration, type, total_points, passing_grade, status, room, created_at, updated_at')
-          .eq('professor_id', professorId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('courses')
-          .select('id, name, code')
-          .order('name'),
-        supabase
-          .from('exam_sessions')
-          .select('*')
-          .order('academic_year', { ascending: false })
-          .order('semester', { ascending: true }),
-        supabase
-          .from('exam_centers')
-          .select('*')
-          .order('name', { ascending: true })
+        getProfessorExams(professorId),
+        getCoursesList(),
+        getExamSessions(),
+        getExamCenters()
       ]);
 
       if (examsError) {
@@ -198,10 +194,7 @@ const ExamsListPage = () => {
 
       const examsWithCounts = await Promise.all(
         (examsData || []).map(async (exam) => {
-          const { count } = await supabase
-            .from('student_exams')
-            .select('*', { count: 'exact', head: true })
-            .eq('exam_id', exam.id);
+          const { count } = await getStudentExamsCount(exam.id);
 
           return {
             ...exam,
@@ -357,6 +350,13 @@ const ExamsListPage = () => {
   const handleMonitorExam = (id) => {
     navigate(`/professor/exams/${id}/monitor`);
   };
+
+  /**
+   * Ouvrir le rapport d'integrite d'un examen
+   */
+  const handleOpenIntegrityReport = (id) => {
+    navigate(`/professor/exams/${id}/integrity`);
+  };
   
   /**
    * Ouvrir le dialogue de confirmation de suppression
@@ -384,10 +384,7 @@ const ExamsListPage = () => {
     
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('exams')
-        .delete()
-        .eq('id', examToDelete.id);
+      const { error } = await deleteExamDirect(examToDelete.id);
       
       if (error) {
         throw error;
@@ -424,22 +421,14 @@ const ExamsListPage = () => {
       };
       
       // Insérer le nouvel examen
-      const { data, error } = await supabase
-        .from('exams')
-        .insert(newExamData)
-        .select();
-      
+      const { data: newExam, error } = await insertExam(newExamData);
+
       if (error) {
         throw error;
       }
-      
-      const newExam = data[0];
-      
+
       // Si des questions sont associées à l'examen original, les copier
-      const { data: questions, error: questionsError } = await supabase
-        .from('exam_questions')
-        .select('*')
-        .eq('exam_id', id);
+      const { data: questions, error: questionsError } = await getExamQuestions(id);
       
       if (questionsError) {
         throw questionsError;
@@ -447,17 +436,14 @@ const ExamsListPage = () => {
       
       if (questions && questions.length > 0) {
         // Copier les questions pour le nouvel examen
-        const newQuestions = questions.map(q => ({
+        const newQuestions = questions.map(({ id: _questionId, ...q }) => ({
           ...q,
-          id: undefined, // Supprimer l'ID pour que Supabase en génère un nouveau
           exam_id: newExam.id,
           created_at: new Date(),
           updated_at: new Date()
         }));
         
-        const { error: insertQuestionsError } = await supabase
-          .from('exam_questions')
-          .insert(newQuestions);
+        const { error: insertQuestionsError } = await insertExamQuestions(newQuestions);
         
         if (insertQuestionsError) {
           throw insertQuestionsError;
@@ -765,6 +751,18 @@ const ExamsListPage = () => {
                                     onClick={() => handleMonitorExam(exam.id)}
                                   >
                                     <AnalyticsIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              {exam.status !== 'draft' && (
+                                <Tooltip title="Rapport d'integrite">
+                                  <IconButton
+                                    size="small"
+                                    color="secondary"
+                                    onClick={() => handleOpenIntegrityReport(exam.id)}
+                                  >
+                                    <SecurityIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
                               )}

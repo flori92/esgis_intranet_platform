@@ -4,7 +4,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Select, MenuItem, FormControl, InputLabel, Chip, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText,
-  Tooltip, Card, CardContent, Divider, Snackbar, Tabs, Tab,
+  Card, CardContent, Divider, Snackbar, Tabs, Tab,
   LinearProgress
 } from '@mui/material';
 import {
@@ -17,9 +17,7 @@ import {
   Edit as EditIcon,
   Assessment as AssessmentIcon,
   Grading as GradingIcon,
-  Warning as WarningIcon,
-  CheckCircle as CheckCircleIcon,
-  Info as InfoIcon
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -27,29 +25,8 @@ import {
   getStudentsByCourse,
   getGradesByCourse,
   batchUpsertGrades,
-  getCourseGradeStats,
   publishGrades
 } from '@/api/grades';
-
-/**
- * Données mock pour le développement
- */
-const MOCK_COURSES = [
-  { id: 'c1', code: 'INFO-345', name: 'Développement Web Frontend', credits: 4, niveaux: { id: 'n1', code: 'L3', name: 'Licence 3', filieres: { id: 'f1', code: 'INFO', name: 'Informatique' } } },
-  { id: 'c2', code: 'INFO-221', name: 'Algorithmique Avancée', credits: 3, niveaux: { id: 'n2', code: 'L2', name: 'Licence 2', filieres: { id: 'f1', code: 'INFO', name: 'Informatique' } } },
-  { id: 'c3', code: 'INFO-234', name: 'Base de Données Relationnelles', credits: 4, niveaux: { id: 'n2', code: 'L2', name: 'Licence 2', filieres: { id: 'f1', code: 'INFO', name: 'Informatique' } } },
-];
-
-const MOCK_STUDENTS = [
-  { id: 's1', etudiant: { id: 's1', first_name: 'Kofi', last_name: 'AGBEKO' } },
-  { id: 's2', etudiant: { id: 's2', first_name: 'Ama', last_name: 'DOSSEH' } },
-  { id: 's3', etudiant: { id: 's3', first_name: 'Yao', last_name: 'KPOMASSE' } },
-  { id: 's4', etudiant: { id: 's4', first_name: 'Akossiwa', last_name: 'MENSAH' } },
-  { id: 's5', etudiant: { id: 's5', first_name: 'Komi', last_name: 'AMEGAH' } },
-  { id: 's6', etudiant: { id: 's6', first_name: 'Edem', last_name: 'TOGBUI' } },
-  { id: 's7', etudiant: { id: 's7', first_name: 'Ablavi', last_name: 'SODJI' } },
-  { id: 's8', etudiant: { id: 's8', first_name: 'Kodjo', last_name: 'AFANOU' } },
-];
 
 const EVALUATION_TYPES = [
   { value: 'cc1', label: 'Contrôle Continu 1' },
@@ -73,8 +50,6 @@ const GradesManagementPage = () => {
   const [selectedCourse, setSelectedCourse] = useState('');
   const [students, setStudents] = useState([]);
   const [grades, setGrades] = useState({});
-  const [existingGrades, setExistingGrades] = useState([]);
-  const [stats, setStats] = useState(null);
 
   // États UI
   const [loading, setLoading] = useState(true);
@@ -102,23 +77,19 @@ const GradesManagementPage = () => {
    */
   const loadCourses = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const { data, error } = await getProfessorCourses(authState.user?.id);
+      const { data, error } = await getProfessorCourses(authState.profile?.id || authState.user?.id);
       if (error) throw error;
-
-      if (data && data.length > 0) {
-        setCourses(data);
-      } else {
-        // Utiliser les données mock en développement
-        setCourses(MOCK_COURSES);
-      }
+      setCourses(data || []);
     } catch (err) {
       console.error('Erreur chargement cours:', err);
-      setCourses(MOCK_COURSES);
+      setCourses([]);
+      setError('Impossible de charger les cours du professeur.');
     } finally {
       setLoading(false);
     }
-  }, [authState.user?.id]);
+  }, [authState.profile?.id, authState.user?.id]);
 
   /**
    * Charger les étudiants et notes existantes pour un cours
@@ -131,21 +102,13 @@ const GradesManagementPage = () => {
     try {
       // Charger les étudiants
       const { data: studentsData, error: studentsError } = await getStudentsByCourse(courseId);
-
-      let studentsList;
-      if (studentsError || !studentsData || studentsData.length === 0) {
-        studentsList = MOCK_STUDENTS;
-      } else {
-        studentsList = studentsData;
-      }
-      setStudents(studentsList);
+      if (studentsError) throw studentsError;
+      setStudents(studentsData || []);
 
       // Charger les notes existantes
       const { data: gradesData, error: gradesError } = await getGradesByCourse(courseId);
 
       if (!gradesError && gradesData && gradesData.length > 0) {
-        setExistingGrades(gradesData);
-
         // Transformer les notes en format tableur { studentId: { evalType: note } }
         const gradesMap = {};
         gradesData.forEach(g => {
@@ -177,17 +140,11 @@ const GradesManagementPage = () => {
         }
       } else {
         setGrades({});
-        setExistingGrades([]);
-      }
-
-      // Charger les statistiques
-      const { data: statsData } = await getCourseGradeStats(courseId);
-      if (statsData) {
-        setStats(statsData);
       }
     } catch (err) {
       console.error('Erreur chargement données du cours:', err);
-      setStudents(MOCK_STUDENTS);
+      setError('Impossible de charger les étudiants et les notes de ce cours.');
+      setStudents([]);
       setGrades({});
     } finally {
       setLoading(false);

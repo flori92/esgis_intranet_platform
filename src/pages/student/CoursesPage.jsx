@@ -32,6 +32,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
   getStudentCourses,
   getCourseChaptersAndResources,
+  getUserResourceInteractions,
   recordResourceInteraction,
   removeResourceInteraction,
   getUserFavorites
@@ -80,9 +81,22 @@ const StudentCoursesPage = () => {
       try {
         const { data, error } = await getStudentCourses(authState.user?.id);
         if (!error && data && data.length > 0) {
+          const chapterResults = await Promise.all(
+            data.map(async (course) => ({
+              courseId: course.id,
+              chaptersData: (await getCourseChaptersAndResources(course.id)).data || []
+            }))
+          );
+
+          const allResourceIds = chapterResults.flatMap(({ chaptersData }) =>
+            (chaptersData || []).flatMap((chapter) => (chapter.resources || []).map((resource) => resource.id))
+          );
+          const { data: interactionMap } = await getUserResourceInteractions(allResourceIds, authState.user?.id);
+
           // Transformer les données Supabase au format attendu
-          const formatted = await Promise.all(data.map(async (c) => {
-            const { data: chaptersData } = await getCourseChaptersAndResources(c.id);
+          const formatted = data.map((c) => {
+            const chapterEntry = chapterResults.find((entry) => entry.courseId === c.id);
+            const chaptersData = chapterEntry?.chaptersData || [];
             const allResources = (chaptersData || []).flatMap(ch => ch.resources || []);
             return {
               id: c.id, code: c.code, name: c.name, credits: c.credits,
@@ -96,16 +110,32 @@ const StudentCoursesPage = () => {
               chapters: (chaptersData || []).map(ch => ({
                 id: ch.id, name: ch.name,
                 resources: (ch.resources || []).map(r => ({
+                  ...(interactionMap?.[r.id] || {}),
                   id: r.id, title: r.title, type: r.file_type || 'pdf',
                   size: r.file_size || 0, date: r.created_at,
-                  downloads: r.downloads_count || 0, status: 'read',
+                  downloads: r.downloads_count || 0,
                   professor: r.uploaded_by?.full_name || '-',
                   file_url: r.file_url,
+                  status: interactionMap?.[r.id]?.is_favorite
+                    ? 'favorite'
+                    : interactionMap?.[r.id]?.has_download
+                      ? 'downloaded'
+                      : interactionMap?.[r.id]?.has_view
+                        ? 'read'
+                        : 'new',
                 }))
               }))
             };
-          }));
+          });
           setCourses(formatted);
+
+          const loadedReactions = Object.entries(interactionMap || {}).reduce((accumulator, [resourceId, interaction]) => {
+            if (interaction?.reaction_value) {
+              accumulator[resourceId] = interaction.reaction_value;
+            }
+            return accumulator;
+          }, {});
+          setReactions(loadedReactions);
         } else {
           setCourses([]);
         }
@@ -131,6 +161,30 @@ const StudentCoursesPage = () => {
       if (next.has(resourceId)) next.delete(resourceId); else next.add(resourceId);
       return next;
     });
+
+    setCourses((prevCourses) => prevCourses.map((course) => ({
+      ...course,
+      chapters: (course.chapters || []).map((chapter) => ({
+        ...chapter,
+        resources: (chapter.resources || []).map((resource) => {
+          if (resource.id !== resourceId) {
+            return resource;
+          }
+
+          return {
+            ...resource,
+            status: isCurrentlyFavorite
+              ? resource.has_download
+                ? 'downloaded'
+                : resource.has_view
+                  ? 'read'
+                  : 'new'
+              : 'favorite',
+            is_favorite: !isCurrentlyFavorite
+          };
+        })
+      }))
+    })));
 
     if (isCurrentlyFavorite) {
       await removeResourceInteraction(resourceId, authState.user?.id, 'favorite').catch(() => {});
@@ -370,6 +424,32 @@ const StudentCoursesPage = () => {
                               <Tooltip title="Télécharger">
                                 <IconButton
                                   size="small"
+                                  component="a"
+                                  href={resource.file_url || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  disabled={!resource.file_url}
+                                  onClick={() => {
+                                    if (resource.file_url) {
+                                      setCourses((prevCourses) => prevCourses.map((course) => ({
+                                        ...course,
+                                        chapters: (course.chapters || []).map((chapter) => ({
+                                          ...chapter,
+                                          resources: (chapter.resources || []).map((item) => item.id === resource.id
+                                            ? { ...item, has_view: true, status: item.is_favorite ? 'favorite' : item.has_download ? 'downloaded' : 'read' }
+                                            : item)
+                                        }))
+                                      })));
+                                      recordResourceInteraction(resource.id, authState.user?.id, 'view').catch(() => {});
+                                    }
+                                  }}
+                                >
+                                  <ViewIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Télécharger">
+                                <IconButton
+                                  size="small"
                                   color="primary"
                                   component="a"
                                   href={resource.file_url || '#'}
@@ -378,6 +458,15 @@ const StudentCoursesPage = () => {
                                   disabled={!resource.file_url}
                                   onClick={() => {
                                     if (resource.file_url) {
+                                      setCourses((prevCourses) => prevCourses.map((course) => ({
+                                        ...course,
+                                        chapters: (course.chapters || []).map((chapter) => ({
+                                          ...chapter,
+                                          resources: (chapter.resources || []).map((item) => item.id === resource.id
+                                            ? { ...item, has_download: true, has_view: true, status: item.is_favorite ? 'favorite' : 'downloaded' }
+                                            : item)
+                                        }))
+                                      })));
                                       recordResourceInteraction(resource.id, authState.user?.id, 'download').catch(() => {});
                                     }
                                   }}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box, Typography, Paper, Grid, CircularProgress, Alert, Button,
   Select, MenuItem, FormControl, InputLabel, Chip, Divider,
@@ -7,59 +7,27 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import {
-  Print as PrintIcon,
-  Download as DownloadIcon,
-  School as SchoolIcon,
-  CheckCircle as CheckIcon,
-  Warning as WarningIcon,
-  PlayArrow as StartIcon,
-  Description as DocIcon,
-  Group as GroupIcon
+  Print as PrintIcon, Download as DownloadIcon, School as SchoolIcon,
+  CheckCircle as CheckIcon, PlayArrow as StartIcon,
+  Description as DocIcon, Group as GroupIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { getStudentsForBulletins, saveBulletin } from '@/api/admin';
+import { supabase } from '@/supabase';
 
-const MOCK_FILIERES = [
-  { id: 'f1', code: 'INFO', name: 'Informatique' },
-  { id: 'f2', code: 'GEST', name: 'Gestion' },
-  { id: 'f3', code: 'COMM', name: 'Communication' },
-];
-
-const MOCK_NIVEAUX = [
-  { id: 'n1', code: 'L1', name: 'Licence 1', filiere_id: 'f1', students_count: 120 },
-  { id: 'n2', code: 'L2', name: 'Licence 2', filiere_id: 'f1', students_count: 95 },
-  { id: 'n3', code: 'L3', name: 'Licence 3', filiere_id: 'f1', students_count: 72 },
-  { id: 'n4', code: 'M1', name: 'Master 1', filiere_id: 'f1', students_count: 40 },
-  { id: 'n5', code: 'M2', name: 'Master 2', filiere_id: 'f1', students_count: 28 },
-];
-
-const MOCK_STUDENTS_PREVIEW = [
-  { id: 's1', name: 'AGBEKO Kofi', moyenne: 14.5, credits: 30, rang: 1, statut: 'admis', mention: 'Bien' },
-  { id: 's2', name: 'DOSSEH Ama', moyenne: 12.8, credits: 28, rang: 2, statut: 'admis', mention: 'Assez Bien' },
-  { id: 's3', name: 'KPOMASSE Yao', moyenne: 11.2, credits: 26, rang: 3, statut: 'admis', mention: 'Passable' },
-  { id: 's4', name: 'MENSAH Akossiwa', moyenne: 10.1, credits: 24, rang: 4, statut: 'compensation', mention: 'Passable' },
-  { id: 's5', name: 'AMEGAH Komi', moyenne: 9.5, credits: 20, rang: 5, statut: 'rattrapage', mention: 'Insuffisant' },
-  { id: 's6', name: 'TOGBUI Edem', moyenne: 8.2, credits: 18, rang: 6, statut: 'ajourné', mention: 'Insuffisant' },
-];
-
-/**
- * Page de génération en masse de bulletins — ESGIS Campus §5.5
- */
 const BulkBulletinPage = () => {
   const { authState } = useAuth();
-  const [filieres, setFilieres] = useState(MOCK_FILIERES);
-  const [niveaux, setNiveaux] = useState(MOCK_NIVEAUX);
-  const [selectedFiliere, setSelectedFiliere] = useState('');
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
   const [selectedNiveau, setSelectedNiveau] = useState('');
   const [selectedSemestre, setSelectedSemestre] = useState('S1');
   const [anneeAcademique, setAnneeAcademique] = useState('2025-2026');
   const [students, setStudents] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingDepts, setLoadingDepts] = useState(true);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
-
-  // Génération
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [totalToGenerate, setTotalToGenerate] = useState(0);
@@ -67,40 +35,58 @@ const BulkBulletinPage = () => {
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [generationComplete, setGenerationComplete] = useState(false);
 
-  const filteredNiveaux = niveaux.filter(n => !selectedFiliere || n.filiere_id === selectedFiliere);
+  const NIVEAUX = [
+    { id: 'n1', code: 'L1', name: 'Licence 1' },
+    { id: 'n2', code: 'L2', name: 'Licence 2' },
+    { id: 'n3', code: 'L3', name: 'Licence 3' },
+    { id: 'n4', code: 'M1', name: 'Master 1' },
+    { id: 'n5', code: 'M2', name: 'Master 2' },
+  ];
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const { data, error } = await supabase.from('departments').select('id, name, code').order('name');
+        if (!error) setDepartments(data || []);
+      } catch (err) {
+        // departments are optional for filtering
+      } finally {
+        setLoadingDepts(false);
+      }
+    };
+    loadDepartments();
+  }, []);
 
   const handleLoadStudents = async () => {
     if (!selectedNiveau) { setError('Sélectionnez un niveau.'); return; }
     setLoading(true);
+    setError(null);
     try {
-      const { data, error } = await getStudentsForBulletins(selectedNiveau, selectedSemestre, anneeAcademique);
-      if (!error && data && data.length > 0) {
-        setStudents(data);
-        setSelectedStudents(data.map(s => s.id));
-      } else {
-        setStudents(MOCK_STUDENTS_PREVIEW);
-        setSelectedStudents(MOCK_STUDENTS_PREVIEW.map(s => s.id));
+      const { data, error: apiError } = await getStudentsForBulletins(selectedNiveau, selectedSemestre, anneeAcademique);
+      if (apiError) throw apiError;
+      if (!data || data.length === 0) {
+        setStudents([]);
+        setSelectedStudents([]);
+        setError('Aucun étudiant trouvé pour cette sélection.');
+        return;
       }
-    } catch {
-      setStudents(MOCK_STUDENTS_PREVIEW);
-      setSelectedStudents(MOCK_STUDENTS_PREVIEW.map(s => s.id));
+      setStudents(data);
+      setSelectedStudents(data.map(s => s.id));
+    } catch (err) {
+      setError(`Erreur lors du chargement: ${err.message || 'Erreur inconnue'}`);
+      setStudents([]);
+      setSelectedStudents([]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleToggleStudent = (id) => {
-    setSelectedStudents(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
+    setSelectedStudents(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   };
 
   const handleToggleAll = () => {
-    if (selectedStudents.length === students.length) {
-      setSelectedStudents([]);
-    } else {
-      setSelectedStudents(students.map(s => s.id));
-    }
+    setSelectedStudents(prev => prev.length === students.length ? [] : students.map(s => s.id));
   };
 
   const handleStartGeneration = async () => {
@@ -111,29 +97,84 @@ const BulkBulletinPage = () => {
     setTotalToGenerate(selectedStudents.length);
     setGenerationComplete(false);
 
-    // Simulation de génération progressive
-    for (let i = 0; i < selectedStudents.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 150));
+    const selectedData = students.filter(s => selectedStudents.includes(s.id));
+    let successCount = 0;
+    const errors = [];
+
+    for (let i = 0; i < selectedData.length; i++) {
+      const student = selectedData[i];
+      try {
+        // Generate PDF bulletin using pdf-lib
+        const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage([595, 842]); // A4
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+        // Header
+        page.drawText('ESGIS - Bulletin de Notes', { x: 150, y: 790, size: 18, font: boldFont, color: rgb(0, 0.2, 0.4) });
+        page.drawText(`Année Académique: ${anneeAcademique}`, { x: 50, y: 760, size: 11, font });
+        page.drawText(`Semestre: ${selectedSemestre}`, { x: 350, y: 760, size: 11, font });
+
+        // Student info
+        page.drawText(`Étudiant: ${student.name}`, { x: 50, y: 730, size: 12, font: boldFont });
+        page.drawText(`Rang: ${student.rang}/${selectedData.length}`, { x: 400, y: 730, size: 11, font });
+
+        // Results
+        page.drawText(`Moyenne Générale: ${student.moyenne?.toFixed(2)}/20`, { x: 50, y: 700, size: 14, font: boldFont, color: student.moyenne >= 10 ? rgb(0, 0.5, 0) : rgb(0.8, 0, 0) });
+        page.drawText(`Crédits Validés: ${student.credits}`, { x: 50, y: 675, size: 12, font });
+        page.drawText(`Mention: ${student.mention}`, { x: 250, y: 675, size: 12, font });
+        page.drawText(`Décision: ${student.statut}`, { x: 400, y: 675, size: 12, font: boldFont });
+
+        // Footer
+        page.drawText(`Document généré le ${new Date().toLocaleDateString('fr-FR')}`, { x: 50, y: 50, size: 9, font, color: rgb(0.5, 0.5, 0.5) });
+        page.drawText('Ce document est généré électroniquement et peut être vérifié via QR code.', { x: 50, y: 35, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
+
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const fileName = `bulletin_${student.id}_${selectedSemestre}_${anneeAcademique.replace('-', '_')}.pdf`;
+
+        // Upload to storage
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(`bulletins/${fileName}`, blob, { contentType: 'application/pdf', upsert: true });
+
+        // Save record in generated_documents
+        const { error: saveError } = await saveBulletin({
+          student_id: student.id,
+          file_path: `bulletins/${fileName}`,
+          status: 'approved',
+          generated_by: authState.profile?.id,
+          approved_by: authState.profile?.id,
+          approval_date: new Date().toISOString(),
+        });
+
+        if (saveError) throw saveError;
+        successCount++;
+      } catch (err) {
+        errors.push({ student: student.name, error: err.message });
+      }
+
       setGeneratedCount(i + 1);
-      setProgress(Math.round(((i + 1) / selectedStudents.length) * 100));
+      setProgress(Math.round(((i + 1) / selectedData.length) * 100));
     }
 
     setGenerating(false);
     setGenerationComplete(true);
-    setSuccessMessage(`${selectedStudents.length} bulletins générés avec succès !`);
-  };
 
-  const getStatusColor = (statut) => {
-    switch (statut) {
-      case 'admis': return 'success';
-      case 'compensation': return 'warning';
-      case 'rattrapage': return 'info';
-      case 'ajourné': return 'error';
-      default: return 'default';
+    if (errors.length > 0) {
+      setSuccessMessage(`${successCount} bulletins générés. ${errors.length} erreur(s).`);
+    } else {
+      setSuccessMessage(`${successCount} bulletins générés avec succès !`);
     }
   };
 
-  const niveauData = niveaux.find(n => n.id === selectedNiveau);
+  const getStatusColor = (statut) => {
+    const colors = { admis: 'success', compensation: 'warning', rattrapage: 'info', 'ajourné': 'error' };
+    return colors[statut] || 'default';
+  };
+
+  const niveauData = NIVEAUX.find(n => n.id === selectedNiveau);
 
   return (
     <Box sx={{ p: { xs: 1, md: 2 } }}>
@@ -145,17 +186,16 @@ const BulkBulletinPage = () => {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       <Snackbar open={!!successMessage} autoHideDuration={4000} onClose={() => setSuccessMessage('')} message={successMessage} />
 
-      {/* Sélection */}
       <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" fontWeight="bold" gutterBottom>Paramètres de génération</Typography>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={3}>
             <FormControl fullWidth size="small">
               <InputLabel>Filière</InputLabel>
-              <Select value={selectedFiliere} label="Filière"
-                onChange={(e) => { setSelectedFiliere(e.target.value); setSelectedNiveau(''); setStudents([]); }}>
+              <Select value={selectedDepartment} label="Filière"
+                onChange={(e) => { setSelectedDepartment(e.target.value); setStudents([]); }}>
                 <MenuItem value="">Toutes</MenuItem>
-                {filieres.map(f => <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>)}
+                {departments.map(d => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
               </Select>
             </FormControl>
           </Grid>
@@ -164,19 +204,14 @@ const BulkBulletinPage = () => {
               <InputLabel>Niveau</InputLabel>
               <Select value={selectedNiveau} label="Niveau"
                 onChange={(e) => { setSelectedNiveau(e.target.value); setStudents([]); }}>
-                {filteredNiveaux.map(n => (
-                  <MenuItem key={n.id} value={n.id}>
-                    {n.name} ({n.students_count} étudiants)
-                  </MenuItem>
-                ))}
+                {NIVEAUX.map(n => <MenuItem key={n.id} value={n.id}>{n.name}</MenuItem>)}
               </Select>
             </FormControl>
           </Grid>
           <Grid item xs={6} sm={2}>
             <FormControl fullWidth size="small">
               <InputLabel>Semestre</InputLabel>
-              <Select value={selectedSemestre} label="Semestre"
-                onChange={(e) => setSelectedSemestre(e.target.value)}>
+              <Select value={selectedSemestre} label="Semestre" onChange={(e) => setSelectedSemestre(e.target.value)}>
                 <MenuItem value="S1">S1</MenuItem>
                 <MenuItem value="S2">S2</MenuItem>
               </Select>
@@ -185,46 +220,36 @@ const BulkBulletinPage = () => {
           <Grid item xs={6} sm={2}>
             <FormControl fullWidth size="small">
               <InputLabel>Année</InputLabel>
-              <Select value={anneeAcademique} label="Année"
-                onChange={(e) => setAnneeAcademique(e.target.value)}>
+              <Select value={anneeAcademique} label="Année" onChange={(e) => setAnneeAcademique(e.target.value)}>
                 <MenuItem value="2025-2026">2025-2026</MenuItem>
                 <MenuItem value="2024-2025">2024-2025</MenuItem>
               </Select>
             </FormControl>
           </Grid>
           <Grid item xs={12} sm={2}>
-            <Button variant="contained" fullWidth onClick={handleLoadStudents}
-              disabled={loading || !selectedNiveau}>
+            <Button variant="contained" fullWidth onClick={handleLoadStudents} disabled={loading || !selectedNiveau}>
               {loading ? <CircularProgress size={20} /> : 'Charger'}
             </Button>
           </Grid>
         </Grid>
       </Paper>
 
-      {/* Barre de progression */}
       {generating && (
         <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" fontWeight="bold" gutterBottom>
             Génération en cours... ({generatedCount}/{totalToGenerate})
           </Typography>
           <LinearProgress variant="determinate" value={progress} sx={{ height: 16, borderRadius: 8, mb: 1 }} />
-          <Typography variant="body2" color="text.secondary" align="center">
-            {progress}% — {generatedCount} bulletin(s) généré(s)
-          </Typography>
+          <Typography variant="body2" color="text.secondary" align="center">{progress}%</Typography>
         </Paper>
       )}
 
       {generationComplete && (
         <Alert severity="success" sx={{ mb: 3 }} icon={<CheckIcon />}>
-          <strong>{selectedStudents.length} bulletins</strong> ont été générés et sont maintenant disponibles
-          dans l'espace documents de chaque étudiant.
-          <Button size="small" startIcon={<DownloadIcon />} sx={{ ml: 2 }}>
-            Télécharger l'archive ZIP
-          </Button>
+          <strong>{generatedCount} bulletins</strong> ont été générés et enregistrés dans l'espace documents de chaque étudiant.
         </Alert>
       )}
 
-      {/* Tableau des étudiants */}
       {students.length > 0 && !generating && (
         <>
           <Paper elevation={2} sx={{ p: 2, mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
@@ -233,12 +258,10 @@ const BulkBulletinPage = () => {
               <Typography variant="subtitle1" fontWeight="bold">
                 {niveauData?.name} — {selectedSemestre} — {anneeAcademique}
               </Typography>
-              <Chip label={`${selectedStudents.length}/${students.length} sélectionnés`}
-                color="primary" variant="outlined" />
+              <Chip label={`${selectedStudents.length}/${students.length} sélectionnés`} color="primary" variant="outlined" />
             </Box>
             <Button variant="contained" color="success" startIcon={<StartIcon />}
-              onClick={() => setConfirmDialog(true)}
-              disabled={selectedStudents.length === 0}>
+              onClick={() => setConfirmDialog(true)} disabled={selectedStudents.length === 0}>
               Générer {selectedStudents.length} bulletin(s)
             </Button>
           </Paper>
@@ -261,8 +284,7 @@ const BulkBulletinPage = () => {
                 {students.map(s => (
                   <TableRow key={s.id} hover selected={selectedStudents.includes(s.id)}>
                     <TableCell padding="checkbox">
-                      <Checkbox checked={selectedStudents.includes(s.id)}
-                        onChange={() => handleToggleStudent(s.id)} />
+                      <Checkbox checked={selectedStudents.includes(s.id)} onChange={() => handleToggleStudent(s.id)} />
                     </TableCell>
                     <TableCell>{s.rang}</TableCell>
                     <TableCell><Typography fontWeight="bold">{s.name}</Typography></TableCell>
@@ -273,9 +295,7 @@ const BulkBulletinPage = () => {
                     </TableCell>
                     <TableCell>{s.credits}</TableCell>
                     <TableCell>{s.mention}</TableCell>
-                    <TableCell>
-                      <Chip label={s.statut} size="small" color={getStatusColor(s.statut)} />
-                    </TableCell>
+                    <TableCell><Chip label={s.statut} size="small" color={getStatusColor(s.statut)} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -293,21 +313,19 @@ const BulkBulletinPage = () => {
         </Paper>
       )}
 
-      {/* Confirmation */}
       <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
         <DialogTitle>Confirmer la génération</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
-            Vous allez générer <strong>{selectedStudents.length} bulletins</strong> pour le semestre {selectedSemestre} de l'année {anneeAcademique}.
+            Vous allez générer <strong>{selectedStudents.length} bulletins PDF</strong> pour le semestre {selectedSemestre} de l'année {anneeAcademique}.
           </Alert>
           <Typography variant="body2">
-            Les bulletins seront automatiquement mis à disposition dans l'espace documents de chaque étudiant concerné.
+            Les bulletins seront automatiquement uploadés et mis à disposition dans l'espace documents de chaque étudiant.
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDialog(false)}>Annuler</Button>
-          <Button variant="contained" color="success" startIcon={<StartIcon />}
-            onClick={handleStartGeneration}>
+          <Button variant="contained" color="success" startIcon={<StartIcon />} onClick={handleStartGeneration}>
             Lancer la génération
           </Button>
         </DialogActions>

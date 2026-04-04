@@ -5,8 +5,7 @@ import {
   signOut as apiSignOut,
   resetPassword as apiResetPassword,
   onAuthStateChange,
-  getSession,
-  getUser
+  getSession
 } from '../api/auth';
 import { getProfileById, updateProfileSettings } from '../api/profile';
 import { getRoleEntities } from '../api/users';
@@ -193,86 +192,12 @@ export const useSupabaseAuth = () => {
   };
 
   /**
-   * Construit un profil de secours à partir des métadonnées Auth.
-   * @param {string} userId
-   * @param {Object} userData - résultat de getUser()
-   * @returns {Object|null}
-   */
-  const buildFallbackProfile = (userId, userData) => {
-    if (!userData?.user) {
-      return null;
-    }
-
-    const userMetadata = userData.user.user_metadata || {};
-    const email = userData.user.email || '';
-
-    let role = userMetadata.role || 'user';
-    let firstName = userMetadata.first_name || '';
-    let lastName = userMetadata.last_name || '';
-
-    // Pour les comptes de test, déduire le rôle à partir de l'email si nécessaire
-    if (email.includes('mailinator.com') && !role) {
-      if (email.includes('admin')) {
-        role = 'admin';
-        firstName = 'Admin';
-        lastName = 'ESGIS';
-      } else if (email.includes('prof')) {
-        role = 'professor';
-        firstName = 'Floraice';
-        lastName = 'FAVI';
-      } else if (email.includes('etudiant')) {
-        role = 'student';
-        firstName = 'Marie';
-        lastName = 'Koné';
-      }
-    }
-
-    let fallback = {
-      id: userId,
-      email,
-      role,
-      first_name: firstName,
-      last_name: lastName,
-      avatar_url: userMetadata.avatar_url || null,
-      created_at: new Date().toISOString()
-    };
-
-    if (role === 'professor') {
-      fallback = { ...fallback, speciality: userMetadata.speciality || 'Cloud Computing' };
-    }
-
-    if (role === 'student') {
-      fallback = {
-        ...fallback,
-        student_id: userMetadata.student_id || 'ETU' + Math.floor(10000 + Math.random() * 90000),
-        level: userMetadata.level || 'Licence 3'
-      };
-    }
-
-    return fallback;
-  };
-
-  /**
    * Récupère le profil de l'utilisateur connecté
    * @param {string} userId - ID de l'utilisateur
    * @returns {Promise<Object>} Profil de l'utilisateur
    */
   const fetchUserProfile = async (userId) => {
-    let fallbackProfile = null;
-
     try {
-      const { data: userData, error: userError } = await getUser();
-
-      if (!userError && userData) {
-        fallbackProfile = buildFallbackProfile(userId, userData);
-      }
-
-      // Si nous sommes sur la page de quiz, utiliser directement le fallback
-      const isQuizPage = window.location.href.includes('/quiz/');
-      if (isQuizPage && fallbackProfile) {
-        return fallbackProfile;
-      }
-
       const { profile, error } = await getProfileById(userId);
 
       if (error) {
@@ -280,21 +205,16 @@ export const useSupabaseAuth = () => {
           console.warn('Erreur de récursion infinie détectée dans la politique pour relation "profiles"');
         }
 
-        if (fallbackProfile) {
-          return fallbackProfile;
-        }
-
         throw error;
+      }
+
+      if (!profile) {
+        throw new Error('Profil utilisateur introuvable. Contactez l’administration.');
       }
 
       return profile;
     } catch (error) {
       console.error('Erreur lors de la récupération du profil:', error);
-
-      if (fallbackProfile) {
-        return fallbackProfile;
-      }
-
       throw error;
     }
   };
@@ -310,55 +230,9 @@ export const useSupabaseAuth = () => {
     setAuthState(prev => ({ ...prev, error: null }));
 
     try {
-      const isTestAccount = email.includes('mailinator.com');
-
       const { user: authUser, session: authSession, error } = await signInWithEmail(email, password);
 
       if (error) {
-        if (error.message.includes('Email not confirmed') && isTestAccount) {
-          // Deuxième tentative pour les comptes de test
-          const retryResult = await signInWithEmail(email, password);
-
-          if (retryResult.error) {
-            // Simulation pour comptes de test non confirmés
-            let userMetadata = {};
-
-            if (email.includes('admin')) {
-              userMetadata = { role: 'admin', first_name: 'Admin', last_name: 'ESGIS' };
-            } else if (email.includes('prof')) {
-              userMetadata = { role: 'professor', first_name: 'Floraice', last_name: 'FAVI', speciality: 'Cloud Computing' };
-            } else if (email.includes('etudiant')) {
-              userMetadata = { role: 'student', first_name: 'Marie', last_name: 'Koné' };
-            }
-
-            const mockSession = {
-              user: {
-                id: crypto.randomUUID(),
-                email,
-                user_metadata: userMetadata
-              }
-            };
-
-            setAuthState(prev => ({
-              ...prev,
-              user: mockSession.user,
-              session: mockSession,
-              isAuthenticated: true
-            }));
-
-            handleAuthChange(mockSession);
-            return { user: mockSession.user, session: mockSession };
-          }
-
-          setAuthState(prev => ({
-            ...prev,
-            user: retryResult.user,
-            session: retryResult.session
-          }));
-
-          return retryResult;
-        }
-
         throw error;
       }
 

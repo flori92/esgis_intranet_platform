@@ -72,10 +72,36 @@ const IMPORTABLE_TYPE_MAP = {
   short_answer: 'short_answer',
   long_answer: 'long_answer',
   numeric: 'numeric',
+  matching: 'matching',
+  ordering: 'ordering',
+  fill_blank: 'fill_blank',
+  image_question: 'image_question',
   multiple_choice: 'qcm_single',
   multiple_select: 'qcm_multiple',
   essay: 'long_answer'
 };
+
+const createEmptyQuestion = (questionNumber = 1) => ({
+  question_number: questionNumber,
+  question_text: '',
+  question_type: 'qcm_single',
+  points: 1,
+  options: ['', '', '', ''],
+  correct_answer: '',
+  correct_answers: [],
+  rubric: '',
+  explanation: '',
+  tolerance: 0,
+  unit: '',
+  max_words: 500,
+  left_items: ['', ''],
+  right_items: ['', ''],
+  items: ['', ''],
+  text_with_blanks: '',
+  image_url: '',
+  image_caption: '',
+  answer_type: 'short_answer'
+});
 
 /**
  * Composant pour la gestion des questions d'examen
@@ -109,19 +135,7 @@ const ExamQuestions = ({
 }) => {
   const { authState } = useAuth();
   // État pour le formulaire d'édition de question
-  const [editingQuestion, setEditingQuestion] = useState({
-    question_text: '',
-    question_type: 'qcm_single',
-    points: 1,
-    options: ['', '', '', ''],
-    correct_answer: '',
-    correct_answers: [],
-    rubric: '',
-    explanation: '',
-    tolerance: 0,
-    unit: '',
-    max_words: 500
-  });
+  const [editingQuestion, setEditingQuestion] = useState(createEmptyQuestion());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingErrors, setEditingErrors] = useState({});
   const [editingIndex, setEditingIndex] = useState(null);
@@ -204,20 +218,7 @@ const ExamQuestions = ({
     resetForm();
     setIsDialogOpen(true);
     setEditingIndex(null);
-    setEditingQuestion({
-      question_number: questions.length + 1,
-      question_text: '',
-      question_type: 'qcm_single',
-      points: 1,
-      options: ['', '', '', ''],
-      correct_answer: '',
-      correct_answers: [],
-      rubric: '',
-      explanation: '',
-      tolerance: 0,
-      unit: '',
-      max_words: 500
-    });
+    setEditingQuestion(createEmptyQuestion(questions.length + 1));
     setOptions(['', '', '', '']);
   };
   
@@ -228,6 +229,7 @@ const ExamQuestions = ({
   const handleEditQuestion = (index) => {
     const question = normalizeExamQuestion(questions[index]);
     setEditingQuestion({
+      ...createEmptyQuestion(question.question_number || index + 1),
       ...question,
       options: question.options || ['', '', '', ''],
       options_count: question.options?.length || 4
@@ -242,20 +244,31 @@ const ExamQuestions = ({
    */
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
-    setEditingQuestion({
-      question_text: '',
-      question_type: 'qcm_single',
-      points: 1,
-      options: ['', '', '', ''],
-      correct_answer: '',
-      correct_answers: [],
-      rubric: '',
-      explanation: '',
-      tolerance: 0,
-      unit: '',
-      max_words: 500
-    });
+    setEditingQuestion(createEmptyQuestion());
     setEditingErrors({});
+  };
+
+  const updateListItem = (field, index, value) => {
+    const items = [...(editingQuestion[field] || [])];
+    items[index] = value;
+    setEditingQuestion({
+      ...editingQuestion,
+      [field]: items
+    });
+  };
+
+  const addListItem = (field) => {
+    setEditingQuestion({
+      ...editingQuestion,
+      [field]: [...(editingQuestion[field] || []), '']
+    });
+  };
+
+  const removeListItem = (field, index) => {
+    setEditingQuestion({
+      ...editingQuestion,
+      [field]: (editingQuestion[field] || []).filter((_, itemIndex) => itemIndex !== index)
+    });
   };
   
   /**
@@ -343,6 +356,51 @@ const ExamQuestions = ({
     if (editingQuestion.question_type === 'numeric' && editingQuestion.correct_answer === '') {
       errors.correct_answer = 'La réponse correcte est obligatoire pour une question numérique';
     }
+
+    if (editingQuestion.question_type === 'matching') {
+      const leftItems = (editingQuestion.left_items || []).filter((item) => item.trim() !== '');
+      const rightItems = (editingQuestion.right_items || []).filter((item) => item.trim() !== '');
+
+      if (leftItems.length < 2 || rightItems.length < 2 || leftItems.length !== rightItems.length) {
+        errors.matching = 'Ajoutez le même nombre d\'éléments dans chaque colonne (minimum 2).';
+      }
+    }
+
+    if (editingQuestion.question_type === 'ordering') {
+      const items = (editingQuestion.items || []).filter((item) => item.trim() !== '');
+      if (items.length < 2) {
+        errors.ordering = 'Ajoutez au moins deux éléments à ordonner.';
+      }
+    }
+
+    if (editingQuestion.question_type === 'fill_blank') {
+      if (!editingQuestion.text_with_blanks.includes('{{blank_')) {
+        errors.fill_blank = 'Le texte doit contenir au moins un trou au format {{blank_1}}.';
+      }
+    }
+
+    if (editingQuestion.question_type === 'image_question') {
+      if (!editingQuestion.image_url.trim()) {
+        errors.image_url = 'L\'URL de l\'image est obligatoire.';
+      }
+
+      const delegatedType = editingQuestion.answer_type || 'short_answer';
+
+      if (['qcm_single', 'qcm_multiple'].includes(delegatedType)) {
+        const validOptions = options.filter((opt) => opt.trim() !== '');
+        if (validOptions.length < 2) {
+          errors.options_count = 'Au moins 2 options sont requises pour une question sur image de type QCM.';
+        }
+
+        if (delegatedType === 'qcm_single' && editingQuestion.correct_answer === '') {
+          errors.correct_answer = 'Sélectionnez une réponse correcte.';
+        }
+
+        if (delegatedType === 'qcm_multiple' && (editingQuestion.correct_answers || []).length === 0) {
+          errors.correct_answer = 'Sélectionnez au moins une réponse correcte.';
+        }
+      }
+    }
     
     setEditingErrors(errors);
     return Object.keys(errors).length === 0;
@@ -362,17 +420,43 @@ const ExamQuestions = ({
     const question = {
       ...editingQuestion,
       question_number: editingIndex !== null ? questions[editingIndex].question_number : questions.length + 1,
-      options: ['qcm_single', 'qcm_multiple'].includes(editingQuestion.question_type) ? filteredOptions : undefined,
+      options: ['qcm_single', 'qcm_multiple'].includes(editingQuestion.question_type) ||
+        (editingQuestion.question_type === 'image_question' && ['qcm_single', 'qcm_multiple'].includes(editingQuestion.answer_type))
+        ? filteredOptions
+        : undefined,
       correct_answer:
         editingQuestion.question_type === 'qcm_single'
           ? (editingQuestion.correct_answer === '' ? '0' : String(editingQuestion.correct_answer))
           : editingQuestion.question_type === 'qcm_multiple'
             ? (editingQuestion.correct_answers || []).map((value) => String(value))
+            : editingQuestion.question_type === 'matching'
+              ? Object.fromEntries(
+                (editingQuestion.left_items || [])
+                  .filter((item) => item.trim() !== '')
+                  .map((_, index) => [String(index), String(index)])
+              )
+              : editingQuestion.question_type === 'ordering'
+                ? (editingQuestion.items || []).filter((item) => item.trim() !== '')
+                : editingQuestion.question_type === 'fill_blank'
+                  ? Object.fromEntries(
+                    Object.entries(editingQuestion.correct_answer || {}).filter(([, value]) => String(value || '').trim() !== '')
+                  )
+                  : editingQuestion.question_type === 'image_question' && editingQuestion.answer_type === 'qcm_single'
+                    ? (editingQuestion.correct_answer === '' ? '0' : String(editingQuestion.correct_answer))
+                    : editingQuestion.question_type === 'image_question' && editingQuestion.answer_type === 'qcm_multiple'
+                      ? (editingQuestion.correct_answers || []).map((value) => String(value))
             : editingQuestion.correct_answer,
       correct_answers:
-        editingQuestion.question_type === 'qcm_multiple'
+        editingQuestion.question_type === 'qcm_multiple' || (editingQuestion.question_type === 'image_question' && editingQuestion.answer_type === 'qcm_multiple')
           ? (editingQuestion.correct_answers || []).map((value) => String(value))
-          : []
+          : [],
+      left_items: (editingQuestion.left_items || []).filter((item) => item.trim() !== ''),
+      right_items: (editingQuestion.right_items || []).filter((item) => item.trim() !== ''),
+      items: (editingQuestion.items || []).filter((item) => item.trim() !== ''),
+      text_with_blanks: editingQuestion.text_with_blanks || '',
+      image_url: editingQuestion.image_url || '',
+      image_caption: editingQuestion.image_caption || '',
+      answer_type: editingQuestion.answer_type || 'short_answer'
     };
     
     let nextQuestions = [];
@@ -492,6 +576,13 @@ const ExamQuestions = ({
       tolerance: normalizedSource.tolerance || 0,
       unit: normalizedSource.unit || '',
       max_words: normalizedSource.max_words || 500,
+      left_items: normalizedSource.left_items || ['', ''],
+      right_items: normalizedSource.right_items || ['', ''],
+      items: normalizedSource.items || ['', ''],
+      text_with_blanks: normalizedSource.text_with_blanks || '',
+      image_url: normalizedSource.image_url || '',
+      image_caption: normalizedSource.image_caption || '',
+      answer_type: normalizedSource.answer_type || 'short_answer',
       source_question_bank_id: question.id
     };
   };
@@ -518,19 +609,7 @@ const ExamQuestions = ({
    * Réinitialiser le formulaire d'édition
    */
   const resetForm = () => {
-    setEditingQuestion({
-      question_text: '',
-      question_type: 'qcm_single',
-      points: 1,
-      options: ['', '', '', ''],
-      correct_answer: '',
-      correct_answers: [],
-      rubric: '',
-      explanation: '',
-      tolerance: 0,
-      unit: '',
-      max_words: 500
-    });
+    setEditingQuestion(createEmptyQuestion());
     setOptions(['', '', '', '']);
     setEditingErrors({});
   };
@@ -641,6 +720,26 @@ const ExamQuestions = ({
                         Reponse correcte : {getExamCorrectAnswerLabel(displayQuestion)}
                       </Typography>
                     )}
+                    {displayQuestion.question_type === 'matching' && (
+                      <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
+                        Associations : {getExamCorrectAnswerLabel(displayQuestion)}
+                      </Typography>
+                    )}
+                    {displayQuestion.question_type === 'ordering' && (
+                      <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
+                        Ordre attendu : {getExamCorrectAnswerLabel(displayQuestion)}
+                      </Typography>
+                    )}
+                    {displayQuestion.question_type === 'fill_blank' && (
+                      <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
+                        Texte a trous configure
+                      </Typography>
+                    )}
+                    {displayQuestion.question_type === 'image_question' && (
+                      <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
+                        Question sur image ({QUESTION_TYPE_LABELS[displayQuestion.answer_type] || displayQuestion.answer_type})
+                      </Typography>
+                    )}
                   </Box>
                   
                   <Box>
@@ -720,7 +819,14 @@ const ExamQuestions = ({
                       correct_answers: [],
                       tolerance: 0,
                       unit: '',
-                      max_words: 500
+                      max_words: 500,
+                      left_items: ['', ''],
+                      right_items: ['', ''],
+                      items: ['', ''],
+                      text_with_blanks: '',
+                      image_url: '',
+                      image_caption: '',
+                      answer_type: 'short_answer'
                     })}
                     label="Type de question"
                   >
@@ -730,6 +836,10 @@ const ExamQuestions = ({
                     <MenuItem value="short_answer">Réponse courte</MenuItem>
                     <MenuItem value="long_answer">Rédaction / Dissertation</MenuItem>
                     <MenuItem value="numeric">Numérique</MenuItem>
+                    <MenuItem value="matching">Association</MenuItem>
+                    <MenuItem value="ordering">Ordonnancement</MenuItem>
+                    <MenuItem value="fill_blank">Texte a trous</MenuItem>
+                    <MenuItem value="image_question">Question sur image</MenuItem>
                   </Select>
                   {editingErrors.question_type && (
                     <FormHelperText>{editingErrors.question_type}</FormHelperText>
@@ -962,7 +1072,330 @@ const ExamQuestions = ({
                 </Grid>
               )}
 
+              {editingQuestion.question_type === 'matching' && (
+                <>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" gutterBottom>Colonne de gauche</Typography>
+                    {(editingQuestion.left_items || []).map((item, index) => (
+                      <Box key={`left-${index}`} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <TextField
+                          fullWidth
+                          value={item}
+                          onChange={(e) => updateListItem('left_items', index, e.target.value)}
+                          placeholder={`Element gauche ${index + 1}`}
+                          size="small"
+                        />
+                        <IconButton size="small" onClick={() => removeListItem('left_items', index)} disabled={(editingQuestion.left_items || []).length <= 2}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                    <Button variant="outlined" startIcon={<AddIcon />} onClick={() => addListItem('left_items')}>
+                      Ajouter
+                    </Button>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" gutterBottom>Colonne de droite</Typography>
+                    {(editingQuestion.right_items || []).map((item, index) => (
+                      <Box key={`right-${index}`} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <TextField
+                          fullWidth
+                          value={item}
+                          onChange={(e) => updateListItem('right_items', index, e.target.value)}
+                          placeholder={`Element droit ${index + 1}`}
+                          size="small"
+                        />
+                        <IconButton size="small" onClick={() => removeListItem('right_items', index)} disabled={(editingQuestion.right_items || []).length <= 2}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                    <Button variant="outlined" startIcon={<AddIcon />} onClick={() => addListItem('right_items')}>
+                      Ajouter
+                    </Button>
+                  </Grid>
+                  {editingErrors.matching && (
+                    <Grid item xs={12}>
+                      <Alert severity="error">{editingErrors.matching}</Alert>
+                    </Grid>
+                  )}
+                </>
+              )}
+
+              {editingQuestion.question_type === 'ordering' && (
+                <>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle1" gutterBottom>Elements a ordonner</Typography>
+                    {(editingQuestion.items || []).map((item, index) => (
+                      <Box key={`item-${index}`} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <TextField
+                          fullWidth
+                          value={item}
+                          onChange={(e) => updateListItem('items', index, e.target.value)}
+                          placeholder={`Element ${index + 1}`}
+                          size="small"
+                        />
+                        <IconButton size="small" onClick={() => removeListItem('items', index)} disabled={(editingQuestion.items || []).length <= 2}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                    <Button variant="outlined" startIcon={<AddIcon />} onClick={() => addListItem('items')}>
+                      Ajouter un element
+                    </Button>
+                  </Grid>
+                  {editingErrors.ordering && (
+                    <Grid item xs={12}>
+                      <Alert severity="error">{editingErrors.ordering}</Alert>
+                    </Grid>
+                  )}
+                </>
+              )}
+
+              {editingQuestion.question_type === 'fill_blank' && (
+                <>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={4}
+                      label="Texte avec trous"
+                      value={editingQuestion.text_with_blanks || ''}
+                      onChange={(e) => setEditingQuestion({
+                        ...editingQuestion,
+                        text_with_blanks: e.target.value
+                      })}
+                      helperText="Utilisez des marqueurs comme {{blank_1}}, {{blank_2}}"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Reponses attendues (JSON)"
+                      value={typeof editingQuestion.correct_answer === 'object' ? JSON.stringify(editingQuestion.correct_answer) : (editingQuestion.correct_answer || '')}
+                      onChange={(e) => {
+                        let nextValue = {};
+                        try {
+                          nextValue = e.target.value ? JSON.parse(e.target.value) : {};
+                        } catch (_error) {
+                          nextValue = editingQuestion.correct_answer || {};
+                        }
+                        setEditingQuestion({
+                          ...editingQuestion,
+                          correct_answer: nextValue
+                        });
+                      }}
+                      helperText='Exemple: {"blank_1":"cloud","blank_2":"vm"}'
+                    />
+                  </Grid>
+                  {editingErrors.fill_blank && (
+                    <Grid item xs={12}>
+                      <Alert severity="error">{editingErrors.fill_blank}</Alert>
+                    </Grid>
+                  )}
+                </>
+              )}
+
+              {editingQuestion.question_type === 'image_question' && (
+                <>
+                  <Grid item xs={12} md={8}>
+                    <TextField
+                      fullWidth
+                      label="URL de l'image"
+                      value={editingQuestion.image_url || ''}
+                      onChange={(e) => setEditingQuestion({
+                        ...editingQuestion,
+                        image_url: e.target.value
+                      })}
+                      error={!!editingErrors.image_url}
+                      helperText={editingErrors.image_url || 'URL publique ou fichier statique deja accessible'}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth>
+                      <InputLabel>Type de reponse</InputLabel>
+                      <Select
+                        value={editingQuestion.answer_type || 'short_answer'}
+                        label="Type de reponse"
+                        onChange={(e) => setEditingQuestion({
+                          ...editingQuestion,
+                          answer_type: e.target.value,
+                          correct_answer: '',
+                          correct_answers: [],
+                          tolerance: 0,
+                          unit: '',
+                          max_words: 500
+                        })}
+                      >
+                        <MenuItem value="qcm_single">QCM unique</MenuItem>
+                        <MenuItem value="qcm_multiple">QCM multiple</MenuItem>
+                        <MenuItem value="true_false">Vrai/Faux</MenuItem>
+                        <MenuItem value="short_answer">Réponse courte</MenuItem>
+                        <MenuItem value="long_answer">Réponse longue</MenuItem>
+                        <MenuItem value="numeric">Numérique</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Legende de l'image"
+                      value={editingQuestion.image_caption || ''}
+                      onChange={(e) => setEditingQuestion({
+                        ...editingQuestion,
+                        image_caption: e.target.value
+                      })}
+                    />
+                  </Grid>
+                  {['qcm_single', 'qcm_multiple'].includes(editingQuestion.answer_type) && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle1" gutterBottom>Options de reponse</Typography>
+                      {options.map((option, index) => (
+                        <Box key={`image-opt-${index}`} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          {editingQuestion.answer_type === 'qcm_single' ? (
+                            <Radio
+                              checked={String(editingQuestion.correct_answer) === String(index)}
+                              onChange={() => setEditingQuestion({
+                                ...editingQuestion,
+                                correct_answer: String(index)
+                              })}
+                            />
+                          ) : (
+                            <Checkbox
+                              checked={(editingQuestion.correct_answers || []).includes(String(index))}
+                              onChange={(e) => {
+                                const nextValues = e.target.checked
+                                  ? [...new Set([...(editingQuestion.correct_answers || []), String(index)])]
+                                  : (editingQuestion.correct_answers || []).filter((value) => String(value) !== String(index));
+                                setEditingQuestion({
+                                  ...editingQuestion,
+                                  correct_answers: nextValues
+                                });
+                              }}
+                            />
+                          )}
+                          <TextField
+                            fullWidth
+                            value={option}
+                            onChange={(e) => handleOptionTextChange(index, e.target.value)}
+                            placeholder={`Option ${index + 1}`}
+                            size="small"
+                          />
+                          <IconButton size="small" onClick={() => handleRemoveOption(index)} disabled={options.length <= 2}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))}
+                      <Button variant="outlined" startIcon={<AddIcon />} onClick={handleAddOption}>
+                        Ajouter une option
+                      </Button>
+                    </Grid>
+                  )}
+                  {editingQuestion.answer_type === 'true_false' && (
+                    <Grid item xs={12}>
+                      <FormControl component="fieldset">
+                        <RadioGroup
+                          row
+                          value={editingQuestion.correct_answer || ''}
+                          onChange={(e) => setEditingQuestion({
+                            ...editingQuestion,
+                            correct_answer: e.target.value
+                          })}
+                        >
+                          <FormControlLabel value="true" control={<Radio />} label="Vrai" />
+                          <FormControlLabel value="false" control={<Radio />} label="Faux" />
+                        </RadioGroup>
+                      </FormControl>
+                    </Grid>
+                  )}
+                  {editingQuestion.answer_type === 'short_answer' && (
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Réponse attendue"
+                        value={editingQuestion.correct_answer || ''}
+                        onChange={(e) => setEditingQuestion({
+                          ...editingQuestion,
+                          correct_answer: e.target.value
+                        })}
+                        helperText="Laissez vide pour une correction uniquement manuelle"
+                      />
+                    </Grid>
+                  )}
+                  {editingQuestion.answer_type === 'numeric' && (
+                    <>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Réponse correcte"
+                          type="number"
+                          value={editingQuestion.correct_answer || ''}
+                          onChange={(e) => setEditingQuestion({
+                            ...editingQuestion,
+                            correct_answer: e.target.value
+                          })}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Tolérance"
+                          type="number"
+                          value={editingQuestion.tolerance || 0}
+                          onChange={(e) => setEditingQuestion({
+                            ...editingQuestion,
+                            tolerance: Number(e.target.value || 0)
+                          })}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Unité"
+                          value={editingQuestion.unit || ''}
+                          onChange={(e) => setEditingQuestion({
+                            ...editingQuestion,
+                            unit: e.target.value
+                          })}
+                        />
+                      </Grid>
+                    </>
+                  )}
+                  {editingQuestion.answer_type === 'long_answer' && (
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Nombre maximum de mots"
+                        type="number"
+                        value={editingQuestion.max_words || 500}
+                        onChange={(e) => setEditingQuestion({
+                          ...editingQuestion,
+                          max_words: Number(e.target.value || 500)
+                        })}
+                      />
+                    </Grid>
+                  )}
+                </>
+              )}
+
               {['short_answer', 'long_answer', 'numeric'].includes(editingQuestion.question_type) && (
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Barème / Critères d'évaluation"
+                    multiline
+                    rows={3}
+                    value={editingQuestion.rubric || ''}
+                    onChange={(e) => setEditingQuestion({
+                      ...editingQuestion,
+                      rubric: e.target.value
+                    })}
+                    helperText="Décrivez comment la réponse sera évaluée (facultatif)"
+                  />
+                </Grid>
+              )}
+
+              {editingQuestion.question_type === 'image_question' && (
                 <Grid item xs={12}>
                   <TextField
                     fullWidth

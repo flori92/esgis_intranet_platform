@@ -20,53 +20,12 @@ import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { getStudentExamResultDetails } from '@/api/exams';
-import { formatExamAnswer, getExamCorrectAnswerLabel } from '@/utils/examQuestionUtils';
-
-const AUTO_GRADED_TYPES = new Set(['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric']);
-
-const normalizeString = (value) => String(value ?? '').trim().toLowerCase();
-
-const normalizeChoiceArray = (values = []) => {
-  return [...values].map((value) => String(value)).sort();
-};
-
-const computeAutoScore = (question, answer) => {
-  if (
-    answer === null ||
-    answer === undefined ||
-    answer === '' ||
-    (Array.isArray(answer) && answer.length === 0)
-  ) {
-    return 0;
-  }
-
-  if (question.question_type === 'qcm_single') {
-    return normalizeString(answer) === normalizeString(question.correct_answer) ? Number(question.points || 0) : 0;
-  }
-
-  if (question.question_type === 'qcm_multiple') {
-    const expected = normalizeChoiceArray(question.correct_answers || question.correct_answer || []);
-    const received = normalizeChoiceArray(Array.isArray(answer) ? answer : []);
-    return expected.length > 0 && expected.length === received.length && expected.every((value, index) => value === received[index])
-      ? Number(question.points || 0)
-      : 0;
-  }
-
-  if (question.question_type === 'true_false' || question.question_type === 'short_answer') {
-    return normalizeString(answer) === normalizeString(question.correct_answer) ? Number(question.points || 0) : 0;
-  }
-
-  if (question.question_type === 'numeric') {
-    const expected = Number(question.correct_answer);
-    const received = Number(answer);
-    const tolerance = Number(question.tolerance || 0);
-    if (Number.isFinite(expected) && Number.isFinite(received) && Math.abs(expected - received) <= tolerance) {
-      return Number(question.points || 0);
-    }
-  }
-
-  return 0;
-};
+import {
+  computeExamQuestionScore,
+  formatExamAnswer,
+  getExamCorrectAnswerLabel,
+  isExamQuestionAutoGradable
+} from '@/utils/examQuestionUtils';
 
 const ExamResultsPage = () => {
   const { id } = useParams();
@@ -135,11 +94,11 @@ const ExamResultsPage = () => {
     return (payload.questions || []).map((question) => {
       const rawAnswer = rawAnswers[question.id] ?? null;
       const gradeRow = gradesByQuestionId.get(question.id) || null;
-      const autoPoints = AUTO_GRADED_TYPES.has(question.question_type)
-        ? computeAutoScore(question, rawAnswer)
+      const autoPoints = isExamQuestionAutoGradable(question)
+        ? computeExamQuestionScore(question, rawAnswer)
         : null;
       const pointsEarned = gradeRow?.points_earned ?? autoPoints;
-      const isPendingManual = !AUTO_GRADED_TYPES.has(question.question_type) && gradeRow?.points_earned === undefined;
+      const isPendingManual = !isExamQuestionAutoGradable(question) && gradeRow?.points_earned === undefined;
 
       return {
         question,
@@ -304,7 +263,7 @@ const ExamResultsPage = () => {
               <Typography variant="body1">{item.displayAnswer}</Typography>
             </Box>
 
-            {AUTO_GRADED_TYPES.has(item.question.question_type) && (
+            {isExamQuestionAutoGradable(item.question) && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle2">Réponse correcte</Typography>
                 <Typography variant="body1">{item.correctAnswerLabel}</Typography>

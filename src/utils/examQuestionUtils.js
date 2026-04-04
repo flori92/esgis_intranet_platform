@@ -89,6 +89,31 @@ const getChoiceIndexes = (options, rawValue) => {
     .filter(Boolean);
 };
 
+const normalizeString = (value) => String(value ?? '').trim().toLowerCase();
+
+const normalizeChoiceArray = (values = []) => {
+  return [...values]
+    .map((value) => String(value))
+    .sort();
+};
+
+const normalizeOrderingAnswer = (answer = []) => {
+  return (Array.isArray(answer) ? answer : [])
+    .map((item) => typeof item === 'string' ? item : item?.text || '')
+    .filter(Boolean);
+};
+
+const normalizeAnswerMap = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.entries(value).reduce((accumulator, [key, item]) => {
+    accumulator[String(key)] = normalizeString(item);
+    return accumulator;
+  }, {});
+};
+
 const buildQuestionMetadata = (question = {}) => {
   const type = normalizeExamQuestionType(question.question_type || question.type);
 
@@ -281,6 +306,131 @@ export const serializeExamQuestion = (question = {}) => {
   };
 };
 
+const computeChoiceScore = (question, rawAnswer) => {
+  if (question.question_type === 'qcm_single') {
+    return normalizeString(rawAnswer) === normalizeString(question.correct_answer)
+      ? Number(question.points || 0)
+      : 0;
+  }
+
+  if (question.question_type === 'qcm_multiple') {
+    const expected = normalizeChoiceArray(question.correct_answers || question.correct_answer || []);
+    const received = normalizeChoiceArray(Array.isArray(rawAnswer) ? rawAnswer : []);
+
+    return expected.length > 0 && expected.length === received.length && expected.every((value, index) => value === received[index])
+      ? Number(question.points || 0)
+      : 0;
+  }
+
+  return 0;
+};
+
+const computeScalarScore = (question, rawAnswer) => {
+  if (question.question_type === 'true_false' || question.question_type === 'short_answer') {
+    return normalizeString(rawAnswer) === normalizeString(question.correct_answer)
+      ? Number(question.points || 0)
+      : 0;
+  }
+
+  if (question.question_type === 'numeric') {
+    const expected = Number(question.correct_answer);
+    const received = Number(rawAnswer);
+    const tolerance = Number(question.tolerance || 0);
+
+    if (Number.isFinite(expected) && Number.isFinite(received) && Math.abs(expected - received) <= tolerance) {
+      return Number(question.points || 0);
+    }
+  }
+
+  return 0;
+};
+
+export const isExamQuestionAutoGradable = (question = {}) => {
+  const normalizedQuestion = normalizeExamQuestion(question);
+
+  if (['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric', 'matching', 'ordering', 'fill_blank'].includes(normalizedQuestion.question_type)) {
+    return true;
+  }
+
+  if (normalizedQuestion.question_type === 'image_question') {
+    return ['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric'].includes(
+      normalizeExamQuestionType(normalizedQuestion.answer_type)
+    );
+  }
+
+  return false;
+};
+
+export const computeExamQuestionScore = (question = {}, rawAnswer) => {
+  const normalizedQuestion = normalizeExamQuestion(question);
+
+  if (
+    rawAnswer === null ||
+    rawAnswer === undefined ||
+    rawAnswer === '' ||
+    (Array.isArray(rawAnswer) && rawAnswer.length === 0) ||
+    (typeof rawAnswer === 'object' && !Array.isArray(rawAnswer) && Object.keys(rawAnswer).length === 0)
+  ) {
+    return isExamQuestionAutoGradable(normalizedQuestion) ? 0 : null;
+  }
+
+  if (['qcm_single', 'qcm_multiple'].includes(normalizedQuestion.question_type)) {
+    return computeChoiceScore(normalizedQuestion, rawAnswer);
+  }
+
+  if (['true_false', 'short_answer', 'numeric'].includes(normalizedQuestion.question_type)) {
+    return computeScalarScore(normalizedQuestion, rawAnswer);
+  }
+
+  if (normalizedQuestion.question_type === 'matching') {
+    const expected = normalizeAnswerMap(normalizedQuestion.correct_answer);
+    const received = normalizeAnswerMap(rawAnswer);
+    const expectedEntries = Object.entries(expected);
+
+    return expectedEntries.length > 0 && expectedEntries.every(([key, value]) => received[key] === value)
+      ? Number(normalizedQuestion.points || 0)
+      : 0;
+  }
+
+  if (normalizedQuestion.question_type === 'ordering') {
+    const expected = normalizeOrderingAnswer(normalizedQuestion.correct_answer || normalizedQuestion.items || []);
+    const received = normalizeOrderingAnswer(rawAnswer);
+
+    return expected.length > 0 && expected.length === received.length && expected.every((value, index) => value === received[index])
+      ? Number(normalizedQuestion.points || 0)
+      : 0;
+  }
+
+  if (normalizedQuestion.question_type === 'fill_blank') {
+    const expected = normalizeAnswerMap(normalizedQuestion.correct_answer);
+    const received = normalizeAnswerMap(rawAnswer);
+    const expectedEntries = Object.entries(expected);
+
+    return expectedEntries.length > 0 && expectedEntries.every(([key, value]) => received[key] === value)
+      ? Number(normalizedQuestion.points || 0)
+      : 0;
+  }
+
+  if (normalizedQuestion.question_type === 'image_question') {
+    const answerType = normalizeExamQuestionType(normalizedQuestion.answer_type || 'short_answer');
+    const delegatedQuestion = {
+      ...normalizedQuestion,
+      question_type: answerType,
+      type: answerType
+    };
+
+    if (['qcm_single', 'qcm_multiple'].includes(answerType)) {
+      return computeChoiceScore(delegatedQuestion, rawAnswer);
+    }
+
+    if (['true_false', 'short_answer', 'numeric'].includes(answerType)) {
+      return computeScalarScore(delegatedQuestion, rawAnswer);
+    }
+  }
+
+  return null;
+};
+
 export const formatExamAnswer = (question = {}, rawAnswer) => {
   const normalizedQuestion = normalizeExamQuestion(question);
 
@@ -329,6 +479,17 @@ export const formatExamAnswer = (question = {}, rawAnswer) => {
       .join(' | ');
   }
 
+  if (normalizedQuestion.question_type === 'image_question') {
+    if (['qcm_single', 'qcm_multiple'].includes(normalizedQuestion.answer_type)) {
+      return formatExamAnswer({
+        ...normalizedQuestion,
+        question_type: normalizedQuestion.answer_type
+      }, rawAnswer);
+    }
+
+    return String(rawAnswer);
+  }
+
   return String(rawAnswer);
 };
 
@@ -362,6 +523,21 @@ export const getExamCorrectAnswerLabel = (question = {}) => {
 
   if (normalizedQuestion.question_type === 'ordering') {
     return formatExamAnswer(normalizedQuestion, normalizedQuestion.correct_answer);
+  }
+
+  if (normalizedQuestion.question_type === 'fill_blank') {
+    return formatExamAnswer(normalizedQuestion, normalizedQuestion.correct_answer);
+  }
+
+  if (normalizedQuestion.question_type === 'image_question') {
+    if (['qcm_single', 'qcm_multiple'].includes(normalizedQuestion.answer_type)) {
+      return getExamCorrectAnswerLabel({
+        ...normalizedQuestion,
+        question_type: normalizedQuestion.answer_type
+      });
+    }
+
+    return normalizedQuestion.correct_answer ? String(normalizedQuestion.correct_answer) : '—';
   }
 
   return normalizedQuestion.correct_answer ? String(normalizedQuestion.correct_answer) : '—';

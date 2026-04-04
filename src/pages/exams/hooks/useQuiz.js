@@ -12,9 +12,11 @@ import {
   recordCheatingAttempt,
   updateActiveStudent
 } from '@/api/quiz';
-import { normalizeExamQuestion } from '@/utils/examQuestionUtils';
-
-const AUTO_GRADED_TYPES = new Set(['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric']);
+import {
+  computeExamQuestionScore,
+  isExamQuestionAutoGradable,
+  normalizeExamQuestion
+} from '@/utils/examQuestionUtils';
 
 const getInitialAnswerValue = (question) => {
   switch (question.question_type) {
@@ -31,75 +33,6 @@ const getInitialAnswerValue = (question) => {
     default:
       return '';
   }
-};
-
-const isQuestionAutoGradable = (question) => AUTO_GRADED_TYPES.has(question.question_type);
-
-const normalizeString = (value) => String(value ?? '').trim().toLowerCase();
-
-const normalizeChoiceArray = (values = []) => {
-  return [...values]
-    .map((value) => String(value))
-    .sort();
-};
-
-const normalizeOrderingAnswer = (answer = []) => {
-  return (Array.isArray(answer) ? answer : [])
-    .map((item) => typeof item === 'string' ? item : item?.text || '')
-    .filter(Boolean);
-};
-
-const computeQuestionScore = (question, answer) => {
-  if (
-    answer === null ||
-    answer === undefined ||
-    answer === '' ||
-    (Array.isArray(answer) && answer.length === 0) ||
-    (typeof answer === 'object' && !Array.isArray(answer) && Object.keys(answer).length === 0)
-  ) {
-    return 0;
-  }
-
-  if (question.question_type === 'qcm_single') {
-    return normalizeString(answer) === normalizeString(question.correctAnswer) ? question.points : 0;
-  }
-
-  if (question.question_type === 'qcm_multiple') {
-    const expected = normalizeChoiceArray(question.correct_answers || question.correctAnswer || []);
-    const received = normalizeChoiceArray(Array.isArray(answer) ? answer : []);
-    return expected.length > 0 && expected.length === received.length && expected.every((value, index) => value === received[index])
-      ? question.points
-      : 0;
-  }
-
-  if (question.question_type === 'true_false') {
-    const expected = normalizeString(question.correctAnswer);
-    const received = normalizeString(answer);
-    return expected === received ? question.points : 0;
-  }
-
-  if (question.question_type === 'short_answer') {
-    return normalizeString(answer) === normalizeString(question.correctAnswer) ? question.points : 0;
-  }
-
-  if (question.question_type === 'numeric') {
-    const expected = Number(question.correctAnswer);
-    const received = Number(answer);
-    const tolerance = Number(question.tolerance || 0);
-    if (Number.isFinite(expected) && Number.isFinite(received)) {
-      return Math.abs(expected - received) <= tolerance ? question.points : 0;
-    }
-  }
-
-  if (question.question_type === 'ordering') {
-    const expected = normalizeOrderingAnswer(question.correctAnswer || question.items || []);
-    const received = normalizeOrderingAnswer(answer);
-    return expected.length > 0 && expected.length === received.length && expected.every((value, index) => value === received[index])
-      ? question.points
-      : 0;
-  }
-
-  return 0;
 };
 
 export const useQuiz = () => {
@@ -144,21 +77,21 @@ export const useQuiz = () => {
 
   const calculateScore = useCallback(() => {
     return questions.reduce((total, question) => {
-      if (!isQuestionAutoGradable(question)) {
+      if (!isExamQuestionAutoGradable(question)) {
         return total;
       }
 
-      return total + computeQuestionScore(question, answers[question.id]);
+      return total + Number(computeExamQuestionScore(question, answers[question.id]) || 0);
     }, 0);
   }, [answers, questions]);
 
   const countCorrectAnswers = useCallback(() => {
     return questions.reduce((total, question) => {
-      if (!isQuestionAutoGradable(question)) {
+      if (!isExamQuestionAutoGradable(question)) {
         return total;
       }
 
-      return total + (computeQuestionScore(question, answers[question.id]) >= Number(question.points || 0) ? 1 : 0);
+      return total + (Number(computeExamQuestionScore(question, answers[question.id]) || 0) >= Number(question.points || 0) ? 1 : 0);
     }, 0);
   }, [answers, questions]);
 
@@ -194,13 +127,13 @@ export const useQuiz = () => {
     const currentTimer = timerRef.current;
     const currentExam = examDataRef.current;
     const autoScore = currentQuestions.reduce((total, question) => {
-      if (!isQuestionAutoGradable(question)) {
+      if (!isExamQuestionAutoGradable(question)) {
         return total;
       }
 
-      return total + computeQuestionScore(question, currentAnswers[question.id]);
+      return total + Number(computeExamQuestionScore(question, currentAnswers[question.id]) || 0);
     }, 0);
-    const hasManualQuestions = currentQuestions.some((question) => !isQuestionAutoGradable(question));
+    const hasManualQuestions = currentQuestions.some((question) => !isExamQuestionAutoGradable(question));
     const maxScore = currentQuestions.reduce((total, question) => total + Number(question.points || 0), 0);
     const percentage = maxScore > 0 ? Math.round((autoScore / maxScore) * 100) : 0;
 

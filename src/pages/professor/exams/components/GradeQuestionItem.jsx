@@ -21,8 +21,13 @@ import {
   Check as CheckIcon,
   Save as SaveIcon 
 } from '@mui/icons-material';
-import { supabase } from '@/supabase';
-import { formatExamAnswer, getExamCorrectAnswerLabel, normalizeExamQuestion } from '@/utils/examQuestionUtils';
+import { upsertExamGrade } from '@/api/exams';
+import {
+  formatExamAnswer,
+  getExamCorrectAnswerLabel,
+  isExamQuestionAutoGradable,
+  normalizeExamQuestion
+} from '@/utils/examQuestionUtils';
 
 /**
  * Composant pour noter une question d'examen
@@ -121,20 +126,14 @@ const GradeQuestionItem = ({
     setError(null);
     
     try {
-      const { data, error } = await supabase
-        .from('exam_grades')
-        .upsert({
+      const { data, error } = await upsertExamGrade({
           id: currentAnswer.grade_record_id || undefined,
           student_exam_id: currentAnswer.student_exam_id,
           question_id: currentAnswer.question_id,
           points_earned: grade,
           feedback,
           graded_by: gradedBy
-        }, {
-          onConflict: 'student_exam_id,question_id'
-        })
-        .select('id')
-        .single();
+        });
 
       if (error) {
         throw error;
@@ -192,7 +191,7 @@ const GradeQuestionItem = ({
    * Afficher la réponse correcte pour les QCM
    */
   const renderCorrectAnswer = () => {
-    if (['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric'].includes(normalizedQuestion.question_type)) {
+    if (isExamQuestionAutoGradable(normalizedQuestion)) {
       return (
         <Box sx={{ mt: 1 }}>
           <Typography variant="subtitle2" color="success.main">
@@ -289,7 +288,7 @@ const GradeQuestionItem = ({
               </RadioGroup>
             </FormControl>
             
-            {['qcm_single', 'qcm_multiple', 'true_false', 'short_answer', 'numeric'].includes(normalizedQuestion.question_type) ? (
+            {isExamQuestionAutoGradable(normalizedQuestion) ? (
               <Chip 
                 label="Notation automatique possible" 
                 color="primary" 

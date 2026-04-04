@@ -32,14 +32,9 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { format, parseISO, isBefore, isAfter } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { supabase } from '@/supabase';
-import { getExamsFromUserMetadata, filterExamsByStatus, searchExams } from '@/utils/examUtils';
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// Désactivation ciblée des vérifications TypeScript pour ce fichier
-// Ce composant manipule des données dynamiques provenant de Supabase
-import { virtualizationQuizData } from '@/data/virtualizationQuizData';
+import { getStudentExamsListData } from '@/api/exams';
 
 /**
  * @typedef {Object} ExamData
@@ -109,343 +104,15 @@ const StudentExamsList = () => {
         throw new Error('Données d\'étudiant non disponibles');
       }
       
-      const studentId = authState.student.id;
-      let studentExams = [];
-      
-      // Essayer d'abord de récupérer les examens depuis Supabase
-      try {
-        // Utiliser une requête simplifiée pour éviter les problèmes de jointure complexes
-        const { data, error: fetchError } = await supabase
-          .from('student_exams')
-          .select(`
-            id,
-            exam_id,
-            student_id,
-            seat_number,
-            attendance_status,
-            attempt_status,
-            created_at,
-            updated_at,
-            exams:exam_id(id, title, course_id, date, duration, type, room, total_points, passing_grade, status, description)
-          `)
-          .eq('student_id', studentId)
-          .order('created_at', { ascending: false });
-        
-        // Si nous avons récupéré des données, enrichissons-les avec les informations des cours
-        if (!fetchError && data && data.length > 0) {
-          // Récupérer les IDs de cours uniques
-          // Désactivation temporaire des vérifications TypeScript pour cette partie
-          // @ts-ignore:next-line
-          const courseIds = [...new Set(data
-            // @ts-ignore:next-line
-            .filter(item => item.exams && item.exams.course_id)
-            // @ts-ignore:next-line
-            .map(item => item.exams.course_id))];          
-          // Récupérer les informations des cours si nécessaire
-          if (courseIds.length > 0) {
-            const { data: coursesData } = await supabase
-              .from('courses')
-              .select('id, name, code')
-              .in('id', courseIds);
-            
-            // Associer les cours aux examens
-            if (coursesData && coursesData.length > 0) {
-              const coursesMap = {};
-              coursesData.forEach(course => {
-                coursesMap[course.id] = course;
-              });
-              
-              // Enrichir les données d'examens avec les informations de cours
-              data.forEach(item => {
-                // Accès aux propriétés dynamiques avec des désactivations TypeScript ciblées pour chaque ligne problématique
-                // @ts-ignore:next-line
-                if (item.exams && item.exams.course_id) {
-                  // @ts-ignore:next-line
-                  const courseId = item.exams.course_id;
-                  if (coursesMap[courseId]) {
-                    // Désactivation spécifique pour l'ajout de la propriété courses
-                    // @ts-ignore:next-line
-                    item.exams = {
-                      // @ts-ignore:next-line
-                      ...item.exams,
-                      // @ts-ignore:next-line
-                      courses: coursesMap[courseId]
-                    };
-                  }
-                }
-              });
-            }
-          }
-        }
-        
-        if (!fetchError && data && data.length > 0) {
-          studentExams = data;
-          console.log('Examens récupérés depuis Supabase:', data.length);
-        }
-        
-        // Ajouter manuellement le quiz de virtualisation à la liste des examens
-        // Ce quiz spécial n'est pas stocké dans la base de données mais dans un fichier local
-        const virtualizationQuiz = {
-          id: 'quiz-virt-1', // ID unique pour ce quiz spécial
-          exam_id: 999, // ID spécial pour le quiz de virtualisation, correspond à celui dans examUtils.js
-          student_id: studentId,
-          seat_number: null,
-          attendance_status: null,
-          attempt_status: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          exams: {
-            id: 999,
-            title: virtualizationQuizData.title,
-            course_id: 101, // ID de cours fictif pour le module de virtualisation
-            date: new Date(new Date().getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(), // Il y a 2 jours (pour qu'il soit dans PASSÉS)
-            duration: virtualizationQuizData.duration,
-            type: 'quiz',
-            room: 'En ligne',
-            total_points: 20,
-            passing_grade: 10,
-            status: 'active',
-            description: virtualizationQuizData.description,
-            courses: {
-              name: 'Virtualisation Cloud et Datacenter',
-              code: 'VCD-420'
-            }
-          }
-        };
-        
-        // Vérifier si le quiz n'est pas déjà dans la liste (pour éviter les doublons)
-        if (!studentExams.some(exam => exam.exam_id === 999)) {
-          studentExams.push(virtualizationQuiz);
-          console.log('Quiz de virtualisation ajouté à la liste');
-        }
-        
-        // Ajouter d'autres quiz prédéfinis
-        const additionalQuizzes = [
-          {
-            id: 'quiz-java-1',
-            exam_id: 991,
-            student_id: studentId,
-            seat_number: null,
-            attendance_status: 'present',
-            attempt_status: 'completed',
-            created_at: new Date(new Date().getTime() - 15 * 24 * 60 * 60 * 1000).toISOString(), // Il y a 15 jours
-            updated_at: new Date(new Date().getTime() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-            exams: {
-              id: 991,
-              title: 'Quiz - Java et Programmation Orientée Objet',
-              course_id: 102,
-              date: new Date(new Date().getTime() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-              duration: 90, // minutes
-              type: 'quiz',
-              room: 'Salle 104',
-              total_points: 20,
-              passing_grade: 10,
-              status: 'completed',
-              description: 'Quiz sur les principes fondamentaux de Java et de la POO',
-              courses: {
-                name: 'Programmation Java',
-                code: 'JAVA-201'
-              }
-            }
-          },
-          {
-            id: 'quiz-web-1',
-            exam_id: 992,
-            student_id: studentId,
-            seat_number: 'L12',
-            attendance_status: 'present',
-            attempt_status: 'completed',
-            created_at: new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(), // Il y a 30 jours
-            updated_at: new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-            exams: {
-              id: 992,
-              title: 'Quiz - Développement Web Avancé',
-              course_id: 103,
-              date: new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-              duration: 60, // minutes
-              type: 'quiz',
-              room: 'Amphi A',
-              total_points: 25,
-              passing_grade: 15,
-              status: 'completed',
-              description: 'Quiz sur les technologies web modernes: JavaScript, React, API REST',
-              courses: {
-                name: 'Technologies Web',
-                code: 'WEB-305'
-              }
-            }
-          },
-          {
-            id: 'quiz-db-1',
-            exam_id: 993,
-            student_id: studentId,
-            seat_number: null,
-            attendance_status: null,
-            attempt_status: null,
-            created_at: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Dans 7 jours
-            updated_at: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            exams: {
-              id: 993,
-              title: 'Quiz - Bases de Données et SQL',
-              course_id: 104,
-              date: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-              duration: 75, // minutes
-              type: 'quiz',
-              room: 'En ligne',
-              total_points: 30,
-              passing_grade: 18,
-              status: 'active',
-              description: 'Quiz sur les principes des bases de données relationnelles et le langage SQL',
-              courses: {
-                name: 'Bases de Données',
-                code: 'DB-202'
-              }
-            }
-          }
-        ];
-        
-        // Ajouter les quiz additionnels à la liste
-        additionalQuizzes.forEach(quiz => {
-          if (!studentExams.some(exam => exam.exam_id === quiz.exam_id)) {
-            studentExams.push(quiz);
-            console.log(`Quiz ${quiz.exams.title} ajouté à la liste`);
-          }
-        });
-      } catch (supabaseError) {
-        console.log('Erreur lors de la récupération des examens depuis Supabase:', supabaseError);
-        // Continuer avec la solution de secours
-      }
-      
-      // Si aucun examen n'a été récupéré, utiliser la solution de secours
-      if (studentExams.length === 0) {
-        console.log('Utilisation de la solution de secours pour les examens');
-        
-        // Essayer de récupérer les examens depuis les métadonnées utilisateur
-        const examsFromMetadata = getExamsFromUserMetadata(authState.session?.user);
-        
-        if (examsFromMetadata && examsFromMetadata.length > 0) {
-          studentExams = examsFromMetadata;
-          console.log('Examens récupérés depuis les métadonnées:', examsFromMetadata.length);
-        } else {
-          // Si pas de données dans les métadonnées non plus, créer des examens fictifs
-          console.log('Création d\'examens fictifs');
-          studentExams = [
-            {
-              id: `${studentId}_exam1`,
-              exam_id: 'exam1',
-              student_id: studentId,
-              seat_number: '15',
-              attendance_status: 'pending',
-              attempt_status: 'not_started',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              exams: {
-                id: 'exam1',
-                title: 'Examen de Programmation Web',
-                course_id: 'course1',
-                courses: { name: 'Programmation Web', code: 'WEB101' },
-                professor_id: 'prof1',
-                professors: { profiles: { full_name: 'Dr. Jean Dupont' } },
-                date: new Date(2025, 5, 15).toISOString(),
-                duration: 120,
-                type: 'final',
-                room: 'Salle 101',
-                total_points: 100,
-                passing_grade: 60,
-                status: 'scheduled',
-                description: 'Examen final de programmation web couvrant HTML, CSS et JavaScript'
-              }
-            },
-            {
-              id: `${studentId}_exam2`,
-              exam_id: 'exam2',
-              student_id: studentId,
-              seat_number: '22',
-              attendance_status: 'pending',
-              attempt_status: 'not_started',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              exams: {
-                id: 'exam2',
-                title: 'Examen de Base de Données',
-                course_id: 'course2',
-                courses: { name: 'Bases de Données', code: 'DB101' },
-                professor_id: 'prof2',
-                professors: { profiles: { full_name: 'Prof. Marie Martin' } },
-                date: new Date(2025, 5, 20).toISOString(),
-                duration: 180,
-                type: 'final',
-                room: 'Salle 102',
-                total_points: 100,
-                passing_grade: 60,
-                status: 'scheduled',
-                description: 'Examen final de bases de données couvrant SQL et modélisation'
-              }
-            },
-            {
-              id: `${studentId}_quiz1`,
-              exam_id: 'quiz1',
-              student_id: studentId,
-              seat_number: 'Q07',
-              attendance_status: 'pending',
-              attempt_status: 'not_started',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              exams: {
-                id: 'quiz1',
-                title: 'Quiz - Virtualization Cloud et Datacenter advanced',
-                course_id: 'course3',
-                courses: { name: 'Virtualization Cloud et Datacenter', code: 'VCD101' },
-                professor_id: 'prof3',
-                professors: { profiles: { full_name: 'Prof. Cloud Expert' } },
-                date: new Date(Date.now() + 86400000).toISOString(), // Toujours 1 jour dans le futur
-                duration: 45,
-                type: 'quiz',
-                room: 'Salle Datacenter',
-                total_points: 25,
-                passing_grade: 13,
-                status: 'scheduled',
-                description: 'Quiz sur les concepts avancés de virtualisation, cloud computing et datacenter'
-              }
-            }
-          ];
-        }
-      }
-      
-      // Transformation des données pour un format uniforme
-      const mappedExams = studentExams.map(item => {
-        // Vérifier si la structure attendue existe
-        const exam = item.exams || {};
-        return {
-          id: item.id,
-          exam_id: item.exam_id,
-          student_id: item.student_id,
-          seat_number: item.seat_number,
-          attendance_status: item.attendance_status,
-          attempt_status: item.attempt_status,
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-          title: exam?.title || 'Examen sans titre' || '',
-          course_id: exam.course_id || '',
-          course_name: exam.courses?.name || '',
-          course_code: exam.courses?.code || '',
-          professor_id: exam.professor_id || '',
-          professor_name: exam.professors?.profiles?.full_name || 'Professeur inconnu',
-          date: exam?.date || new Date().toISOString() || new Date().toISOString(),
-          duration: exam.duration || 0,
-          type: exam.type || '',
-          room: exam.room || '',
-          total_points: exam.total_points || 0,
-          passing_grade: exam.passing_grade || 0,
-          status: exam.status || '',
-          description: exam.description || ''
-        };
-      });
+      const { data: mappedExams, error: fetchError } = await getStudentExamsListData(authState.student.id);
 
-      setExams(mappedExams);
-      setFilteredExams(mappedExams);
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      setExams(mappedExams || []);
+      setFilteredExams(mappedExams || []);
     } catch (error) {
-      // Utilisation de template strings pour éviter l'erreur '0-1 arguments attendus, mais 2 reçus'
       console.error(`SUPABASE_EXAMS_ERROR: ${error?.message || 'Erreur inconnue'}`);
       setError(error);
     } finally {
@@ -461,12 +128,32 @@ const StudentExamsList = () => {
   // Effet pour filtrer les examens lors du changement d'onglet
   useEffect(() => {
     if (exams.length === 0) {
+      setFilteredExams([]);
       return;
     }
-    
-    const status = tabValue === 0 ? 'upcoming' : tabValue === 1 ? 'past' : 'all';
-    const filtered = filterExamsByStatus(exams, status);
-    setFilteredExams(searchTerm ? searchExams(filtered, searchTerm) : filtered);
+
+    const now = new Date();
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    let nextExams = [...exams];
+
+    if (tabValue === 0) {
+      nextExams = nextExams.filter((exam) => new Date(exam.date) >= now && exam.attempt_status !== 'submitted');
+    } else if (tabValue === 1) {
+      nextExams = nextExams.filter((exam) => new Date(exam.date) < now || exam.attempt_status === 'submitted');
+    }
+
+    if (normalizedSearch) {
+      nextExams = nextExams.filter((exam) => {
+        return (
+          String(exam.title || '').toLowerCase().includes(normalizedSearch) ||
+          String(exam.course_code || '').toLowerCase().includes(normalizedSearch) ||
+          String(exam.course_name || '').toLowerCase().includes(normalizedSearch) ||
+          String(exam.professor_name || '').toLowerCase().includes(normalizedSearch)
+        );
+      });
+    }
+
+    setFilteredExams(nextExams);
   }, [tabValue, exams, searchTerm]);
 
   // Gestionnaire de recherche
@@ -481,12 +168,11 @@ const StudentExamsList = () => {
 
   // Gestionnaire pour afficher les détails d'un examen
   const handleViewExam = (exam) => {
-    if (exam.type === 'quiz' && exam.status === 'active') {
-      navigate('/student/practice');
-      return;
-    }
-
-    if (exam.attempt_status === 'submitted' || new Date(exam?.date || new Date().toISOString()) < new Date()) {
+    if (
+      exam.attempt_status === 'submitted' ||
+      ['passed', 'failed'].includes(exam.result_status) ||
+      exam.grade !== null
+    ) {
       navigate(`/student/exams/${exam.exam_id}/results`);
       return;
     }
@@ -506,8 +192,10 @@ const StudentExamsList = () => {
   // Rendu d'un examen
   const renderExam = (exam) => {
     const isPast = new Date(exam?.date || new Date().toISOString()) < new Date();
-    const statusColor = isPast ? 'error' : 'success';
-    const statusText = isPast ? 'Passé' : 'À venir';
+    const isSubmitted = exam.attempt_status === 'submitted' || ['passed', 'failed'].includes(exam.result_status) || exam.grade !== null;
+    const canStart = ['published', 'in_progress'].includes(exam.status) && !isSubmitted;
+    const statusColor = isSubmitted ? 'primary' : isPast ? 'error' : 'success';
+    const statusText = isSubmitted ? 'Soumis' : isPast ? 'Passé' : 'À venir';
 
     return (
       <Card key={exam.id} sx={{ mb: 2, position: 'relative' }}>
@@ -568,16 +256,16 @@ const StudentExamsList = () => {
           >
             Détails
           </Button>
-          {!isPast && (
-            <Button 
-              size="small" 
-              variant="contained" 
-              color="primary" 
+              {!isPast && (
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
               startIcon={<PlayArrowIcon />}
-              disabled={isPast}
+              disabled={!canStart}
               onClick={() => handleViewExam(exam)}
             >
-              {exam.type === 'quiz' ? 'Lancer le quiz' : 'Commencer'}
+              {exam.attempt_status === 'in_progress' ? 'Reprendre' : 'Commencer'}
             </Button>
           )}
         </CardActions>

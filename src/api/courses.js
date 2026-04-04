@@ -581,6 +581,59 @@ export const getUserFavorites = async (userId) => {
   }
 };
 
+/** Recupere les interactions utilisateur sur un ensemble de ressources */
+export const getUserResourceInteractions = async (resourceIds, userId) => {
+  try {
+    if (!userId || !Array.isArray(resourceIds) || resourceIds.length === 0) {
+      return { data: {}, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('resource_interactions')
+      .select('resource_id, interaction_type, reaction_value, created_at')
+      .eq('user_id', userId)
+      .in('resource_id', resourceIds);
+
+    if (error) {
+      throw error;
+    }
+
+    const interactionMap = (data || []).reduce((accumulator, item) => {
+      if (!accumulator[item.resource_id]) {
+        accumulator[item.resource_id] = {
+          has_view: false,
+          has_download: false,
+          is_favorite: false,
+          reaction_value: null
+        };
+      }
+
+      if (item.interaction_type === 'view') {
+        accumulator[item.resource_id].has_view = true;
+      }
+
+      if (item.interaction_type === 'download') {
+        accumulator[item.resource_id].has_download = true;
+      }
+
+      if (item.interaction_type === 'favorite') {
+        accumulator[item.resource_id].is_favorite = true;
+      }
+
+      if (item.interaction_type === 'reaction') {
+        accumulator[item.resource_id].reaction_value = item.reaction_value || null;
+      }
+
+      return accumulator;
+    }, {});
+
+    return { data: interactionMap, error: null };
+  } catch (error) {
+    console.error('getUserResourceInteractions:', error);
+    return { data: {}, error };
+  }
+};
+
 /** Recherche dans les ressources */
 export const searchResources = async (query, courseId = null) => {
   try {
