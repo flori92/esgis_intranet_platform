@@ -150,15 +150,16 @@ const DocumentGeneratorPage = () => {
       await Promise.all([fetchTemplates(), fetchStudents()]);
       
       // Récupérer les documents générés
-      const { documents, error: documentsError } = await getAllGeneratedDocuments()
-        .limit(10);
+      const { documents, error: documentsError } = await getAllGeneratedDocuments();
       
       if (documentsError) {
         throw documentsError;
       }
       
+      const limitedDocs = (documents || []).slice(0, 10);
+      
       // Transformer les données pour inclure le nom de l'étudiant et du modèle
-      const formattedDocuments = documents.map(doc => ({
+      const formattedDocuments = limitedDocs.map(doc => ({
         ...doc,
         student_name: doc.students?.profiles?.full_name || 'Étudiant inconnu',
         template_name: doc.document_templates?.name || 'Modèle inconnu'

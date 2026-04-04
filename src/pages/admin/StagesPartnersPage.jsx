@@ -20,7 +20,7 @@ import {
 } from '@mui/icons-material';
 import { supabase } from '@/supabase';
 import { getPartners, createPartner, updatePartner, deletePartner } from '@/api/partners';
-import { getStageOffers, createStageOffer, deleteStageOffer, getStudentStageApplications, updateStageApplication } from '@/api/stages';
+import { getStageOffers, deleteStageOffer } from '@/api/stages';
 
 const StagesPartnersPage = () => {
   const [tabValue, setTabValue] = useState(0);
@@ -51,13 +51,26 @@ const StagesPartnersPage = () => {
       setOffres(offersRes.data || []);
       
       // Fetch ALL applications for admin
-      const { data: appsData } = await supabase
-        .from('internship_applications')
-        .select('*, profiles:student_id(full_name, email), internship_offers:offre_id(title, company_name)');
+      const { data: appsData, error: appsError } = await supabase
+        .from('stage_candidatures')
+        .select(`
+          *,
+          etudiant:etudiant_id(
+            id,
+            profiles:profile_id(full_name, email)
+          ),
+          offre:offre_id(
+            id,
+            titre,
+            entreprises:entreprise_id(nom)
+          )
+        `);
       
+      if (appsError) throw appsError;
       setApplications(appsData || []);
     } catch (err) {
-      setError('Erreur lors du chargement des données');
+      console.error('loadData error:', err);
+      setError('Erreur lors du chargement des données: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -71,8 +84,8 @@ const StagesPartnersPage = () => {
     if (item) {
       setFormData({ ...item });
     } else {
-      if (type === 'partner') setFormData({ name: '', sector: '', email: '', website: '', description: '', status: 'active' });
-      if (type === 'offer') setFormData({ title: '', company_name: '', description: '', location: '', type: 'internship', status: 'open' });
+      if (type === 'partner') setFormData({ nom: '', secteur: '', email: '', site_web: '', description: '', etat: 'actif' });
+      if (type === 'offer') setFormData({ titre: '', entreprise_id: '', description: '', lieu: '', type_stage: 'internship', etat: 'actif' });
     }
     setDialogOpen(true);
   };
@@ -83,10 +96,9 @@ const StagesPartnersPage = () => {
       if (dialogType === 'partner') {
         res = editingItem ? await updatePartner(editingItem.id, formData) : await createPartner(formData);
       } else {
-        // Simple insert for offer
         res = editingItem 
-          ? await supabase.from('internship_offers').update(formData).eq('id', editingItem.id)
-          : await supabase.from('internship_offers').insert(formData);
+          ? await supabase.from('stage_offres').update(formData).eq('id', editingItem.id)
+          : await supabase.from('stage_offres').insert(formData);
       }
 
       if (res.error) throw res.error;
@@ -116,8 +128,8 @@ const StagesPartnersPage = () => {
   const handleUpdateAppStatus = async (appId, newStatus) => {
     try {
       const { error } = await supabase
-        .from('internship_applications')
-        .update({ status: newStatus })
+        .from('stage_candidatures')
+        .update({ statut: newStatus })
         .eq('id', appId);
       
       if (error) throw error;
@@ -142,9 +154,9 @@ const StagesPartnersPage = () => {
 
       <Paper elevation={2}>
         <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tab icon={<BusinessIcon />} label="Entreprises Partenaires" iconPosition="start" />
-          <Tab icon={<WorkIcon />} label="Offres publiées" iconPosition="start" />
-          <Tab icon={<AssignmentIcon />} label="Suivi des Candidatures" iconPosition="start" />
+          <Tab icon={<BusinessIcon />} label="Entreprises" iconPosition="start" />
+          <Tab icon={<WorkIcon />} label="Offres" iconPosition="start" />
+          <Tab icon={<AssignmentIcon />} label="Candidatures" iconPosition="start" />
         </Tabs>
 
         <Box sx={{ p: 2 }}>
@@ -152,19 +164,15 @@ const StagesPartnersPage = () => {
             <TableContainer>
               <Table size="small">
                 <TableHead><TableRow>
-                  <TableCell>Entreprise</TableCell>
-                  <TableCell>Secteur</TableCell>
-                  <TableCell>Contact</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell>Entreprise</TableCell><TableCell>Secteur</TableCell><TableCell>Contact</TableCell><TableCell>Statut</TableCell><TableCell align="right">Actions</TableCell>
                 </TableRow></TableHead>
                 <TableBody>
                   {partners.map(p => (
                     <TableRow key={p.id}>
-                      <TableCell><Typography fontWeight="bold">{p.name}</Typography></TableCell>
-                      <TableCell>{p.sector}</TableCell>
+                      <TableCell><Typography fontWeight="bold">{p.nom || p.name}</Typography></TableCell>
+                      <TableCell>{p.secteur || p.sector}</TableCell>
                       <TableCell>{p.email}</TableCell>
-                      <TableCell><Chip label={p.status} size="small" color={p.status === 'active' ? 'success' : 'default'} /></TableCell>
+                      <TableCell><Chip label={p.etat || p.status} size="small" color={(p.etat === 'actif' || p.status === 'active') ? 'success' : 'default'} /></TableCell>
                       <TableCell align="right">
                         <IconButton size="small" onClick={() => handleOpenDialog('partner', p)}><EditIcon fontSize="small" /></IconButton>
                         <IconButton size="small" color="error" onClick={() => handleDelete('partner', p.id)}><DeleteIcon fontSize="small" /></IconButton>
@@ -180,19 +188,15 @@ const StagesPartnersPage = () => {
             <TableContainer>
               <Table size="small">
                 <TableHead><TableRow>
-                  <TableCell>Titre de l'offre</TableCell>
-                  <TableCell>Entreprise</TableCell>
-                  <TableCell>Lieu</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell>Titre de l'offre</TableCell><TableCell>Entreprise</TableCell><TableCell>Lieu</TableCell><TableCell>Type</TableCell><TableCell align="right">Actions</TableCell>
                 </TableRow></TableHead>
                 <TableBody>
                   {offers.map(o => (
                     <TableRow key={o.id}>
-                      <TableCell><Typography fontWeight="bold">{o.title}</Typography></TableCell>
-                      <TableCell>{o.company_name}</TableCell>
-                      <TableCell>{o.location}</TableCell>
-                      <TableCell><Chip label={o.type} size="small" variant="outlined" /></TableCell>
+                      <TableCell><Typography fontWeight="bold">{o.titre || o.title}</Typography></TableCell>
+                      <TableCell>{o.entreprise?.nom || o.company_name}</TableCell>
+                      <TableCell>{o.lieu || o.location}</TableCell>
+                      <TableCell><Chip label={o.typeStage || o.type} size="small" variant="outlined" /></TableCell>
                       <TableCell align="right">
                         <IconButton size="small" onClick={() => handleOpenDialog('offer', o)}><EditIcon fontSize="small" /></IconButton>
                         <IconButton size="small" color="error" onClick={() => handleDelete('offer', o.id)}><DeleteIcon fontSize="small" /></IconButton>
@@ -208,30 +212,26 @@ const StagesPartnersPage = () => {
             <TableContainer>
               <Table size="small">
                 <TableHead><TableRow>
-                  <TableCell>Étudiant</TableCell>
-                  <TableCell>Offre</TableCell>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell>Étudiant</TableCell><TableCell>Offre</TableCell><TableCell>Date</TableCell><TableCell>Statut</TableCell><TableCell align="right">Actions</TableCell>
                 </TableRow></TableHead>
                 <TableBody>
                   {applications.map(app => (
                     <TableRow key={app.id}>
                       <TableCell>
-                        <Typography variant="body2" fontWeight="bold">{app.profiles?.full_name}</Typography>
-                        <Typography variant="caption">{app.profiles?.email}</Typography>
+                        <Typography variant="body2" fontWeight="bold">{app.etudiant?.profiles?.full_name}</Typography>
+                        <Typography variant="caption">{app.etudiant?.profiles?.email}</Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">{app.internship_offers?.title}</Typography>
-                        <Typography variant="caption" color="text.secondary">{app.internship_offers?.company_name}</Typography>
+                        <Typography variant="body2">{app.offre?.titre}</Typography>
+                        <Typography variant="caption" color="text.secondary">{app.offre?.entreprises?.nom}</Typography>
                       </TableCell>
                       <TableCell>{new Date(app.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell><Chip label={app.status} size="small" color={app.status === 'accepted' ? 'success' : app.status === 'rejected' ? 'error' : 'warning'} /></TableCell>
+                      <TableCell><Chip label={app.statut} size="small" color={app.statut === 'acceptee' ? 'success' : app.statut === 'rejetee' ? 'error' : 'warning'} /></TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          <IconButton size="small" color="success" onClick={() => handleUpdateAppStatus(app.id, 'accepted')}><CheckCircleIcon fontSize="small" /></IconButton>
-                          <IconButton size="small" color="error" onClick={() => handleUpdateAppStatus(app.id, 'rejected')}><CancelIcon fontSize="small" /></IconButton>
-                          <IconButton size="small"><DownloadIcon fontSize="small" /></IconButton>
+                          <IconButton size="small" color="success" onClick={() => handleUpdateAppStatus(app.id, 'acceptee')}><CheckCircleIcon fontSize="small" /></IconButton>
+                          <IconButton size="small" color="error" onClick={() => handleUpdateAppStatus(app.id, 'rejetee')}><CancelIcon fontSize="small" /></IconButton>
+                          {app.cv_path && <IconButton size="small" onClick={() => window.open(app.cv_path, '_blank')}><DownloadIcon fontSize="small" /></IconButton>}
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -249,22 +249,29 @@ const StagesPartnersPage = () => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid item xs={12}>
-              <TextField fullWidth label="Nom / Titre" value={formData.name || formData.title || ''} 
-                onChange={(e) => setFormData({...formData, [dialogType === 'partner' ? 'name' : 'title']: e.target.value})} />
+              <TextField fullWidth label="Nom / Titre" value={formData.nom || formData.titre || ''} 
+                onChange={(e) => setFormData({...formData, [dialogType === 'partner' ? 'nom' : 'titre']: e.target.value})} />
             </Grid>
             {dialogType === 'partner' ? (
               <>
-                <Grid item xs={6}><TextField fullWidth label="Secteur" value={formData.sector || ''} onChange={(e) => setFormData({...formData, sector: e.target.value})} /></Grid>
+                <Grid item xs={6}><TextField fullWidth label="Secteur" value={formData.secteur || ''} onChange={(e) => setFormData({...formData, secteur: e.target.value})} /></Grid>
                 <Grid item xs={6}><TextField fullWidth label="Email" value={formData.email || ''} onChange={(e) => setFormData({...formData, email: e.target.value})} /></Grid>
               </>
             ) : (
               <>
-                <Grid item xs={12}><TextField fullWidth label="Entreprise" value={formData.company_name || ''} onChange={(e) => setFormData({...formData, company_name: e.target.value})} /></Grid>
-                <Grid item xs={6}><TextField fullWidth label="Lieu" value={formData.location || ''} onChange={(e) => setFormData({...formData, location: e.target.value})} /></Grid>
+                <Grid item xs={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>Entreprise</InputLabel>
+                    <Select value={formData.entreprise_id || ''} label="Entreprise" onChange={(e) => setFormData({...formData, entreprise_id: e.target.value})}>
+                      {partners.map(p => <MenuItem key={p.id} value={p.id}>{p.nom || p.name}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={6}><TextField fullWidth label="Lieu" value={formData.lieu || ''} onChange={(e) => setFormData({...formData, lieu: e.target.value})} /></Grid>
                 <Grid item xs={6}>
                   <FormControl fullWidth>
                     <InputLabel>Type</InputLabel>
-                    <Select value={formData.type || 'internship'} label="Type" onChange={(e) => setFormData({...formData, type: e.target.value})}>
+                    <Select value={formData.type_stage || 'internship'} label="Type" onChange={(e) => setFormData({...formData, type_stage: e.target.value})}>
                       <MenuItem value="internship">Stage</MenuItem>
                       <MenuItem value="apprenticeship">Alternance</MenuItem>
                       <MenuItem value="job">Emploi</MenuItem>

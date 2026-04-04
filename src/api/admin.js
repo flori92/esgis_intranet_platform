@@ -690,7 +690,7 @@ export const getValidationQueue = async () => {
       .select(`
         *,
         student:students(id, profile_id, level),
-        requester:profiles(id, full_name, email)
+        requester:profiles!validation_queue_requester_id_fkey(id, full_name, email)
       `)
       .order('created_at', { ascending: false });
 
@@ -1873,7 +1873,7 @@ export const getDepartmentsWithProfessors = async () => {
   try {
     const { data, error } = await supabase
       .from('departments')
-      .select('*, professors!head_professor_id(profiles(full_name))');
+      .select('*, head_professor:profiles!head_professor_id(full_name)');
 
     if (error) throw error;
     return { data: data || [], error: null };

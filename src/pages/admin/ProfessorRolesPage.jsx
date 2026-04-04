@@ -29,38 +29,26 @@ import {
   FormControlLabel,
   Checkbox,
   Tab,
-  Tabs
+  Tabs,
+  Stack
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Save as SaveIcon,
   Delete as DeleteIcon,
-  Person as PersonIcon,
-  School as SchoolIcon,
-  Badge as BadgeIcon,
-  Settings as SettingsIcon
+  Badge as BadgeIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { getRecordsWithRelation, insertRecord, updateRecord, deleteRecord } from '@/api/helpers';
+import { supabase } from '@/supabase';
 
 // Composant pour les onglets
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
-
   return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`tabpanel-${index}`}
-      aria-labelledby={`tab-${index}`}
-      {...other}
-    >
-      {value === index && (
-        <Box sx={{ p: 3 }}>
-          {children}
-        </Box>
-      )}
+    <div role="tabpanel" hidden={value !== index} id={`tabpanel-${index}`} {...other}>
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
     </div>
   );
 }
@@ -77,7 +65,6 @@ const ProfessorRolesPage = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  // États pour le dialogue de rôle
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [currentRole, setCurrentRole] = useState(null);
   const [roleName, setRoleName] = useState('');
@@ -85,129 +72,64 @@ const ProfessorRolesPage = () => {
   const [rolePermissions, setRolePermissions] = useState([]);
   const [roleEditMode, setRoleEditMode] = useState(false);
 
-  // États pour le dialogue de professeur
-  const [professorDialogOpen, setProfessorDialogOpen] = useState(false);
-  const [currentProfessor, setCurrentProfessor] = useState(null);
-  const [selectedRoles, setSelectedRoles] = useState([]);
-  
-  // États pour le dialogue d'assignation
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [professorForAssign, setProfessorForAssign] = useState(null);
+  const [selectedRoles, setSelectedRoles] = useState([]);
 
-  // Liste des permissions disponibles
   const availablePermissions = [
-    'view_courses',
-    'edit_courses',
-    'view_students',
-    'edit_students',
-    'view_grades',
-    'edit_grades',
-    'view_departments',
-    'edit_departments',
-    'view_professors',
-    'edit_professors',
-    'manage_roles',
-    'approve_documents',
-    'manage_internships',
-    'view_finances',
-    'edit_finances'
+    'view_courses', 'edit_courses', 'view_students', 'edit_students',
+    'view_grades', 'edit_grades', 'view_departments', 'edit_departments',
+    'view_professors', 'edit_professors', 'manage_roles', 'approve_documents',
+    'manage_internships', 'view_finances', 'edit_finances'
   ];
 
-  // Référence pour éviter les recréations de fonctions
-  const fetchDataRef = useRef(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       setError(null);
       
-      // Charger les professeurs
+      // 1. Charger les professeurs avec leurs assignations
       const { data: professorsData, error: professorsError } = await getRecordsWithRelation('professors', {
-        select: '*, profiles(id, full_name, email), departments(id, name, code), professor_roles(role_id, professor_roles_permissions(*))'
+        select: '*, profiles(id, full_name, email), departments(id, name, code), assignments:professor_role_assignments(role:professor_roles(*))'
       });
 
-      if (professorsError) {
-        throw professorsError;
-      }
+      if (professorsError) throw professorsError;
 
-      // Transformer les données
-      const formattedProfessors = professorsData.map(prof => ({
+      const formattedProfessors = (professorsData || []).map(prof => ({
         id: prof.id,
         profile_id: prof.profile_id,
         full_name: prof.profiles?.full_name || 'Nom inconnu',
         email: prof.profiles?.email || 'Email inconnu',
         employee_number: prof.employee_number || '',
-        hire_date: prof.hire_date || '',
-        specialties: prof.specialties || [],
-        status: prof.status || 'active',
-        department_id: prof.department_id,
         department_name: prof.departments?.name || 'Non assigné',
-        roles: prof.professor_roles || []
+        // On aplatit les rôles pour l'UI
+        roles: (prof.assignments || []).map(a => a.role).filter(Boolean)
       }));
 
       setProfessors(formattedProfessors);
 
-      // Charger les départements
-      const { data: departmentsData, error: departmentsError } = await getRecordsWithRelation('departments');
+      // 2. Charger les départements
+      const { data: departmentsData } = await getRecordsWithRelation('departments');
+      setDepartments(departmentsData || []);
 
-      if (departmentsError) {
-        throw departmentsError;
-      }
+      // 3. Charger les définitions de rôles
+      const { data: rolesData, error: rolesError } = await getRecordsWithRelation('professor_roles');
+      if (rolesError) throw rolesError;
+      setRoles(rolesData || []);
 
-      setDepartments(departmentsData);
-
-      // Charger les rôles
-      const { data: rolesData, error: rolesError } = await getRecordsWithRelation('roles');
-
-      if (rolesError) {
-        throw rolesError;
-      }
-
-      setRoles(rolesData);
     } catch (err) {
-      console.error('Erreur lors du chargement des données:', err);
-      setError(err.message || 'Une erreur est survenue lors du chargement des données');
+      console.error('Erreur fetchData:', err);
+      setError(err.message || 'Une erreur est survenue');
     } finally {
       setLoading(false);
     }
-  });
+  }, []);
 
   useEffect(() => {
-    // Vérifier si l'utilisateur est autorisé
-    if (!authState.isAdmin) {
-      window.location.href = '/';
-      return;
-    }
+    if (authState.isAdmin) fetchData();
+  }, [authState.isAdmin, fetchData]);
 
-    // Charger les données
-    const loadData = async () => {
-      await fetchDataRef.current();
-    };
-    
-    loadData();
-  }, [authState.isAdmin]);
-
-  const fetchData = async () => {
-    if (fetchDataRef.current) {
-      await fetchDataRef.current();
-    }
-  };
-
-  // Gestion des onglets
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-  };
-
-  // Gestion de la pagination
-  const handleChangePage = (event, newValue) => {
-    setPage(newValue);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  // Fonctions pour la gestion des rôles
-  const handleOpenRoleDialog = (role) => {
+  const handleOpenRoleDialog = (role = null) => {
     if (role) {
       setCurrentRole(role);
       setRoleName(role.name);
@@ -224,538 +146,207 @@ const ProfessorRolesPage = () => {
     setRoleDialogOpen(true);
   };
 
-  const handleCloseRoleDialog = () => {
-    setRoleDialogOpen(false);
-  };
-
-  const handlePermissionToggle = (permission) => {
-    const currentPermissions = [...rolePermissions];
-    if (currentPermissions.includes(permission)) {
-      setRolePermissions(currentPermissions.filter(p => p !== permission));
-    } else {
-      setRolePermissions([...currentPermissions, permission]);
-    }
-  };
-
-  const handleCreateRole = async () => {
-    if (!roleName.trim()) {
-      setError('Le nom du rôle est requis');
-      return;
-    }
-
+  const handleSaveRole = async () => {
+    if (!roleName.trim()) return setError('Le nom du rôle est requis');
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      // Créer un nouveau rôle
-      const { data: roleData, error: roleError } = await insertRecord('roles', {
-        name: roleName,
-        description: roleDescription,
-        permissions: rolePermissions,
-        created_at: new Date().toISOString()
-      });
-
-      if (roleError) {
-        throw roleError;
-      }
-
-      setRoles([...roles, roleData]);
-      setSuccessMessage('Rôle créé avec succès');
-      handleCloseRoleDialog();
-    } catch (err) {
-      console.error('Erreur lors de la création du rôle:', err);
-      setError(err.message || 'Erreur lors de la création du rôle');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateRole = async () => {
-    if (!roleName.trim() || !currentRole) {
-      setError('Le nom du rôle est requis');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      // Mettre à jour le rôle
-      const { error: roleError } = await updateRecord('roles', currentRole.id, {
+      const payload = {
         name: roleName,
         description: roleDescription,
         permissions: rolePermissions,
         updated_at: new Date().toISOString()
-      });
+      };
 
-      if (roleError) {
-        throw roleError;
+      if (roleEditMode) {
+        await updateRecord('professor_roles', currentRole.id, payload);
+        setSuccessMessage('Rôle mis à jour');
+      } else {
+        await insertRecord('professor_roles', { ...payload, created_at: new Date().toISOString() });
+        setSuccessMessage('Rôle créé');
       }
-
-      // Mettre à jour l'état local
-      setRoles(roles.map(role => 
-        role.id === currentRole.id 
-          ? { ...role, name: roleName, description: roleDescription, permissions: rolePermissions }
-          : role
-      ));
       
-      setSuccessMessage('Rôle mis à jour avec succès');
-      handleCloseRoleDialog();
+      setRoleDialogOpen(false);
+      fetchData();
     } catch (err) {
-      console.error('Erreur lors de la mise à jour du rôle:', err);
-      setError(err.message || 'Erreur lors de la mise à jour du rôle');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteRole = async (roleId) => {
-    // Demander confirmation
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce rôle ? Cela supprimera également toutes les assignations de ce rôle.')) {
-      return;
-    }
-
+    if (!window.confirm('Supprimer ce rôle ?')) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      // Supprimer d'abord les assignations de ce rôle
-      const { error: assignmentsError } = await deleteRecord('professor_roles', roleId);
-
-      if (assignmentsError) {
-        throw assignmentsError;
-      }
-
-      // Supprimer le rôle
-      const { error: roleError } = await deleteRecord('roles', roleId);
-
-      if (roleError) {
-        throw roleError;
-      }
-
-      // Mettre à jour l'état local
-      setRoles(roles.filter(role => role.id !== roleId));
-      
-      setSuccessMessage('Rôle supprimé avec succès');
+      await deleteRecord('professor_roles', roleId);
+      setSuccessMessage('Rôle supprimé');
+      fetchData();
     } catch (err) {
-      console.error('Erreur lors de la suppression du rôle:', err);
-      setError(err.message || 'Erreur lors de la suppression du rôle');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fonctions pour la gestion des assignations de rôles
   const handleOpenAssignDialog = (professor) => {
     setProfessorForAssign(professor);
-    setSelectedRoles(professor.roles.map(r => roles.find(role => role.id === r.role_id)).filter(Boolean));
+    setSelectedRoles(professor.roles || []);
     setAssignDialogOpen(true);
   };
 
-  const handleCloseAssignDialog = () => {
-    setAssignDialogOpen(false);
-    setProfessorForAssign(null);
-  };
-
-  const handleSaveRoleAssignments = async () => {
-    if (!professorForAssign) {
-      return;
-    }
-
+  const handleSaveAssignments = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      // Supprimer d'abord toutes les assignations existantes
-      const { error: deleteError } = await deleteRecord('professor_roles', professorForAssign.id);
+      // 1. Supprimer les anciennes assignations
+      await supabase.from('professor_role_assignments').delete().eq('professor_id', professorForAssign.id);
 
-      if (deleteError) {
-        throw deleteError;
-      }
-
-      // Ajouter les nouvelles assignations
+      // 2. Insérer les nouvelles
       if (selectedRoles.length > 0) {
-        const assignments = selectedRoles.map(role => ({
+        const newAssignments = selectedRoles.map(r => ({
           professor_id: professorForAssign.id,
-          role_id: role.id,
-          assigned_at: new Date().toISOString()
+          role_id: r.id
         }));
-
-        const { error: insertError } = await insertRecord('professor_roles', assignments);
-
-        if (insertError) {
-          throw insertError;
-        }
+        const { error } = await supabase.from('professor_role_assignments').insert(newAssignments);
+        if (error) throw error;
       }
 
-      // Mettre à jour l'état local
-      setProfessors(professors.map(prof => 
-        prof.id === professorForAssign.id 
-          ? { ...prof, roles: selectedRoles.map(role => ({ role_id: role.id })) }
-          : prof
-      ));
-      
-      setSuccessMessage('Rôles assignés avec succès');
-      handleCloseAssignDialog();
+      setSuccessMessage('Rôles mis à jour');
+      setAssignDialogOpen(false);
+      fetchData();
     } catch (err) {
-      console.error('Erreur lors de l\'assignation des rôles:', err);
-      setError(err.message || 'Erreur lors de l\'assignation des rôles');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fonctions de rendu
-  const renderPermissionCheckboxes = () => {
-    return (
-      <Grid container spacing={1}>
-        {availablePermissions.map((permission) => (
-          <Grid item xs={12} sm={6} md={4} key={permission}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={rolePermissions.includes(permission)}
-                  onChange={() => handlePermissionToggle(permission)}
-                  name={permission}
-                />
-              }
-              label={permission.replace(/_/g, ' ')}
-            />
-          </Grid>
-        ))}
-      </Grid>
-    );
-  };
-
-  // Calculer les indices pour la pagination
-  const startIndex = page * rowsPerPage;
-  const endIndex = startIndex + rowsPerPage;
-  const displayedProfessors = professors.slice(startIndex, endIndex);
-  const displayedRoles = roles.slice(startIndex, endIndex);
+  const displayedProfessors = professors.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Gestion des rôles des professeurs
-      </Typography>
+      <Typography variant="h4" fontWeight="bold" gutterBottom>Gestion des Rôles</Typography>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      <Snackbar open={!!successMessage} autoHideDuration={3000} onClose={() => setSuccessMessage(null)} message={successMessage} />
 
-      {successMessage && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {successMessage}
-        </Alert>
-      )}
-
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={tabValue} onChange={handleTabChange} aria-label="roles tabs">
-          <Tab label="Professeurs" />
-          <Tab label="Rôles" />
-        </Tabs>
-      </Box>
+      <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ mb: 3 }}>
+        <Tab label="Assignations" />
+        <Tab label="Définition des Rôles" />
+      </Tabs>
 
       <TabPanel value={tabValue} index={0}>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Nom</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Département</TableCell>
-                    <TableCell>Rôles</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {displayedProfessors.map((professor) => (
-                    <TableRow key={professor.id}>
-                      <TableCell>{professor.full_name}</TableCell>
-                      <TableCell>{professor.email}</TableCell>
-                      <TableCell>{professor.department_name}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {professor.roles.map((profRole, index) => {
-                            const role = roles.find(r => r.id === profRole.role_id);
-                            return role ? (
-                              <Chip 
-                                key={index} 
-                                label={role.name} 
-                                size="small" 
-                                color="primary" 
-                              />
-                            ) : null;
-                          })}
-                          {professor.roles.length === 0 && (
-                            <Typography variant="body2" color="text.secondary">
-                              Aucun rôle assigné
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleOpenAssignDialog(professor)}
-                        >
-                          <BadgeIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TablePagination
-              component="div"
-              count={professors.length}
-              page={page}
-              onPageChange={handleChangePage}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Lignes par page"
-            />
-          </>
-        )}
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead><TableRow>
+              <TableCell>Nom</TableCell><TableCell>Email</TableCell><TableCell>Département</TableCell><TableCell>Rôles</TableCell><TableCell align="right">Actions</TableCell>
+            </TableRow></TableHead>
+            <TableBody>
+              {displayedProfessors.map((prof) => (
+                <TableRow key={prof.id}>
+                  <TableCell>{prof.full_name}</TableCell>
+                  <TableCell>{prof.email}</TableCell>
+                  <TableCell>{prof.department_name}</TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                      {prof.roles.map(r => <Chip key={r.id} label={r.name} size="small" color="primary" />)}
+                      {prof.roles.length === 0 && <Typography variant="caption" color="text.secondary">Aucun</Typography>}
+                    </Stack>
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton color="primary" onClick={() => handleOpenAssignDialog(prof)}><BadgeIcon /></IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination component="div" count={professors.length} page={page} onPageChange={(_, p) => setPage(p)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => setRowsPerPage(parseInt(e.target.value, 10))} />
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenRoleDialog()}
-          >
-            Nouveau rôle
-          </Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenRoleDialog()}>Nouveau rôle</Button>
         </Box>
-
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Nom</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Permissions</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {displayedRoles.map((role) => (
-                    <TableRow key={role.id}>
-                      <TableCell>{role.name}</TableCell>
-                      <TableCell>{role.description || '-'}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {role.permissions && role.permissions.map((permission, index) => (
-                            <Chip 
-                              key={index} 
-                              label={permission.replace(/_/g, ' ')} 
-                              size="small" 
-                              color="primary" 
-                              variant="outlined" 
-                            />
-                          ))}
-                          {(!role.permissions || role.permissions.length === 0) && (
-                            <Typography variant="body2" color="text.secondary">
-                              Aucune permission
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleOpenRoleDialog(role)}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton
-                          color="error"
-                          onClick={() => handleDeleteRole(role.id)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TablePagination
-              component="div"
-              count={roles.length}
-              page={page}
-              onPageChange={handleChangePage}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Lignes par page"
-            />
-          </>
-        )}
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead><TableRow>
+              <TableCell>Nom</TableCell><TableCell>Description</TableCell><TableCell>Permissions</TableCell><TableCell align="right">Actions</TableCell>
+            </TableRow></TableHead>
+            <TableBody>
+              {roles.map((role) => (
+                <TableRow key={role.id}>
+                  <TableCell fontWeight="bold">{role.name}</TableCell>
+                  <TableCell>{role.description}</TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(role.permissions || []).map(p => <Chip key={p} label={p.replace(/_/g, ' ')} size="small" variant="outlined" />)}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton onClick={() => handleOpenRoleDialog(role)}><EditIcon fontSize="small" /></IconButton>
+                    <IconButton color="error" onClick={() => handleDeleteRole(role.id)}><DeleteIcon fontSize="small" /></IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </TabPanel>
 
-      {/* Dialogue pour créer/modifier un rôle */}
-      <Dialog
-        open={roleDialogOpen}
-        onClose={handleCloseRoleDialog}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          {roleEditMode ? 'Modifier le rôle' : 'Créer un nouveau rôle'}
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                label="Nom du rôle"
-                fullWidth
-                value={roleName}
-                onChange={(e) => setRoleName(e.target.value)}
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                label="Description"
-                fullWidth
-                multiline
-                rows={2}
-                value={roleDescription}
-                onChange={(e) => setRoleDescription(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Typography variant="subtitle1">Permissions</Typography>
-              {renderPermissionCheckboxes()}
-            </Grid>
-          </Grid>
+      {/* DIALOG RÔLE */}
+      <Dialog open={roleDialogOpen} onClose={() => setRoleDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{roleEditMode ? 'Modifier' : 'Créer'} un rôle</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={3}>
+            <TextField label="Nom du rôle" fullWidth value={roleName} onChange={(e) => setRoleName(e.target.value)} required />
+            <TextField label="Description" fullWidth multiline rows={2} value={roleDescription} onChange={(e) => setRoleDescription(e.target.value)} />
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>Permissions</Typography>
+              <Grid container>
+                {availablePermissions.map(p => (
+                  <Grid item xs={6} sm={4} key={p}>
+                    <FormControlLabel control={<Checkbox checked={rolePermissions.includes(p)} onChange={() => {
+                      setRolePermissions(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+                    }} />} label={p.replace(/_/g, ' ')} />
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseRoleDialog}>Annuler</Button>
-          <Button 
-            onClick={roleEditMode ? handleUpdateRole : handleCreateRole}
-            variant="contained"
-            color="primary"
-            disabled={loading}
-          >
-            {loading ? (
-              <CircularProgress size={24} />
-            ) : (
-              roleEditMode ? 'Mettre à jour' : 'Créer'
-            )}
-          </Button>
+          <Button onClick={() => setRoleDialogOpen(false)}>Annuler</Button>
+          <Button onClick={handleSaveRole} variant="contained">Sauvegarder</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Dialogue pour assigner des rôles */}
-      <Dialog 
-        open={assignDialogOpen} 
-        onClose={handleCloseAssignDialog}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          Assigner des rôles à {professorForAssign?.full_name}
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel id="assign-roles-label">Rôles</InputLabel>
-              <Select
-                labelId="assign-roles-label"
-                multiple
-                value={selectedRoles.map((role) => role.id)}
-                onChange={(event) => {
-                  const nextRoleIds = Array.isArray(event.target.value)
-                    ? event.target.value
-                    : String(event.target.value).split(',');
-
-                  setSelectedRoles(
-                    roles.filter(
-                      (role) =>
-                        nextRoleIds.includes(role.id) ||
-                        nextRoleIds.includes(String(role.id))
-                    )
-                  );
-                }}
-                label="Rôles"
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((roleId) => {
-                      const role = roles.find(
-                        (item) => item.id === roleId || String(item.id) === String(roleId)
-                      );
-
-                      if (!role) {
-                        return null;
-                      }
-
-                      return (
-                        <Chip
-                          key={role.id}
-                          label={role.name}
-                          color="primary"
-                          size="small"
-                        />
-                      );
-                    })}
-                  </Box>
-                )}
-              >
-                {roles.map((role) => (
-                  <MenuItem key={role.id} value={role.id}>
-                    {role.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            
-            {selectedRoles.length > 0 && (
-              <Box sx={{ mt: 3 }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Permissions accordées
-                </Typography>
+      {/* DIALOG ASSIGNATION */}
+      <Dialog open={assignDialogOpen} onClose={() => setAssignDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Assigner des rôles à {professorForAssign?.full_name}</DialogTitle>
+        <DialogContent dividers>
+          <FormControl fullWidth sx={{ mt: 1 }}>
+            <InputLabel>Rôles</InputLabel>
+            <Select
+              multiple
+              value={selectedRoles.map(r => r.id)}
+              label="Rôles"
+              onChange={(e) => {
+                const ids = e.target.value;
+                setSelectedRoles(roles.filter(r => ids.includes(r.id)));
+              }}
+              renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {Array.from(new Set(selectedRoles.flatMap(role => role.permissions))).map(
-                    (permission, index) => (
-                      <Chip 
-                        key={index} 
-                        label={permission.replace('_', ' ')} 
-                        size="small" 
-                        color="primary" 
-                        variant="outlined" 
-                      />
-                    )
-                  )}
+                  {selected.map(id => <Chip key={id} label={roles.find(r => r.id === id)?.name} size="small" color="primary" />)}
                 </Box>
-              </Box>
-            )}
-          </Box>
+              )}
+            >
+              {roles.map(r => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAssignDialog}>Annuler</Button>
-          <Button 
-            onClick={handleSaveRoleAssignments}
-            variant="contained"
-            color="primary"
-            disabled={loading}
-            startIcon={<SaveIcon />}
-          >
-            {loading ? <CircularProgress size={24} /> : 'Enregistrer'}
-          </Button>
+          <Button onClick={() => setAssignDialogOpen(false)}>Annuler</Button>
+          <Button onClick={handleSaveAssignments} variant="contained" startIcon={<SaveIcon />}>Enregistrer</Button>
         </DialogActions>
       </Dialog>
     </Box>
