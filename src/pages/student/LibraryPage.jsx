@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material';
 
 import { supabase } from '@/supabase';
-...
+
 const LibraryPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [tabValue, setTabValue] = useState(0);

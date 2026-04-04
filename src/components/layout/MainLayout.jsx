@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { getAssetPath } from '@/utils/assetUtils';
 import Badge from '@mui/material/Badge';
 import { Outlet, useNavigate, Link as RouterLink } from 'react-router-dom';
+import notificationService from '@/services/NotificationService';
 import {
   AppBar,
   Box,
@@ -64,6 +65,46 @@ const MainLayout = () => {
   const { authState, signOut } = useAuth();
   const { user, profile, isAdmin, isProfessor } = authState;
   const navigate = useNavigate();
+
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  /**
+   * Charger les notifications réelles
+   */
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const loadNotifs = async () => {
+      try {
+        const { data } = await notificationService.getUnread(user.id);
+        if (data) {
+          setNotifications(data.slice(0, 5));
+          setUnreadCount(data.length);
+        }
+      } catch (err) {
+        console.error('Error loading unread notifications:', err);
+      }
+    };
+
+    loadNotifs();
+
+    // S'abonner aux changements temps réel
+    const subscription = notificationService.subscribeRealtime(
+      user.id, 
+      profile?.role, 
+      (newNotif) => {
+        setNotifications(prev => [newNotif, ...prev].slice(0, 5));
+        setUnreadCount(prev => prev + 1);
+      }
+    );
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, [user?.id, profile?.role]);
 
   /**
    * Gestion du menu utilisateur
@@ -333,7 +374,7 @@ const MainLayout = () => {
               color="inherit"
               onClick={handleOpenNotificationsMenu}
             >
-              <Badge badgeContent={4} color="error">
+              <Badge badgeContent={unreadCount} color="error">
                 <NotificationsIcon />
               </Badge>
             </IconButton>
@@ -352,12 +393,26 @@ const MainLayout = () => {
                 horizontal: 'right',
               }}
             >
-              <MenuItem component={RouterLink} to="/notifications" onClick={handleCloseNotificationsMenu}>
-                <Typography textAlign="center" fontFamily="Montserrat">Note publiée: Développement Web</Typography>
-              </MenuItem>
-              <MenuItem component={RouterLink} to="/notifications" onClick={handleCloseNotificationsMenu}>
-                <Typography textAlign="center" fontFamily="Montserrat">Nouvel examen: Algorithmique</Typography>
-              </MenuItem>
+              {notifications.length > 0 ? (
+                notifications.map((notif) => (
+                  <MenuItem 
+                    key={notif.id} 
+                    component={RouterLink} 
+                    to="/notifications" 
+                    onClick={handleCloseNotificationsMenu}
+                  >
+                    <Typography variant="body2" fontFamily="Montserrat">
+                      {notif.title}
+                    </Typography>
+                  </MenuItem>
+                ))
+              ) : (
+                <MenuItem onClick={handleCloseNotificationsMenu}>
+                  <Typography variant="body2" color="text.secondary" fontFamily="Montserrat">
+                    Aucune notification
+                  </Typography>
+                </MenuItem>
+              )}
               <Divider />
               <MenuItem component={RouterLink} to="/notifications" onClick={handleCloseNotificationsMenu}>
                 <Typography textAlign="center" fontFamily="Montserrat" color="primary">Voir toutes les notifications</Typography>
