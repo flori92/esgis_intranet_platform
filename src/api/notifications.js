@@ -17,16 +17,12 @@ const normalizeNotification = (row = {}) => ({
 
 const normalizeInsertPayload = (payload = {}) => ({
   recipient_id: payload.recipient_id ?? payload.userId ?? payload.user_id ?? null,
-  user_id: payload.recipient_id ?? payload.userId ?? payload.user_id ?? null,
   recipient_role: payload.recipient_role ?? null,
   sender_id: payload.sender_id ?? null,
   title: payload.title ?? payload.titre ?? 'Notification',
-  content: payload.content ?? payload.contenu ?? '',
-  message: payload.content ?? payload.contenu ?? '',
-  priority: payload.priority || 'medium',
-  type: payload.priority || 'medium',
-  read: Boolean(payload.read),
-  is_read: Boolean(payload.read)
+  content: payload.content ?? payload.message ?? payload.contenu ?? '',
+  priority: payload.priority ?? payload.type ?? 'medium',
+  read: Boolean(payload.read ?? payload.is_read)
 });
 
 const buildNotificationScope = (profileId, role) => {
@@ -51,7 +47,7 @@ export const getNotifications = async (profileId, role, options = {}) => {
 
     let query = supabase
       .from('notifications')
-      .select('id, title, content, message, priority, type, read, is_read, recipient_id, user_id, recipient_role, sender_id, created_at')
+      .select('*')
       .or(buildNotificationScope(profileId, role))
       .order('created_at', { ascending: false });
 
@@ -110,7 +106,7 @@ export const markNotificationAsRead = async (notificationId) => {
   try {
     const { error } = await supabase
       .from('notifications')
-      .update({ read: true, is_read: true })
+      .update({ read: true })
       .eq('id', notificationId);
 
     if (error) throw error;
@@ -125,7 +121,7 @@ export const markAllNotificationsAsRead = async (profileId, role) => {
   try {
     const { error } = await supabase
       .from('notifications')
-      .update({ read: true, is_read: true })
+      .update({ read: true })
       .or(buildNotificationScope(profileId, role))
       .eq('read', false);
 

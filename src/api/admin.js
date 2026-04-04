@@ -102,7 +102,7 @@ export const getAdminDashboardData = async (adminProfileId) => {
 
     let notificationsQuery = supabase
       .from('notifications')
-      .select('id, title, content, message, priority, type, read, is_read, recipient_id, user_id, recipient_role, created_at')
+      .select('*')
       .or(`recipient_id.eq.${adminProfileId},recipient_role.eq.admin,recipient_role.eq.all`)
       .order('created_at', { ascending: false })
       .limit(20);

@@ -358,7 +358,7 @@ export const exportUserData = async (userId) => {
       supabase.from('profiles').select('*').eq('id', userId).single(),
       supabase.from('grades').select('*, course:courses(name, code)').eq('student_id', userId),
       supabase.from('generated_documents').select('*').eq('student_id', userId),
-      supabase.from('notifications').select('*').or(`recipient_id.eq.${userId},user_id.eq.${userId}`).limit(100),
+      supabase.from('notifications').select('*').or(`recipient_id.eq.${userId},sender_id.eq.${userId}`).limit(100),
       supabase.from('messages').select('*').or(`sender_id.eq.${userId},recipient_id.eq.${userId}`).limit(100),
     ]);
 
