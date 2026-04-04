@@ -2,23 +2,92 @@
 import https from 'https';
 
 // Configuration Supabase
-const SUPABASE_URL = 'https://epnhnjkbxgciojevrwfq.supabase.co';
-const SUPABASE_SERVICE_ROLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjIwNjkwNiwiZXhwIjoyMDYxNzgyOTA2fQ.kbEs9bN0vpsf9cE8TZuj0-sBz6LCQ3o3LU0sptEx-mY';
+const SUPABASE_URL = 'https://zsuszjlgatsylleuopff.supabase.co';
+const SUPABASE_SERVICE_ROLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzdXN6amxnYXRzeWxsZXVvcGZmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTIwMDk2NiwiZXhwIjoyMDkwNzY5NjY2fQ.KoZX_65H9eeGDrV4FrYi3b-i0xxLa4GVLah-nKlHUhw';
 
 // SQL à exécuter
 const SQL_QUERY = `
--- Ajout d'un champ has_completed à la table active_students
-ALTER TABLE public.active_students 
-ADD COLUMN IF NOT EXISTS has_completed BOOLEAN DEFAULT FALSE;
+-- Script to create missing students and professors tables
 
--- Mise à jour des enregistrements existants
-UPDATE public.active_students 
-SET has_completed = (status = 'completed')
-WHERE has_completed IS NULL;
+-- Create students table
+CREATE TABLE IF NOT EXISTS public.students (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  student_number TEXT UNIQUE,
+  entry_year INTEGER,
+  level TEXT,
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(profile_id)
+);
 
--- Création d'un index pour améliorer les performances des requêtes
-CREATE INDEX IF NOT EXISTS idx_active_students_has_completed 
-ON public.active_students(has_completed);
+-- Create professors table
+CREATE TABLE IF NOT EXISTS public.professors (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  employee_number TEXT UNIQUE,
+  hire_date DATE,
+  specialties TEXT[],
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(profile_id)
+);
+
+-- Add RLS policies for students table
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Students can view their own record" ON public.students
+  FOR SELECT TO authenticated
+  USING (profile_id = auth.uid());
+
+CREATE POLICY "Professors and admins can view all students" ON public.students
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid()
+      AND role IN ('professor', 'admin')
+    )
+  );
+
+CREATE POLICY "Admins can manage students" ON public.students
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid()
+      AND role = 'admin'
+    )
+  );
+
+-- Add RLS policies for professors table
+ALTER TABLE public.professors ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Professors can view their own record" ON public.professors
+  FOR SELECT TO authenticated
+  USING (profile_id = auth.uid());
+
+CREATE POLICY "Everyone can view professors" ON public.professors
+  FOR SELECT TO authenticated
+  USING (true);
+
+CREATE POLICY "Admins can manage professors" ON public.professors
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid()
+      AND role = 'admin'
+    )
+  );
+
+-- Add indexes
+CREATE INDEX IF NOT EXISTS idx_students_profile_id ON public.students(profile_id);
+CREATE INDEX IF NOT EXISTS idx_students_student_number ON public.students(student_number);
+CREATE INDEX IF NOT EXISTS idx_professors_profile_id ON public.professors(profile_id);
+CREATE INDEX IF NOT EXISTS idx_professors_employee_number ON public.professors(employee_number);
 `;
 
 // Fonction pour exécuter une requête SQL directement via l'API REST
@@ -26,7 +95,7 @@ async function executeSql() {
   return new Promise((resolve, reject) => {
     // Créer une requête POST vers l'API REST de Supabase
     const options = {
-      hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+      hostname: 'zsuszjlgatsylleuopff.supabase.co',
       path: '/rest/v1/rpc/alter_table_add_column',
       method: 'POST',
       headers: {

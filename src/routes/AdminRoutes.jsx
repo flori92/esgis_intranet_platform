@@ -28,6 +28,7 @@ const LevelsAndSemestersPage = lazy(() => import('../pages/admin/LevelsAndSemest
 const SubjectsPage = lazy(() => import('../pages/admin/SubjectsPage'));
 const DocumentTemplatesPage = lazy(() => import('../pages/admin/DocumentTemplatesPage'));
 const ValidationQueuePage = lazy(() => import('../pages/admin/ValidationQueuePage'));
+const AllowedEmailsPage = lazy(() => import('../pages/admin/AllowedEmailsPage'));
 
 // Super Admin Pages
 const RolesPermissionsPage = lazy(() => import('../pages/admin/superadmin/RolesPermissionsPage'));
@@ -79,6 +80,7 @@ const AdminRoutes = () => {
         <Route path="subjects" element={<SubjectsPage />} />
         <Route path="document-templates" element={<DocumentTemplatesPage />} />
         <Route path="validation-queue" element={<ValidationQueuePage />} />
+        <Route path="allowed-emails" element={<AllowedEmailsPage />} />
 
         {/* Calendrier & Bulletins */}
         <Route path="calendar" element={<CalendarManagerPage />} />

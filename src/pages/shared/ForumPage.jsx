@@ -7,14 +7,15 @@ import {
 import {
   Forum as ForumIcon, Send as SendIcon, Reply as ReplyIcon,
   Delete as DeleteIcon, ThumbUp as ThumbUpIcon, PushPin as PinIcon,
-  ArrowBack as BackIcon
+  ArrowBack as BackIcon, Edit as EditIcon, Search as SearchIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import {
   getForums, getForumPosts, createForumPost, createForumReply,
-  toggleLike, togglePin, deleteForumPost
+  toggleLike, togglePin, deleteForumPost, updateForumPost, searchForumPosts
 } from '@/api/forums';
 
 const ForumPage = () => {
@@ -34,6 +35,10 @@ const ForumPage = () => {
   const [replyTo, setReplyTo] = useState(null);
   const [replyContent, setReplyContent] = useState('');
   const [posting, setPosting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [editingPost, setEditingPost] = useState(null);
+  const [editContent, setEditContent] = useState('');
 
   const loadForums = useCallback(async () => {
     setLoading(true);
@@ -153,6 +158,55 @@ const ForumPage = () => {
     }
   };
 
+  const handleEditPost = (post) => {
+    setEditingPost(post.id);
+    setEditContent(post.content);
+  };
+
+  const handleSaveEdit = async (postId) => {
+    if (!editContent.trim()) return;
+    try {
+      const { error: apiError } = await updateForumPost(postId, editContent);
+      if (apiError) throw apiError;
+      setEditingPost(null);
+      setEditContent('');
+      setSuccessMessage('Message modifié.');
+      await handleSelectForum(selectedForum);
+    } catch (err) {
+      setError('Erreur lors de la modification');
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim() || !selectedForum) return;
+    setSearching(true);
+    try {
+      const { data, error: apiError } = await searchForumPosts(selectedForum.id, searchQuery);
+      if (apiError) throw apiError;
+      setPosts((data || []).map(p => ({
+        id: p.id,
+        forum_id: selectedForum.id,
+        author: p.author?.full_name || 'Anonyme',
+        author_id: p.author?.id || p.author_id,
+        role: p.author?.role || 'student',
+        content: p.content,
+        created_at: p.created_at,
+        likes: p.likes_count || 0,
+        pinned: p.pinned || false,
+        replies: [],
+      })));
+    } catch (err) {
+      setError('Erreur lors de la recherche');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleClearSearch = async () => {
+    setSearchQuery('');
+    if (selectedForum) await handleSelectForum(selectedForum);
+  };
+
   const formatDate = (d) => {
     try { return format(new Date(d), "dd MMM yyyy 'à' HH:mm", { locale: fr }); } catch { return d || ''; }
   };
@@ -218,6 +272,22 @@ const ForumPage = () => {
             </Box>
           </Box>
 
+          {/* Barre de recherche */}
+          <Paper elevation={1} sx={{ p: 1.5, mb: 2, display: 'flex', gap: 1, alignItems: 'center' }}>
+            <SearchIcon color="action" />
+            <TextField size="small" fullWidth placeholder="Rechercher dans ce forum..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            />
+            {searchQuery && (
+              <IconButton size="small" onClick={handleClearSearch}><CloseIcon fontSize="small" /></IconButton>
+            )}
+            <Button size="small" variant="outlined" onClick={handleSearch} disabled={searching || !searchQuery.trim()}>
+              {searching ? 'Recherche...' : 'Rechercher'}
+            </Button>
+          </Paper>
+
           <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
             <TextField fullWidth multiline rows={2} placeholder="Écrire un message..."
               value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} />
@@ -257,6 +327,13 @@ const ForumPage = () => {
                     </Box>
                   </Box>
                   <Box>
+                    {post.author_id === userId && (
+                      <Tooltip title="Modifier">
+                        <IconButton size="small" onClick={() => handleEditPost(post)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     {userRole === 'professor' && (
                       <Tooltip title={post.pinned ? 'Désépingler' : 'Épingler'}>
                         <IconButton size="small" onClick={() => handlePin(post.id)}>
@@ -274,7 +351,19 @@ const ForumPage = () => {
                   </Box>
                 </Box>
 
-                <Typography variant="body1" sx={{ mt: 1, mb: 1.5, whiteSpace: 'pre-wrap' }}>{post.content}</Typography>
+                {editingPost === post.id ? (
+                  <Box sx={{ mt: 1, mb: 1.5 }}>
+                    <TextField fullWidth multiline rows={3} value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)} size="small" />
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                      <Button size="small" variant="contained" onClick={() => handleSaveEdit(post.id)}
+                        disabled={!editContent.trim()}>Enregistrer</Button>
+                      <Button size="small" onClick={() => { setEditingPost(null); setEditContent(''); }}>Annuler</Button>
+                    </Box>
+                  </Box>
+                ) : (
+                  <Typography variant="body1" sx={{ mt: 1, mb: 1.5, whiteSpace: 'pre-wrap' }}>{post.content}</Typography>
+                )}
 
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Button size="small" startIcon={<ThumbUpIcon />} onClick={() => handleLike(post.id)}>{post.likes}</Button>

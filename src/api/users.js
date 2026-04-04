@@ -147,128 +147,146 @@ const restorePreviousSession = async (session) => {
 };
 
 const ensureStudentRecord = async (profileId, userData = {}) => {
-  const { data: existing, error: existingError } = await supabase
-    .from('students')
-    .select('id, student_number, entry_year, level, status')
-    .eq('profile_id', profileId)
-    .maybeSingle();
+  try {
+    const { data: existing, error: existingError } = await supabase
+      .from('students')
+      .select('id, student_number, entry_year, level, status')
+      .eq('profile_id', profileId)
+      .maybeSingle();
 
-  if (existingError) {
-    throw existingError;
-  }
-
-  if (existing) {
-    const updates = {};
-    const studentStatus = getStudentStatusInput(userData);
-
-    if (userData.student_number) {
-      updates.student_number = userData.student_number;
-    }
-
-    if (userData.entry_year) {
-      updates.entry_year = Number(userData.entry_year);
-    }
-
-    if (userData.level) {
-      updates.level = normalizeLevel(userData.level);
-    }
-
-    if (studentStatus) {
-      updates.status = normalizeStudentStatus(studentStatus);
-    }
-
-    if (Object.keys(updates).length > 0) {
-      const { error } = await supabase
-        .from('students')
-        .update(updates)
-        .eq('id', existing.id);
-
-      if (error) {
-        throw error;
+    if (existingError) {
+      // If table doesn't exist, just return null
+      if (existingError.code === 'PGRST116' || existingError.message?.includes('relation "public.students" does not exist')) {
+        return null;
       }
+      throw existingError;
     }
 
-    return existing;
+    if (existing) {
+      const updates = {};
+      const studentStatus = getStudentStatusInput(userData);
+
+      if (userData.student_number) {
+        updates.student_number = userData.student_number;
+      }
+
+      if (userData.entry_year) {
+        updates.entry_year = Number(userData.entry_year);
+      }
+
+      if (userData.level) {
+        updates.level = normalizeLevel(userData.level);
+      }
+
+      if (studentStatus) {
+        updates.status = normalizeStudentStatus(studentStatus);
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const { error } = await supabase
+          .from('students')
+          .update(updates)
+          .eq('id', existing.id);
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      return existing;
+    }
+
+    const now = new Date();
+    const { error } = await supabase
+      .from('students')
+      .insert({
+        profile_id: profileId,
+        student_number: userData.student_number || generateStudentNumber(),
+        entry_year: Number(userData.entry_year) || now.getFullYear(),
+        level: normalizeLevel(userData.level),
+        status: normalizeStudentStatus(getStudentStatusInput(userData) || 'active')
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('ensureStudentRecord error:', error);
+    return null;
   }
-
-  const now = new Date();
-  const { error } = await supabase
-    .from('students')
-    .insert({
-      profile_id: profileId,
-      student_number: userData.student_number || generateStudentNumber(),
-      entry_year: Number(userData.entry_year) || now.getFullYear(),
-      level: normalizeLevel(userData.level),
-      status: normalizeStudentStatus(getStudentStatusInput(userData) || 'active')
-    });
-
-  if (error) {
-    throw error;
-  }
-
-  return null;
 };
 
 const ensureProfessorRecord = async (profileId, userData = {}) => {
-  const { data: existing, error: existingError } = await supabase
-    .from('professors')
-    .select('id, employee_number, hire_date, specialties, status')
-    .eq('profile_id', profileId)
-    .maybeSingle();
+  try {
+    const { data: existing, error: existingError } = await supabase
+      .from('professors')
+      .select('id, employee_number, hire_date, specialties, status')
+      .eq('profile_id', profileId)
+      .maybeSingle();
 
-  if (existingError) {
-    throw existingError;
-  }
-
-  if (existing) {
-    const updates = {};
-    const professorStatus = getProfessorStatusInput(userData);
-
-    if (userData.employee_number) {
-      updates.employee_number = userData.employee_number;
-    }
-
-    if (userData.hire_date) {
-      updates.hire_date = userData.hire_date;
-    }
-
-    if (userData.specialties || userData.speciality) {
-      updates.specialties = parseSpecialties(userData.specialties || userData.speciality);
-    }
-
-    if (professorStatus) {
-      updates.status = normalizeProfessorStatus(professorStatus);
-    }
-
-    if (Object.keys(updates).length > 0) {
-      const { error } = await supabase
-        .from('professors')
-        .update(updates)
-        .eq('id', existing.id);
-
-      if (error) {
-        throw error;
+    if (existingError) {
+      // If table doesn't exist, just return null
+      if (existingError.code === 'PGRST116' || existingError.message?.includes('relation "public.professors" does not exist')) {
+        return null;
       }
+      throw existingError;
     }
 
-    return existing;
+    if (existing) {
+      const updates = {};
+      const professorStatus = getProfessorStatusInput(userData);
+
+      if (userData.employee_number) {
+        updates.employee_number = userData.employee_number;
+      }
+
+      if (userData.hire_date) {
+        updates.hire_date = userData.hire_date;
+      }
+
+      if (userData.specialties || userData.speciality) {
+        updates.specialties = parseSpecialties(userData.specialties || userData.speciality);
+      }
+
+      if (professorStatus) {
+        updates.status = normalizeProfessorStatus(professorStatus);
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const { error } = await supabase
+          .from('professors')
+          .update(updates)
+          .eq('id', existing.id);
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      return existing;
+    }
+
+    const { error } = await supabase
+      .from('professors')
+      .insert({
+        profile_id: profileId,
+        employee_number: userData.employee_number || generateEmployeeNumber(),
+        hire_date: userData.hire_date || new Date().toISOString().slice(0, 10),
+        specialties: parseSpecialties(userData.specialties || userData.speciality),
+        status: normalizeProfessorStatus(getProfessorStatusInput(userData) || 'active')
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('ensureProfessorRecord error:', error);
+    return null;
   }
-
-  const { error } = await supabase
-    .from('professors')
-    .insert({
-      profile_id: profileId,
-      employee_number: userData.employee_number || generateEmployeeNumber(),
-      hire_date: userData.hire_date || new Date().toISOString().slice(0, 10),
-      specialties: parseSpecialties(userData.specialties || userData.speciality),
-      status: normalizeProfessorStatus(getProfessorStatusInput(userData) || 'active')
-    });
-
-  if (error) {
-    throw error;
-  }
-
-  return null;
 };
 
 const ensureRoleRecord = async (profileId, role, userData = {}) => {
@@ -306,6 +324,11 @@ export const getRoleEntities = async (profileId) => {
       professorEntity: professorEntity || null
     };
   } catch (error) {
+    // If tables don't exist, return null for both
+    if (error.message?.includes('relation "public.students" does not exist') ||
+        error.message?.includes('relation "public.professors" does not exist')) {
+      return { studentEntity: null, professorEntity: null };
+    }
     console.error('getRoleEntities:', error);
     return { studentEntity: null, professorEntity: null };
   }
@@ -333,9 +356,7 @@ export const getUsers = async (options = {}) => {
         role,
         department_id,
         is_active,
-        departments:department_id(name),
-        students(id, student_number, entry_year, level, status),
-        professors(id, employee_number, hire_date, specialties, status)
+        departments:department_id(name)
       `, { count: 'exact' });
 
     if (role) {
@@ -365,8 +386,20 @@ export const getUsers = async (options = {}) => {
       return { users: [], count: 0, error };
     }
 
+    // Get role entities separately to handle missing tables
+    const usersWithEntities = await Promise.all(
+      (data || []).map(async (user) => {
+        const { studentEntity, professorEntity } = await getRoleEntities(user.id);
+        return {
+          ...user,
+          students: studentEntity ? [studentEntity] : null,
+          professors: professorEntity ? [professorEntity] : null
+        };
+      })
+    );
+
     return {
-      users: (data || []).map(normalizeUserRow),
+      users: usersWithEntities.map(normalizeUserRow),
       count: count || 0,
       error: null
     };
@@ -389,9 +422,7 @@ export const getUserById = async (userId) => {
         role,
         department_id,
         is_active,
-        departments:department_id(name),
-        students(id, student_number, entry_year, level, status),
-        professors(id, employee_number, hire_date, specialties, status)
+        departments:department_id(name)
       `)
       .eq('id', userId)
       .single();
@@ -400,7 +431,16 @@ export const getUserById = async (userId) => {
       return { user: null, error };
     }
 
-    return { user: normalizeUserRow(data), error: null };
+    // Get role entities separately to handle missing tables
+    const { studentEntity, professorEntity } = await getRoleEntities(userId);
+
+    const userWithEntities = {
+      ...data,
+      students: studentEntity ? [studentEntity] : null,
+      professors: professorEntity ? [professorEntity] : null
+    };
+
+    return { user: normalizeUserRow(userWithEntities), error: null };
   } catch (error) {
     console.error(`Exception lors de la récupération de l'utilisateur ${userId}:`, error);
     return { user: null, error };

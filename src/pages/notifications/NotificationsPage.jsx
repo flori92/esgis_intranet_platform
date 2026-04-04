@@ -34,6 +34,8 @@ import {
   Warning as WarningIcon,
   Error as ErrorIcon,
   Info as InfoIcon,
+  NotificationsActive as PushIcon,
+  NotificationsOff as PushOffIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -44,6 +46,7 @@ import {
   markNotificationAsRead,
   subscribeToNotifications
 } from '@/api/notifications';
+import notificationService from '../../services/NotificationService';
 
 const NotificationsPage = () => {
   const { authState } = useAuth();
@@ -56,6 +59,9 @@ const NotificationsPage = () => {
   const [tabValue, setTabValue] = useState(0);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [selectedNotification, setSelectedNotification] = useState(null);
+  const [pushPermission, setPushPermission] = useState(
+    'Notification' in window ? Notification.permission : 'denied'
+  );
 
   const loadNotifications = async () => {
     if (!currentProfileId) {
@@ -232,11 +238,45 @@ const NotificationsPage = () => {
 
   const unreadCount = notifications.filter((item) => !item.read).length;
 
+  const handleRequestPush = async () => {
+    const permission = await notificationService.requestPushPermission();
+    setPushPermission(permission);
+    if (permission === 'granted') {
+      await notificationService.init();
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
         Notifications
       </Typography>
+
+      {/* Bannière Push Notifications */}
+      {pushPermission === 'default' && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          icon={<PushIcon />}
+          action={
+            <Button color="inherit" size="small" onClick={handleRequestPush}>
+              Activer
+            </Button>
+          }
+        >
+          Activez les notifications push pour recevoir les alertes d'examens, de notes et d'absences en temps réel sur votre navigateur.
+        </Alert>
+      )}
+      {pushPermission === 'granted' && (
+        <Alert severity="success" sx={{ mb: 2 }} icon={<PushIcon />}>
+          Notifications push activées. Vous recevrez les alertes importantes directement sur votre navigateur.
+        </Alert>
+      )}
+      {pushPermission === 'denied' && (
+        <Alert severity="warning" sx={{ mb: 2 }} icon={<PushOffIcon />}>
+          Les notifications push sont bloquées. Pour les activer, modifiez les paramètres de votre navigateur pour ce site.
+        </Alert>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>

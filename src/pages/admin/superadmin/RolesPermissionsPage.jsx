@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Grid, CircularProgress, Alert, Button,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   Card, CardContent, Divider, Snackbar, IconButton, Tooltip,
-  Switch, FormControlLabel, Checkbox, FormGroup, Accordion,
-  AccordionSummary, AccordionDetails, Select, MenuItem, FormControl,
-  InputLabel
+  Checkbox, FormGroup, Accordion, AccordionSummary, AccordionDetails,
+  Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead,
+  TableRow, FormControl, InputLabel, Select, MenuItem, FormControlLabel,
+  Autocomplete
 } from '@mui/material';
 import {
   Security as SecurityIcon,
@@ -15,18 +15,22 @@ import {
   Delete as DeleteIcon,
   Save as SaveIcon,
   ExpandMore as ExpandMoreIcon,
-  Person as PersonIcon,
-  AdminPanelSettings as AdminIcon,
-  School as SchoolIcon,
   Group as GroupIcon,
-  Shield as ShieldIcon
+  Shield as ShieldIcon,
+  PersonAdd as PersonAddIcon,
+  PersonRemove as PersonRemoveIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
-import { getRoles, createRole as apiCreateRole, updateRole as apiUpdateRole, deleteRole as apiDeleteRole } from '@/api/admin';
+import {
+  getRoles,
+  createRole as apiCreateRole,
+  updateRole as apiUpdateRole,
+  deleteRole as apiDeleteRole,
+  getUsersWithRoles,
+  assignRoleToUser,
+  removeRoleFromUser,
+} from '@/api/admin';
 
-/**
- * Ressources et actions disponibles dans le système
- */
 const SYSTEM_RESOURCES = [
   { key: 'students', label: 'Étudiants', actions: ['create', 'read', 'update', 'delete', 'import', 'export'] },
   { key: 'professors', label: 'Professeurs', actions: ['create', 'read', 'update', 'delete'] },
@@ -49,115 +53,72 @@ const ACTION_LABELS = {
   publish: 'Publier', grade: 'Noter', generate: 'Générer', validate: 'Valider',
 };
 
-/**
- * Données mock pour les rôles
- */
-const MOCK_ROLES = [
-  {
-    id: 'r1', name: 'super_admin', label: 'Super Administrateur', description: 'Accès complet au système',
-    is_system: true, user_count: 1,
-    permissions: SYSTEM_RESOURCES.reduce((acc, res) => {
-      acc[res.key] = res.actions;
-      return acc;
-    }, {})
-  },
-  {
-    id: 'r2', name: 'admin', label: 'Administrateur', description: 'Gestion globale de l\'établissement',
-    is_system: true, user_count: 3,
-    permissions: {
-      students: ['create', 'read', 'update', 'delete', 'import', 'export'],
-      professors: ['create', 'read', 'update', 'delete'],
-      courses: ['create', 'read', 'update', 'delete', 'assign'],
-      grades: ['read', 'update', 'publish'],
-      exams: ['read'],
-      documents: ['create', 'read', 'update', 'delete', 'generate', 'validate'],
-      schedule: ['create', 'read', 'update', 'delete'],
-      messages: ['create', 'read', 'delete'],
-      stages: ['create', 'read', 'update', 'delete'],
-      payments: ['create', 'read', 'update', 'validate'],
-      reports: ['read', 'export'],
-      system: [],
-      audit: [],
-    }
-  },
-  {
-    id: 'r3', name: 'scolarite', label: 'Agent Scolarité',
-    description: 'Accès aux documents et inscriptions uniquement',
-    is_system: false, user_count: 2,
-    permissions: {
-      students: ['read', 'update'], professors: [], courses: ['read'],
-      grades: ['read'], exams: [], documents: ['create', 'read', 'generate', 'validate'],
-      schedule: ['read'], messages: ['create', 'read'], stages: [],
-      payments: ['read', 'validate'], reports: ['read'], system: [], audit: [],
-    }
-  },
-  {
-    id: 'r4', name: 'professor', label: 'Professeur', description: 'Gestion pédagogique',
-    is_system: true, user_count: 15,
-    permissions: {
-      students: ['read'], professors: [], courses: ['read'],
-      grades: ['create', 'read', 'update', 'publish'], exams: ['create', 'read', 'update', 'delete', 'grade'],
-      documents: ['create', 'read'], schedule: ['read'], messages: ['create', 'read'],
-      stages: [], payments: [], reports: [], system: [], audit: [],
-    }
-  },
-  {
-    id: 'r5', name: 'student', label: 'Étudiant', description: 'Accès au parcours académique',
-    is_system: true, user_count: 450,
-    permissions: {
-      students: [], professors: [], courses: ['read'],
-      grades: ['read'], exams: ['read'],
-      documents: ['read'], schedule: ['read'], messages: ['create', 'read'],
-      stages: ['read'], payments: ['read'], reports: [], system: [], audit: [],
-    }
-  },
-];
+const ROLE_LABELS = { admin: 'Admin', professor: 'Professeur', student: 'Étudiant' };
 
-/**
- * Page de gestion des rôles et permissions — ESGIS Campus §7
- */
 const RolesPermissionsPage = () => {
   const { authState } = useAuth();
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [tabIndex, setTabIndex] = useState(0);
 
-  // Dialog d'édition de rôle
+  // Role edit dialog
   const [editDialog, setEditDialog] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
-  const [roleForm, setRoleForm] = useState({
-    name: '', label: '', description: '', permissions: {}
-  });
+  const [roleForm, setRoleForm] = useState({ name: '', label: '', description: '', permissions: {} });
   const [saving, setSaving] = useState(false);
-
-  // Dialog de confirmation de suppression
   const [deleteDialog, setDeleteDialog] = useState(null);
+
+  // User assignment
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [assignDialog, setAssignDialog] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedRoleId, setSelectedRoleId] = useState('');
 
   const loadRoles = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await getRoles();
-      if (!error && data && data.length > 0) {
-        setRoles(data);
-      } else {
-        setRoles(MOCK_ROLES);
-      }
-    } catch {
-      setRoles(MOCK_ROLES);
+      const { data, error: fetchError } = await getRoles();
+      if (fetchError) throw fetchError;
+      setRoles(data || []);
+    } catch (err) {
+      setError('Erreur lors du chargement des rôles: ' + err.message);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadRoles(); }, [loadRoles]);
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const { data, error: fetchError } = await getUsersWithRoles();
+      if (fetchError) throw fetchError;
+      setUsers(data || []);
+    } catch (err) {
+      setError('Erreur chargement utilisateurs: ' + err.message);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRoles();
+  }, [loadRoles]);
+
+  useEffect(() => {
+    if (tabIndex === 1) loadUsers();
+  }, [tabIndex, loadUsers]);
+
+  // ---- Role CRUD ----
 
   const handleOpenEdit = (role = null) => {
     if (role) {
       setEditingRole(role);
       setRoleForm({
         name: role.name, label: role.label,
-        description: role.description, permissions: { ...role.permissions }
+        description: role.description || '', permissions: { ...role.permissions }
       });
     } else {
       setEditingRole(null);
@@ -182,10 +143,7 @@ const RolesPermissionsPage = () => {
       const allChecked = actions.every(a => currentPerms.includes(a));
       return {
         ...prev,
-        permissions: {
-          ...prev.permissions,
-          [resource]: allChecked ? [] : [...actions]
-        }
+        permissions: { ...prev.permissions, [resource]: allChecked ? [] : [...actions] }
       };
     });
   };
@@ -197,28 +155,24 @@ const RolesPermissionsPage = () => {
     }
     setSaving(true);
     try {
+      const payload = {
+        name: roleForm.name,
+        label: roleForm.label,
+        description: roleForm.description,
+        permissions: roleForm.permissions,
+      };
+
       if (editingRole) {
-        // Mise à jour
-        const updatedRoles = roles.map(r =>
-          r.id === editingRole.id
-            ? { ...r, ...roleForm, updated_at: new Date().toISOString() }
-            : r
-        );
-        setRoles(updatedRoles);
+        const { error: updateError } = await apiUpdateRole(editingRole.id, payload);
+        if (updateError) throw updateError;
         setSuccessMessage(`Rôle "${roleForm.label}" mis à jour.`);
       } else {
-        // Création
-        const newRole = {
-          id: `r${Date.now()}`,
-          ...roleForm,
-          is_system: false,
-          user_count: 0,
-          created_at: new Date().toISOString()
-        };
-        setRoles(prev => [...prev, newRole]);
+        const { error: createError } = await apiCreateRole({ ...payload, is_system: false });
+        if (createError) throw createError;
         setSuccessMessage(`Rôle "${roleForm.label}" créé.`);
       }
       setEditDialog(false);
+      loadRoles();
     } catch (err) {
       setError('Erreur: ' + err.message);
     } finally {
@@ -226,19 +180,58 @@ const RolesPermissionsPage = () => {
     }
   };
 
-  const handleDeleteRole = (role) => {
+  const handleDeleteRole = async (role) => {
     if (role.is_system) {
       setError('Les rôles système ne peuvent pas être supprimés.');
       return;
     }
-    setRoles(prev => prev.filter(r => r.id !== role.id));
-    setDeleteDialog(null);
-    setSuccessMessage(`Rôle "${role.label}" supprimé.`);
+    try {
+      const { error: delError } = await apiDeleteRole(role.id);
+      if (delError) throw delError;
+      setSuccessMessage(`Rôle "${role.label}" supprimé.`);
+      setDeleteDialog(null);
+      loadRoles();
+    } catch (err) {
+      setError('Erreur suppression: ' + err.message);
+    }
   };
 
-  const getPermissionCount = (permissions) => {
-    return Object.values(permissions || {}).reduce((acc, actions) => acc + (actions?.length || 0), 0);
+  // ---- User assignment ----
+
+  const handleAssignRole = async () => {
+    if (!selectedUser || !selectedRoleId) {
+      setError('Sélectionnez un utilisateur et un rôle.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error: assignError } = await assignRoleToUser(selectedUser.id, selectedRoleId);
+      if (assignError) throw assignError;
+      setSuccessMessage(`Rôle assigné à ${selectedUser.full_name || selectedUser.email}.`);
+      setAssignDialog(false);
+      setSelectedUser(null);
+      setSelectedRoleId('');
+      loadUsers();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleRemoveRole = async (userId, roleId, userName) => {
+    try {
+      const { error: removeError } = await removeRoleFromUser(userId, roleId);
+      if (removeError) throw removeError;
+      setSuccessMessage(`Rôle retiré de ${userName}.`);
+      loadUsers();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const getPermissionCount = (permissions) =>
+    Object.values(permissions || {}).reduce((acc, actions) => acc + (actions?.length || 0), 0);
 
   if (loading) {
     return (
@@ -250,85 +243,192 @@ const RolesPermissionsPage = () => {
 
   return (
     <Box sx={{ p: { xs: 1, md: 2 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <SecurityIcon sx={{ mr: 1, color: 'primary.main', fontSize: 32 }} />
           <Typography variant="h5" fontWeight="bold">Gestion des Rôles & Permissions</Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenEdit()}>
-          Nouveau rôle
-        </Button>
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       <Snackbar open={!!successMessage} autoHideDuration={4000} onClose={() => setSuccessMessage('')} message={successMessage} />
 
-      {/* Liste des rôles */}
-      <Grid container spacing={2}>
-        {roles.map((role) => (
-          <Grid item xs={12} md={6} key={role.id}>
-            <Card elevation={2} sx={{ height: '100%' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                  <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <ShieldIcon color="primary" />
-                      <Typography variant="h6" fontWeight="bold">{role.label}</Typography>
-                    </Box>
-                    <Typography variant="body2" color="text.secondary">{role.description}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    <Tooltip title="Modifier">
-                      <IconButton size="small" onClick={() => handleOpenEdit(role)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    {!role.is_system && (
-                      <Tooltip title="Supprimer">
-                        <IconButton size="small" color="error" onClick={() => setDeleteDialog(role)}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </Box>
-                </Box>
-                <Divider sx={{ my: 1 }} />
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <Chip icon={<GroupIcon />} label={`${role.user_count} utilisateur${role.user_count > 1 ? 's' : ''}`}
-                    size="small" variant="outlined" />
-                  <Chip label={`${getPermissionCount(role.permissions)} permissions`}
-                    size="small" color="primary" variant="outlined" />
-                  {role.is_system && <Chip label="Système" size="small" color="warning" />}
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+      <Tabs value={tabIndex} onChange={(_, v) => setTabIndex(v)} sx={{ mb: 2 }}>
+        <Tab label="Rôles & Permissions" />
+        <Tab label="Assignation aux utilisateurs" />
+      </Tabs>
 
-      {/* Dialog d'édition des permissions */}
+      {/* TAB 0: Rôles */}
+      {tabIndex === 0 && (
+        <>
+          <Box sx={{ mb: 2 }}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenEdit()}>
+              Nouveau rôle
+            </Button>
+          </Box>
+
+          <Grid container spacing={2}>
+            {roles.map((role) => (
+              <Grid item xs={12} md={6} key={role.id}>
+                <Card elevation={2} sx={{ height: '100%' }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <ShieldIcon color="primary" />
+                          <Typography variant="h6" fontWeight="bold">{role.label}</Typography>
+                        </Box>
+                        <Typography variant="body2" color="text.secondary">{role.description}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Tooltip title="Modifier">
+                          <IconButton size="small" onClick={() => handleOpenEdit(role)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {!role.is_system && (
+                          <Tooltip title="Supprimer">
+                            <IconButton size="small" color="error" onClick={() => setDeleteDialog(role)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
+                    </Box>
+                    <Divider sx={{ my: 1 }} />
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <Chip label={`${getPermissionCount(role.permissions)} permissions`}
+                        size="small" color="primary" variant="outlined" />
+                      {role.is_system && <Chip label="Système" size="small" color="warning" />}
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+            {roles.length === 0 && (
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  Aucun rôle créé. Cliquez sur "Nouveau rôle" pour créer un rôle personnalisé
+                  (ex: Agent Scolarité, Responsable RH, Comptable...).
+                </Alert>
+              </Grid>
+            )}
+          </Grid>
+        </>
+      )}
+
+      {/* TAB 1: Assignation utilisateurs */}
+      {tabIndex === 1 && (
+        <>
+          <Box sx={{ mb: 2 }}>
+            <Button
+              variant="contained"
+              startIcon={<PersonAddIcon />}
+              onClick={() => setAssignDialog(true)}
+              disabled={roles.length === 0}
+            >
+              Assigner un rôle
+            </Button>
+            {roles.length === 0 && (
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                Créez d'abord un rôle dans l'onglet "Rôles & Permissions"
+              </Typography>
+            )}
+          </Box>
+
+          {usersLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Utilisateur</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell>Rôle système</TableCell>
+                    <TableCell>Rôles personnalisés</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {users.filter(u => u.custom_roles.length > 0).map((user) => (
+                    <TableRow key={user.id} hover>
+                      <TableCell>{user.full_name || '—'}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        <Chip label={ROLE_LABELS[user.role] || user.role} size="small" variant="outlined" />
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                          {user.custom_roles.map((cr) => (
+                            <Chip key={cr.id} label={cr.label} size="small" color="primary" />
+                          ))}
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        {user.custom_roles.map((cr) => (
+                          <Tooltip key={cr.id} title={`Retirer "${cr.label}"`}>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleRemoveRole(user.id, cr.id, user.full_name || user.email)}
+                            >
+                              <PersonRemoveIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {users.filter(u => u.custom_roles.length > 0).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center">
+                        <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+                          Aucun utilisateur n'a de rôle personnalisé assigné.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
+      )}
+
+      {/* Dialog: Édition de rôle */}
       <Dialog open={editDialog} onClose={() => setEditDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           {editingRole ? `Modifier : ${editingRole.label}` : 'Nouveau rôle personnalisé'}
         </DialogTitle>
         <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Créez des rôles modulaires pour déléguer des fonctions spécifiques
+            (ex: accès RH sans accès Finances, ou accès Scolarité sans accès Notes).
+          </Typography>
           <Grid container spacing={2} sx={{ mt: 0 }}>
             <Grid item xs={12} sm={4}>
               <TextField label="Identifiant" fullWidth size="small" value={roleForm.name}
                 onChange={(e) => setRoleForm(p => ({ ...p, name: e.target.value.toLowerCase().replace(/\s/g, '_') }))}
-                disabled={editingRole?.is_system} />
+                disabled={editingRole?.is_system} placeholder="ex: agent_scolarite" />
             </Grid>
             <Grid item xs={12} sm={4}>
               <TextField label="Libellé" fullWidth size="small" value={roleForm.label}
-                onChange={(e) => setRoleForm(p => ({ ...p, label: e.target.value }))} />
+                onChange={(e) => setRoleForm(p => ({ ...p, label: e.target.value }))}
+                placeholder="ex: Agent Scolarité" />
             </Grid>
             <Grid item xs={12} sm={4}>
               <TextField label="Description" fullWidth size="small" value={roleForm.description}
-                onChange={(e) => setRoleForm(p => ({ ...p, description: e.target.value }))} />
+                onChange={(e) => setRoleForm(p => ({ ...p, description: e.target.value }))}
+                placeholder="ex: Accès aux documents et inscriptions" />
             </Grid>
           </Grid>
 
-          <Typography variant="subtitle1" fontWeight="bold" sx={{ mt: 3, mb: 1 }}>Permissions</Typography>
+          <Typography variant="subtitle1" fontWeight="bold" sx={{ mt: 3, mb: 1 }}>
+            Matrice de permissions
+          </Typography>
           <Divider sx={{ mb: 1 }} />
 
           {SYSTEM_RESOURCES.map((resource) => {
@@ -377,14 +477,46 @@ const RolesPermissionsPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Confirmation suppression */}
+      {/* Dialog: Assignation de rôle */}
+      <Dialog open={assignDialog} onClose={() => setAssignDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Assigner un rôle personnalisé</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Sélectionnez un utilisateur et le rôle à lui attribuer.
+            Les permissions du rôle s'ajouteront à ses permissions système existantes.
+          </Typography>
+          <Autocomplete
+            options={users}
+            getOptionLabel={(u) => `${u.full_name || ''} (${u.email})`}
+            value={selectedUser}
+            onChange={(_, value) => setSelectedUser(value)}
+            renderInput={(params) => <TextField {...params} label="Utilisateur" fullWidth sx={{ mb: 2 }} />}
+            sx={{ mt: 1 }}
+          />
+          <FormControl fullWidth>
+            <InputLabel>Rôle à assigner</InputLabel>
+            <Select value={selectedRoleId} onChange={(e) => setSelectedRoleId(e.target.value)} label="Rôle à assigner">
+              {roles.map((r) => (
+                <MenuItem key={r.id} value={r.id}>{r.label} — {r.description || r.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAssignDialog(false)}>Annuler</Button>
+          <Button variant="contained" onClick={handleAssignRole} disabled={saving || !selectedUser || !selectedRoleId}>
+            {saving ? <CircularProgress size={20} /> : 'Assigner'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: Suppression */}
       <Dialog open={!!deleteDialog} onClose={() => setDeleteDialog(null)}>
         <DialogTitle>Supprimer le rôle</DialogTitle>
         <DialogContent>
           <Typography>
-            Êtes-vous sûr de vouloir supprimer le rôle <strong>{deleteDialog?.label}</strong> ?
-            {deleteDialog?.user_count > 0 &&
-              ` ${deleteDialog.user_count} utilisateur(s) seront réaffectés au rôle par défaut.`}
+            Supprimer le rôle <strong>{deleteDialog?.label}</strong> ?
+            Les utilisateurs assignés à ce rôle perdront ces permissions.
           </Typography>
         </DialogContent>
         <DialogActions>

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Badge from '@mui/material/Badge';
 import {
   Box,
   Typography,
@@ -16,9 +15,9 @@ import {
   MenuItem,
   ToggleButtonGroup,
   ToggleButton,
-  Chip,
-  Badge
+  Chip
 } from '@mui/material';
+import Badge from '@mui/material/Badge';
 import {
   AccessTime as AccessTimeIcon,
   Room as RoomIcon,

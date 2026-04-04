@@ -41,6 +41,7 @@ import {
   Chat as ChatIcon,
   Book as BookIcon,
   BarChart as BarChartIcon,
+  Email as EmailIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 // Suppression de l'import de AuthContextType
@@ -123,6 +124,7 @@ const MainLayout = () => {
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/admin' },
         { text: 'Étudiants & Comptes', icon: <PeopleIcon />, path: '/admin/students' },
         { text: 'Statut des Comptes', icon: <PersonIcon />, path: '/admin/account-status' },
+        { text: 'Emails Autorisés', icon: <EmailIcon />, path: '/admin/allowed-emails' },
         { text: 'Structure Académique', icon: <SchoolIcon />, path: '/admin/levels-semesters' },
         { text: 'Départements & Filières', icon: <SchoolIcon />, path: '/admin/departments-list' },
         { text: 'Matières & Cours', icon: <BookIcon />, path: '/admin/subjects' },

@@ -9,6 +9,7 @@ import {
 } from '../api/auth';
 import { getProfileById, updateProfileSettings } from '../api/profile';
 import { getRoleEntities } from '../api/users';
+import { checkEmailAllowed } from '../api/allowedEmails';
 
 /**
  * Hook personnalisé pour gérer l'authentification avec Supabase
@@ -21,6 +22,7 @@ export const useSupabaseAuth = () => {
     profile: null,
     session: null,
     isAdmin: false,
+    isSuperAdmin: false,
     isProfessor: false,
     isStudent: false,
     admin: null,
@@ -77,7 +79,8 @@ export const useSupabaseAuth = () => {
         const role = userProfile?.role || session.user.user_metadata?.role || null;
 
         // Déterminer le rôle de l'utilisateur
-        const isAdmin = role === 'admin';
+        const isSuperAdmin = role === 'super_admin' || (role === 'admin' && userProfile?.is_super_admin === true);
+        const isAdmin = role === 'admin' || isSuperAdmin;
         const isProfessor = role === 'professor';
         const isStudent = role === 'student';
 
@@ -144,6 +147,7 @@ export const useSupabaseAuth = () => {
           fullName,
           session,
           isAdmin,
+          isSuperAdmin,
           isProfessor,
           isStudent,
           admin,
@@ -161,6 +165,7 @@ export const useSupabaseAuth = () => {
           fullName: '',
           session,
           isAdmin: false,
+          isSuperAdmin: false,
           isProfessor: false,
           isStudent: false,
           admin: null,
@@ -179,6 +184,7 @@ export const useSupabaseAuth = () => {
         fullName: '',
         session: null,
         isAdmin: false,
+        isSuperAdmin: false,
         isProfessor: false,
         isStudent: false,
         admin: null,
@@ -230,6 +236,17 @@ export const useSupabaseAuth = () => {
     setAuthState(prev => ({ ...prev, error: null }));
 
     try {
+      // Vérifier si l'email est dans la liste des emails approuvés
+      const { allowed, error: checkError } = await checkEmailAllowed(email);
+
+      if (checkError) {
+        console.error('Erreur vérification email approuvé:', checkError);
+        // En cas d'erreur de vérification (table inexistante, etc.),
+        // on laisse passer pour ne pas bloquer si la table n'est pas encore créée
+      } else if (!allowed) {
+        throw new Error('EMAIL_NOT_ALLOWED');
+      }
+
       const { user: authUser, session: authSession, error } = await signInWithEmail(email, password);
 
       if (error) {
@@ -242,7 +259,9 @@ export const useSupabaseAuth = () => {
       console.error('Erreur lors de la connexion:', error.message);
 
       let errorMessage = error.message;
-      if (error.message.includes('Email not confirmed')) {
+      if (error.message === 'EMAIL_NOT_ALLOWED') {
+        errorMessage = 'Votre email n\'est pas autorisé. Veuillez contacter l\'administration pour obtenir l\'accès à la plateforme.';
+      } else if (error.message.includes('Email not confirmed')) {
         errorMessage = 'Veuillez confirmer votre email avant de vous connecter.';
       } else if (error.message.includes('Invalid login credentials')) {
         errorMessage = 'Email ou mot de passe incorrect.';
@@ -268,10 +287,33 @@ export const useSupabaseAuth = () => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
-      const { user, error } = await signUpWithEmail(email, password, profileData);
+      // Vérifier si l'email est approuvé
+      const { allowed, data: allowedData, error: checkError } = await checkEmailAllowed(email);
+
+      if (checkError) {
+        console.error('Erreur vérification email approuvé:', checkError);
+      } else if (!allowed) {
+        throw new Error('Votre email n\'est pas autorisé. Veuillez contacter l\'administration pour obtenir l\'accès à la plateforme.');
+      }
+
+      // Utiliser le rôle et les infos de la liste des emails approuvés si disponibles
+      const mergedProfileData = {
+        ...profileData,
+        role: profileData.role || allowedData?.role || 'student',
+        full_name: profileData.full_name || allowedData?.full_name || '',
+        department_id: profileData.department_id || allowedData?.department_id || null,
+      };
+
+      const { user, error } = await signUpWithEmail(email, password, mergedProfileData);
 
       if (error) {
         throw error;
+      }
+
+      // Marquer l'email comme enregistré dans allowed_emails
+      if (allowedData) {
+        const { markEmailAsRegistered } = await import('../api/allowedEmails');
+        await markEmailAsRegistered(email);
       }
 
       return {
@@ -400,6 +442,7 @@ export const useSupabaseAuth = () => {
     professor: authState.professor,
     student: authState.student,
     isAdmin: authState.isAdmin,
+    isSuperAdmin: authState.isSuperAdmin,
     isProfessor: authState.isProfessor,
     isStudent: authState.isStudent,
     isAuthenticated: authState.isAuthenticated,

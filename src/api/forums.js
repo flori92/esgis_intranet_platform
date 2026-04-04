@@ -256,6 +256,42 @@ export const togglePin = async (postId) => {
   }
 };
 
+/** Modifier un post */
+export const updateForumPost = async (postId, content) => {
+  try {
+    const { data, error } = await supabase
+      .from('forum_posts')
+      .update({ content, updated_at: new Date().toISOString() })
+      .eq('id', postId)
+      .select()
+      .single();
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
+/** Rechercher dans les posts d'un forum */
+export const searchForumPosts = async (forumId, query) => {
+  try {
+    const searchTerm = `%${query}%`;
+    const { data, error } = await supabase
+      .from('forum_posts')
+      .select(`
+        id, content, pinned, likes_count, created_at, updated_at,
+        author:author_id(id, full_name, role)
+      `)
+      .eq('forum_id', forumId)
+      .ilike('content', searchTerm)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    return { data: [], error };
+  }
+};
+
 /** Supprimer un post */
 export const deleteForumPost = async (postId) => {
   try {

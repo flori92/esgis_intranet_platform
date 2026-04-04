@@ -247,21 +247,61 @@ class NotificationService {
   }
 
   /**
+   * Envoie un SMS via l'API backend (Twilio/MessageBird)
+   * Utilisé pour les alertes critiques : examens imminents, suspensions, etc.
+   * @param {string} phoneNumber - Numéro au format international (+228...)
+   * @param {string} message - Contenu du SMS (160 chars max recommandé)
+   * @returns {Promise<Object>}
+   */
+  async sendSMS(phoneNumber, message) {
+    if (!phoneNumber) {
+      console.warn('Pas de numéro de téléphone pour l\'envoi SMS.');
+      return { success: false, error: 'Numéro manquant' };
+    }
+
+    try {
+      // Appel vers une Edge Function Supabase ou API backend
+      // Configure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
+      // dans les variables d'environnement Supabase Edge Functions
+      const { data, error } = await import('../supabase').then(({ supabase }) =>
+        supabase.functions.invoke('send-sms', {
+          body: { to: phoneNumber, message },
+        })
+      );
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Erreur envoi SMS:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Envoie une notification selon les préférences de l'utilisateur
-   * Orchestre les canaux (in-app + push + email si configuré)
+   * Orchestre les canaux (in-app + push + email + SMS pour alertes critiques)
    * @param {Object} params
    */
-  async sendSmart({ userId, type, titre, contenu, lien }) {
+  async sendSmart({ userId, type, titre, contenu, lien, phoneNumber }) {
+    const notifType = NOTIFICATION_TYPES[type?.toUpperCase()];
+    const priority = notifType?.priority || 'normal';
+
     // 1. Toujours envoyer in-app
     await this.sendInApp({ userId, type, titre, contenu, lien });
 
     // 2. Push navigateur si permission accordée
     if (this.pushPermission === 'granted') {
-      this.sendPush(titre, { body: contenu, url: lien, type });
+      this.sendPush(titre, { body: contenu, url: lien, type, priority });
     }
 
-    // 3. E-mail : serait géré par une Edge Function Supabase ou un webhook
-    // 4. SMS : serait géré par un service externe pour les événements critiques
+    // 3. SMS pour les alertes critiques et high (examens, suspensions)
+    if ((priority === 'critical' || priority === 'high') && phoneNumber) {
+      const smsMessage = `[ESGIS] ${titre}: ${contenu}`.substring(0, 160);
+      await this.sendSMS(phoneNumber, smsMessage);
+    }
+
+    // 4. E-mail : géré par Supabase Edge Function 'send-email'
+    // Déclenché automatiquement via un trigger DB sur la table notifications
   }
 }
 

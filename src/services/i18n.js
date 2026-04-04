@@ -258,7 +258,7 @@ export function setLocale(locale) {
   if (translations[locale]) {
     currentLocale = locale;
     // Persister en localStorage
-    try { localStorage.setItem('esgis_locale', locale); } catch {}
+    try { localStorage.setItem('esgis_locale', locale); } catch (e) { /* ignore storage errors */ }
   }
 }
 
@@ -280,7 +280,7 @@ export function initLocale() {
       currentLocale = stored;
       return;
     }
-  } catch {}
+  } catch (e) { /* ignore storage errors */ }
 
   // Détecter depuis le navigateur
   const browserLang = navigator.language?.substring(0, 2);

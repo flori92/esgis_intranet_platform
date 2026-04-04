@@ -27,12 +27,15 @@ import {
   ViewDay,
   ViewList,
   School as SchoolIcon,
+  FileDownload as FileDownloadIcon,
+  CalendarMonth as CalendarSyncIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { getScheduleSessions, getStudentCourseIds } from '../../api/schedule';
 import { format, parseISO, isBefore, isAfter, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { styled } from '@mui/material/styles';
+import { downloadICalFile, convertSessionsToICalEvents, generateICalContent } from '../../utils/icalExport';
 
 /**
  * @typedef {Object} CourseSessionWithDetails
@@ -480,6 +483,30 @@ const SchedulePage = () => {
     );
   };
 
+  /**
+   * Exporter l'emploi du temps au format iCal (.ics)
+   */
+  const handleExportICal = () => {
+    const icalEvents = convertSessionsToICalEvents(sessions);
+    const userName = authState.profile?.full_name || 'utilisateur';
+    downloadICalFile(icalEvents, `esgis-emploi-du-temps-${userName}.ics`, `ESGIS - ${userName}`);
+  };
+
+  /**
+   * Copier le lien d'abonnement iCal (webcal://)
+   * Permet la synchronisation avec Google Calendar, Apple Calendar, Outlook
+   */
+  const handleCopyCalendarLink = () => {
+    const icalEvents = convertSessionsToICalEvents(sessions);
+    const content = generateICalContent(icalEvents, 'ESGIS Campus');
+    const blob = new Blob([content], { type: 'text/calendar' });
+    const dataUrl = URL.createObjectURL(blob);
+
+    // Ouvrir avec le protocole webcal pour les apps de calendrier
+    const webcalUrl = dataUrl.replace('blob:', 'webcal:');
+    window.open(dataUrl, '_blank');
+  };
+
   // Rendu principal (JSX)
   return (
     <Box sx={{ py: 3 }}>
@@ -489,21 +516,42 @@ const SchedulePage = () => {
         </Alert>
       )}
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="h4" component="h1" gutterBottom>
           Emploi du temps
         </Typography>
 
-        {isAdmin || isProfessor ? (
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
-            variant="contained"
-            color="primary"
-            startIcon={<SchoolIcon />}
-            href="/schedule/manage"
+            variant="outlined"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportICal}
+            disabled={sessions.length === 0}
+            size="small"
           >
-            Gérer les cours
+            Exporter iCal
           </Button>
-        ) : null}
+          <Button
+            variant="outlined"
+            startIcon={<CalendarSyncIcon />}
+            onClick={handleCopyCalendarLink}
+            disabled={sessions.length === 0}
+            size="small"
+          >
+            Ouvrir dans Calendrier
+          </Button>
+          {isAdmin || isProfessor ? (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<SchoolIcon />}
+              href="/schedule/manage"
+              size="small"
+            >
+              Gérer les cours
+            </Button>
+          ) : null}
+        </Box>
       </Box>
 
       <Box sx={{ mb: 3 }}>
