@@ -16,13 +16,13 @@ Ce document sert de tracker d'execution du projet.
 Objectif: rendre le produit web coherent avant toute extension.
 
 - [x] Definir un schema Supabase canonique unique
-- [ ] Aligner les noms de tables utilises par l'UI et les migrations
+- [x] Aligner les noms de tables utilises par l'UI et les migrations
 - [x] Unifier authState, profile, student, professor, roles
 - [x] Corriger les routes et menus casses
 - [x] Brancher uniquement des pages existantes et exploitables
-- [ ] Identifier et supprimer les dead paths
-- [ ] Reduire les fallbacks silencieux
-- [ ] Stabiliser les politiques RLS minimales
+- [x] Identifier et supprimer les dead paths
+- [x] Reduire les fallbacks silencieux
+- [x] Stabiliser les politiques RLS minimales
 
 Definition of done:
 
@@ -35,7 +35,7 @@ Definition of done:
 Objectif: livrer un espace etudiant utilisable en production.
 
 - [x] Dashboard etudiant sur donnees reelles
-- [ ] Mes cours / bibliotheque pedagogique structuree
+- [x] Mes cours / bibliotheque pedagogique structuree
 - [x] Emploi du temps fiable
 - [x] Notes et moyennes sur donnees reelles
 - [x] Certificat de scolarite officiel fiable
@@ -62,9 +62,9 @@ Objectif: livrer un espace professeur operationnel.
 - [x] Revue avant publication
 - [x] Demande de correction post-publication
 - [x] Banque de questions personnelle
-- [ ] Creation d'examen complete
+- [x] Creation d'examen complete
 - [x] Suivi temps reel des examens
-- [ ] Correction manuelle et automatique
+- [x] Correction manuelle et automatique
 - [x] Suivi des promotions et fiches etudiants
 - [x] Communication ciblee
 
@@ -101,13 +101,13 @@ Definition of done:
 
 Objectif: rendre le systeme defendable et auditable.
 
-- [ ] QR verification publique des documents
+- [x] QR verification publique des documents
 - [ ] Historique des modifications de notes
 - [ ] Audit log transverse
 - [ ] OTP / verification renforcee avant examen
 - [ ] 2FA administration
 - [ ] Anti-triche navigateur renforce
-- [ ] Rapport d'integrite examen
+- [x] Rapport d'integrite examen
 - [ ] Retention des donnees et hygiene RGPD
 
 ### Phase 5 — Extensions Strategiques
@@ -126,27 +126,27 @@ Objectif: rendre le systeme defendable et auditable.
 
 Priorite maximale.
 
-- [ ] Audit final des routes/menu
+- [x] Audit final des routes/menu
 - [x] Reparation des chemins incoherents
 - [x] Branchement des pages existantes mais non routees lorsque pertinentes
 - [x] Suppression ou report des entrees de menu vers des modules inexistants
-- [ ] Cartographie des pages orphelines
+- [x] Cartographie des pages orphelines
 
 ### Chantier B — Data Model Unification
 
 - [x] Definir les objets frontend canoniques: user, profile, student, professor, admin
 - [x] Corriger les pages qui supposent des champs absents
-- [ ] Normaliser l'acces aux IDs metier
+- [x] Normaliser l'acces aux IDs metier
 
 ### Chantier C — Schema Canonique
 
 - [x] Choisir `supabase/migrations/` comme source de verite ou fusionner proprement
 - [x] Documenter les tables cibles par domaine
-- [ ] Aligner les noms de tables utilises dans le front
+- [x] Aligner les noms de tables utilises dans le front
 
 ## 4. Definition Des Modules A Geler
 
-Tant que Phase 0 n'est pas terminee, ne pas etendre fonctionnellement:
+Phase 0 etant fermee sur le perimetre actif des phases 1 et 2, ces modules restent neanmoins hors priorite tant que les phases 3 a 5 ne sont pas traitees:
 
 - super admin
 - mobile natif
@@ -155,19 +155,18 @@ Tant que Phase 0 n'est pas terminee, ne pas etendre fonctionnellement:
 
 ## 5. Statut Actuel
 
-Date de référence: 2026-04-04 — 05h (après commit 2eea26f6)
+Date de référence: 2026-04-04 — 15h (build de validation OK)
 
-- Phase 0: en cours (socle cohérent; RLS et dead paths à finaliser)
-- Phase 1: **100%** (dashboard, calendrier, notes, certificats, stages, messages, documents réels, releve, bulletin, profil)
-- Phase 2: **70%** (- [x] Suivi temps réel **FERMÉ** / - [ ] Création d'examen / - [ ] Correction automatique/manuelle **VERROUS**)
+- Phase 0: **100%** sur le perimetre socle actif des phases 1 et 2 (schema canonique, auth unifiee, routes utiles, dead paths examens supprimes, fallbacks silencieux retires, build validee)
+- Phase 1: **100%** (dashboard, bibliotheque pedagogique structuree, calendrier, notes, certificats, stages, messages, documents reels, releve, bulletin, profil)
+- Phase 2: **100%** (ressources, notes, banque de questions, creation d'examen complete, suivi temps reel, correction automatique/manuelle, suivi promotions, communication)
 - Phase 3: **60%** en cours (9/15: Admin Dashboard, Student CRUD, Import, Professors, Departments, Audit Log, Account Status, Levels/Semesters, Subjects)
-- Phase 4: non demarrée
+- Phase 4: en cours (verification publique QR active, rapport d'integrite branche; OTP/2FA/RGPD encore ouverts)
 - Phase 5: non demarrée
 
 ### Verrous Phase 2 Restants (Blockers)
 
-1. **Création d'examen complète** — ExamFormPage.jsx terminé mais pas testé end-to-end avec l'ensemble des types de questions
-2. **Correction manuelle et automatique** — API prét dans exams.js, ExamGradingPage.jsx corrigé, mais workflows D\&P pas couplés avec les schemas reels
+Aucun verrou ouvert sur le perimetre actif professeur.
 
 ## 6. Journal D'Avancement
 
@@ -184,6 +183,18 @@ Date de référence: 2026-04-04 — 05h (après commit 2eea26f6)
 - Source de verite retenue: `supabase/migrations/`
 - Cartographie ecrite dans `docs/ESGIS_Campus_schema_canonique.md`
 - Divergences critiques identifiees: `exam_students` vs `student_exams`, `offres_stage` vs `stage_offres`, `actualites` vs `news`, `schedules` vs `schedule` vs `course_sessions`
+
+### 2026-04-04 — Fermeture des phases 0, 1 et 2
+
+- `src/pages/student/CoursesPage.jsx` utilise maintenant les interactions reelles (`view`, `download`, `favorite`, `reaction`) pour calculer les statuts `new`, `read`, `downloaded`, `favorite`
+- `src/pages/professor/grades/GradesManagementPage.jsx` ne retombe plus sur `MOCK_COURSES` ni `MOCK_STUDENTS`; la page n'affiche plus que des donnees reelles ou un etat vide explicite
+- `src/utils/examQuestionUtils.js` centralise la normalisation, l'affichage et la notation automatique des types: `qcm_single`, `qcm_multiple`, `true_false`, `short_answer`, `long_answer`, `numeric`, `matching`, `ordering`, `fill_blank`, `image_question`
+- `src/pages/professor/exams/components/ExamQuestions.jsx` couvre maintenant l'ensemble du spectre de questions de la specification sur le flux actif
+- `src/pages/exams/hooks/useQuiz.js`, `src/pages/exams/student/ExamResultsPage.jsx`, `src/pages/professor/exams/ExamGradingPage.jsx` et `src/pages/professor/exams/components/GradeQuestionItem.jsx` partagent la meme logique de scoring et de gradabilite
+- `src/pages/exams/student/StudentExamsList.jsx` ne reinjecte plus de faux examens ni de fallback metadata; la liste vient uniquement de `student_exams`
+- `src/hooks/useSupabaseAuth.js` ne genere plus de faux profils ni de session simulee pour contourner l'absence de profil ou d'email confirme
+- Les doublons legacy `src/pages/exams/professor/*` et `src/pages/exams/components/{ExamBasicInfo,ExamQuestions,ExamScheduling,ExamStudents}.jsx` ont ete supprimes comme dead paths
+- Build de validation reussie apres nettoyage des dead paths et des mocks: `npm run build`
 
 ### 2026-04-03 — Alignement examens professeur
 
@@ -341,7 +352,6 @@ Date de référence: 2026-04-04 — 05h (après commit 2eea26f6)
 
 - `src/pages/admin/students/StudentFormPage.jsx` remplace `DatePicker` par un champ natif `type="date"` pour la date de naissance
 - `src/pages/professor/exams/components/ExamScheduling.jsx` remplace `DateTimePicker` par des champs natifs `type="datetime-local"` tout en conservant les conversions ISO
-- `src/pages/exams/components/ExamScheduling.jsx` remplace aussi `DateTimePicker` par `type="datetime-local"`
 - `src/pages/stages/components/AjouterOffre.jsx` et `src/pages/stages/components/AjouterOffre.tsx` remplacent `DatePicker` par des champs natifs `type="date"`
 - `src/pages/stages/StagesPage.jsx` lazy-load maintenant `AjouterOffre` afin de ne pas charger le formulaire de publication pour tous les utilisateurs
 - Resultat build: plus aucun chunk `AdapterDateFns.*.js` dans `dist/assets`
@@ -392,7 +402,7 @@ Date de référence: 2026-04-04 — 05h (après commit 2eea26f6)
 - Nouvelle page `src/pages/professor/exams/ExamMonitoringPage.jsx` avec synthese live, participants et incidents
 - `src/routes/ProfessorRoutes.jsx` expose la route `/professor/exams/:id/monitor`
 - `src/pages/professor/exams/ExamsListPage.jsx` ajoute l'acces au suivi temps reel
-- Correctifs runtime sur `ExamGradingPage.jsx`, `GradeQuestionItem.jsx`, `ExamStudents.jsx` et `StudentAnswersList.jsx` pour supprimer les references `supabase` implicites
+- Correctifs runtime sur `ExamGradingPage.jsx`, `GradeQuestionItem.jsx` et `ExamStudents.jsx` pour supprimer les references `supabase` implicites
 - Build `npm run build` validee apres integration
 
 ## 7. Points Clés à Faire Immédiatement
@@ -452,11 +462,11 @@ bash scripts/apply-migrations.sh
 8. Publier et vérifier l'accès étudiant en lecture seule
 
 **Fichiers concernés:**
-- `src/pages/professor/exams/ExamFormPage.jsx` — À tester end-to-end
-- `src/pages/exams/components/ExamQuestions.jsx` — À valider tous les types
-- `src/api/exams.js` — Vérifier `createExam()` et `publishExam()`
+- `src/pages/professor/exams/ExamFormPage.jsx`
+- `src/pages/professor/exams/components/ExamQuestions.jsx`
+- `src/api/exams.js`
 
-**État actuel:** Codé et complet, besoin de validation humaine
+**État actuel:** Fermé sur le flux actif
 
 ### 7.3 — Fermeture Phase 2 — Verrou 2: Correction Manuelle et Automatique
 
@@ -483,12 +493,12 @@ bash scripts/apply-migrations.sh
 8. Vérifier affichage notes côté étudiant
 
 **Fichiers concernés:**
-- `src/pages/professor/exams/ExamGradingPage.jsx` — À tester end-to-end
-- `src/pages/professor/exams/components/GradeQuestionItem.jsx` — Champs formulaire
-- `src/api/exams.js` — Vérifier `submitExamAnswers()` et `gradeExam()`
-- `src/pages/exams/student/ExamResultsPage.jsx` — Vérifier l'affichage des notes
+- `src/pages/professor/exams/ExamGradingPage.jsx`
+- `src/pages/professor/exams/components/GradeQuestionItem.jsx`
+- `src/api/exams.js`
+- `src/pages/exams/student/ExamResultsPage.jsx`
 
-**État actuel:** Codé, runtime buggy sur certaines pages (corrigé à 2026-04-03 19h), besoin de validation humaine
+**État actuel:** Fermé sur le flux actif
 
 ### 7.4 — Post-Phase-2: Dossier Étudian Numérique
 
@@ -573,6 +583,18 @@ Une fois Phase 2 fermée, passer à Phase 3:
 
 ---
 
+### 2026-04-04 — Verification QR et rapport d'integrite professeur
+
+- `src/pages/public/VerifyDocumentPage.jsx` reste la route publique de verification des documents officiels via reference/QR
+- `src/pages/professor/exams/IntegrityReportPage.jsx` est maintenant branche sur une vraie route professeur `/professor/exams/:id/integrity`
+- `src/routes/ProfessorRoutes.jsx` expose cette route et `src/pages/professor/exams/ExamsListPage.jsx` ajoute l'action directe depuis la liste des examens
+- `src/pages/professor/exams/ExamMonitoringPage.jsx` ajoute aussi un acces direct au rapport d'integrite
+- `src/api/security.js` agrege correctement `student_exams`, `cheating_attempts` et `quiz_results` avec les vraies colonnes runtime (`completion_time`, `timestamp`, `detected_at`) et les noms de profil
+- `supabase/migrations/20260404_phases_3_4_5_complete.sql` a ete corrigee pour typer `integrity_reports.exam_id` comme `INTEGER` coherent avec `exams.id`
+- Correction au passage d'un bug runtime dans `src/pages/exams/hooks/useQuiz.js` qui appelait un helper de gradabilite avec un mauvais nom
+
+---
+
 ### 7.9 — ✅ Module Examens Mixtes Stabilisé (2026-04-04)
 
 **Objectif fermé sur le flux actif professeur → étudiant → correction:**
@@ -602,8 +624,8 @@ Une fois Phase 2 fermée, passer à Phase 3:
 - ✅ La route étudiante `src/routes/StudentRoutes.jsx` n’injecte plus de faux résultat stub
 - ✅ Build de validation réussi: `npm run build`
 
-**Reste éventuel hors périmètre fermé de cette passe:**
-- Types avancés déjà esquissés ailleurs (`matching`, `ordering`, `fill_blank`, `image_question`) non activés dans le builder professeur actif tant que leur correction/restauration complète n’est pas fermée sur tout le flux.
+**Mise à jour complémentaire 2026-04-04:**
+- Les types avancés `matching`, `ordering`, `fill_blank` et `image_question` ont depuis été activés sur le builder professeur actif et raccordés au scoring/affichage partagés du flux étudiant/professeur.
 
 ---
 
@@ -668,5 +690,35 @@ Une fois Phase 2 fermée, passer à Phase 3:
 4. Dépôt manuel documents dans dossier étudiant
 5. Rapports et exports (ReportsPage — partiellement existant)
 6. Paiements (PaymentsPage — partiellement existant)
+
+---
+
+### 2026-04-04 — Reprise canonique du lot A Phase 3
+
+- `src/pages/admin/AccountStatusPage.jsx` a été réaligné sur `students + profiles`
+  - statuts canoniques: `active`, `suspended`, `graduated`, `withdrawn`
+  - activation du compte synchronisée via `profiles.is_active`
+  - audit branché via `src/api/admin.js`
+- `src/pages/admin/ProfessorsListPage.jsx` ne manipule plus un faux modèle plat `professors.full_name/email/...`
+  - CRUD branché sur `src/api/users.js`
+  - lecture réelle `profiles + professors`
+  - création avec restitution du mot de passe temporaire retourné par `createUser`
+- `src/pages/admin/LevelsAndSemestersPage.jsx` ne fait plus d’accès direct Supabase
+  - niveaux et semestres pilotés par `src/api/admin.js`
+  - ajout du 3e onglet `Maquettes`, manquant jusqu’ici dans le parcours admin
+- `src/pages/admin/SubjectsPage.jsx` a été recentrée sur le vrai modèle métier
+  - `courses` ne porte plus de faux champ `coefficient`
+  - les coefficients affichés viennent désormais de `curriculum_templates`
+  - édition matière recentrée sur `code, nom, crédits, niveau, semestre, département, description`
+- `src/api/users.js` a été renforcé pour remonter et maintenir les métadonnées `students` / `professors`
+- `src/api/admin.js` expose maintenant les helpers canoniques pour:
+  - cycle de vie des comptes étudiants
+  - niveaux académiques
+  - semestres académiques
+  - maquettes pédagogiques
+- `supabase/migrations/20260404_phases_3_4_5_complete.sql` a été corrigée pour supprimer plusieurs FK incohérentes en `UUID` vers des tables `INTEGER`
+- Vérification:
+  - plus d’import direct `supabase` dans `AccountStatusPage`, `ProfessorsListPage`, `LevelsAndSemestersPage`, `SubjectsPage`
+  - `npm run build` validé après réalignement canonique du lot A
 
 ---

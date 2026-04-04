@@ -13,6 +13,37 @@ const LEVEL_BY_UI_ID = {
 };
 
 const normalizeLevel = (value) => LEVEL_BY_UI_ID[value] || value || null;
+const getRelation = (value) => (Array.isArray(value) ? value[0] : value);
+
+const normalizeStudentLifecycleStatus = (value) => {
+  const normalized = `${value || 'active'}`.trim().toLowerCase();
+
+  const mapping = {
+    active: 'active',
+    actif: 'active',
+    suspended: 'suspended',
+    suspendu: 'suspended',
+    graduated: 'graduated',
+    'diplomé': 'graduated',
+    diplome: 'graduated',
+    withdrawn: 'withdrawn',
+    'radié': 'withdrawn',
+    radie: 'withdrawn'
+  };
+
+  return mapping[normalized] || 'active';
+};
+
+const normalizeCoursePayload = (courseData = {}) => ({
+  name: `${courseData.name || ''}`.trim(),
+  code: `${courseData.code || ''}`.trim().toUpperCase(),
+  credits: Number(courseData.credits) || 0,
+  description: courseData.description || null,
+  department_id: courseData.department_id ? Number(courseData.department_id) : null,
+  level: normalizeLevel(courseData.level) || 'L1',
+  semester: Number(courseData.semester) || 1,
+  updated_at: new Date().toISOString()
+});
 
 const countQuery = (table, filter) => {
   let query = supabase.from(table).select('*', { count: 'exact', head: true });
@@ -574,6 +605,126 @@ export const insertAuditLogEntry = async (entry) => {
 // ACCOUNT STATUS (Students)
 // ============================================================
 
+/** Récupère la liste canonique des comptes étudiants avec profil */
+export const getStudentAccountStatuses = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .select(`
+        id,
+        student_number,
+        entry_year,
+        level,
+        status,
+        created_at,
+        profile:profile_id(
+          id,
+          full_name,
+          email,
+          is_active,
+          department_id,
+          departments:department_id(name)
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      data: (data || []).map((student) => ({
+        profile: getRelation(student.profile),
+        id: student.id,
+        profile_id: getRelation(student.profile)?.id || null,
+        student_number: student.student_number,
+        entry_year: student.entry_year,
+        level: student.level,
+        status: student.status,
+        created_at: student.created_at,
+        full_name: getRelation(student.profile)?.full_name || '',
+        email: getRelation(student.profile)?.email || '',
+        is_active: getRelation(student.profile)?.is_active !== false,
+        department_id: getRelation(student.profile)?.department_id || null,
+        department_name: getRelation(getRelation(student.profile)?.departments)?.name || 'Non assigné'
+      })),
+      error: null
+    };
+  } catch (error) {
+    console.error('getStudentAccountStatuses:', error);
+    return { data: [], error };
+  }
+};
+
+/** Met à jour le cycle de vie d'un compte étudiant et journalise l'action */
+export const updateStudentAccountStatus = async (studentId, { status, reason = '', actor = null } = {}) => {
+  try {
+    const normalizedStatus = normalizeStudentLifecycleStatus(status);
+    const { data: student, error: studentError } = await supabase
+      .from('students')
+      .select(`
+        id,
+        profile_id,
+        student_number,
+        status,
+        profile:profile_id(full_name, email)
+      `)
+      .eq('id', studentId)
+      .single();
+
+    if (studentError) {
+      throw studentError;
+    }
+
+    const isActive = normalizedStatus === 'active';
+    const timestamp = new Date().toISOString();
+
+    const { error: updateStudentError } = await supabase
+      .from('students')
+      .update({
+        status: normalizedStatus,
+        updated_at: timestamp
+      })
+      .eq('id', studentId);
+
+    if (updateStudentError) {
+      throw updateStudentError;
+    }
+
+    const { error: updateProfileError } = await supabase
+      .from('profiles')
+      .update({
+        is_active: isActive,
+        updated_at: timestamp
+      })
+      .eq('id', student.profile_id);
+
+    if (updateProfileError) {
+      throw updateProfileError;
+    }
+
+    const detailsParts = [
+      `Statut étudiant: ${student.status} -> ${normalizedStatus}`,
+      reason ? `Raison: ${reason}` : null
+    ].filter(Boolean);
+
+    await insertAuditLogEntry({
+      user_id: actor?.id || null,
+      user_name: actor?.full_name || null,
+      user_role: actor?.role || 'admin',
+      action: 'update_student_status',
+      resource: 'student_account',
+      resource_id: `${studentId}`,
+      details: detailsParts.join(' | ')
+    });
+
+    return { error: null };
+  } catch (error) {
+    console.error('updateStudentAccountStatus:', error);
+    return { error };
+  }
+};
+
 /** Recupere tous les etudiants avec leur profil */
 export const getStudentsWithProfiles = async () => {
   try {
@@ -583,7 +734,14 @@ export const getStudentsWithProfiles = async () => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return { data: data || [], error: null };
+    return {
+      data: (data || []).map((entry) => ({
+        ...entry,
+        course: getRelation(entry.course),
+        department: getRelation(entry.department)
+      })),
+      error: null
+    };
   } catch (error) {
     console.error('getStudentsWithProfiles:', error);
     return { data: [], error };
@@ -609,6 +767,335 @@ export const updateStudentStatus = async (id, updates) => {
 // ============================================================
 // LEVELS & SEMESTERS
 // ============================================================
+
+/** Récupère les niveaux académiques avec nombre d'étudiants */
+export const getAcademicLevels = async () => {
+  try {
+    const [levelsRes, studentLevelsRes] = await Promise.all([
+      supabase
+        .from('academic_levels')
+        .select('*')
+        .order('sort_order'),
+      supabase
+        .from('students')
+        .select('level')
+        .not('level', 'is', null)
+    ]);
+
+    if (levelsRes.error) {
+      throw levelsRes.error;
+    }
+    if (studentLevelsRes.error) {
+      throw studentLevelsRes.error;
+    }
+
+    const studentCountByLevel = {};
+    (studentLevelsRes.data || []).forEach((student) => {
+      studentCountByLevel[student.level] = (studentCountByLevel[student.level] || 0) + 1;
+    });
+
+    return {
+      data: (levelsRes.data || []).map((level) => ({
+        ...level,
+        student_count: studentCountByLevel[level.code] || 0
+      })),
+      error: null
+    };
+  } catch (error) {
+    console.error('getAcademicLevels:', error);
+    return { data: [], error };
+  }
+};
+
+export const createAcademicLevel = async (payload) => {
+  try {
+    const { data, error } = await supabase
+      .from('academic_levels')
+      .insert({
+        code: `${payload.code || ''}`.trim().toUpperCase(),
+        label: payload.label,
+        sort_order: Number(payload.sort_order) || 0,
+        is_active: payload.is_active !== false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('createAcademicLevel:', error);
+    return { data: null, error };
+  }
+};
+
+export const updateAcademicLevel = async (id, payload) => {
+  try {
+    const { data, error } = await supabase
+      .from('academic_levels')
+      .update({
+        code: `${payload.code || ''}`.trim().toUpperCase(),
+        label: payload.label,
+        sort_order: Number(payload.sort_order) || 0,
+        is_active: payload.is_active !== false
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('updateAcademicLevel:', error);
+    return { data: null, error };
+  }
+};
+
+export const deleteAcademicLevel = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('academic_levels')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    return { error: null };
+  } catch (error) {
+    console.error('deleteAcademicLevel:', error);
+    return { error };
+  }
+};
+
+/** Récupère les semestres académiques */
+export const getAcademicSemesters = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('academic_semesters')
+      .select('*')
+      .order('academic_year', { ascending: false })
+      .order('code');
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      data: (data || []).map((course) => ({
+        ...course,
+        departments: getRelation(course.departments)
+      })),
+      error: null
+    };
+  } catch (error) {
+    console.error('getAcademicSemesters:', error);
+    return { data: [], error };
+  }
+};
+
+export const createAcademicSemester = async (payload) => {
+  try {
+    const { data, error } = await supabase
+      .from('academic_semesters')
+      .insert({
+        name: payload.name,
+        code: payload.code || 'S1',
+        academic_year: payload.academic_year,
+        start_date: payload.start_date,
+        end_date: payload.end_date,
+        is_active: payload.is_active === true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('createAcademicSemester:', error);
+    return { data: null, error };
+  }
+};
+
+export const updateAcademicSemester = async (id, payload) => {
+  try {
+    const { data, error } = await supabase
+      .from('academic_semesters')
+      .update({
+        name: payload.name,
+        code: payload.code || 'S1',
+        academic_year: payload.academic_year,
+        start_date: payload.start_date,
+        end_date: payload.end_date,
+        is_active: payload.is_active === true
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('updateAcademicSemester:', error);
+    return { data: null, error };
+  }
+};
+
+export const deleteAcademicSemester = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('academic_semesters')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    return { error: null };
+  } catch (error) {
+    console.error('deleteAcademicSemester:', error);
+    return { error };
+  }
+};
+
+/** Récupère les années académiques */
+export const getAcademicYears = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('academic_years')
+      .select('*')
+      .order('start_date', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getAcademicYears:', error);
+    return { data: [], error };
+  }
+};
+
+/** Récupère les maquettes pédagogiques */
+export const getCurriculumTemplates = async (filters = {}) => {
+  try {
+    let query = supabase
+      .from('curriculum_templates')
+      .select(`
+        *,
+        course:course_id(id, name, code, credits, level, semester),
+        department:department_id(id, name, code)
+      `)
+      .order('level_code')
+      .order('semester_code')
+      .order('course_id');
+
+    if (filters.department_id) {
+      query = query.eq('department_id', filters.department_id);
+    }
+    if (filters.level_code) {
+      query = query.eq('level_code', filters.level_code);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getCurriculumTemplates:', error);
+    return { data: [], error };
+  }
+};
+
+export const createCurriculumTemplate = async (payload) => {
+  try {
+    const { data, error } = await supabase
+      .from('curriculum_templates')
+      .insert({
+        department_id: payload.department_id || null,
+        level_code: normalizeLevel(payload.level_code) || 'L1',
+        semester_code: payload.semester_code || 'S1',
+        course_id: Number(payload.course_id) || null,
+        coefficient: Number(payload.coefficient) || 1,
+        credits: Number(payload.credits) || 0,
+        is_optional: payload.is_optional === true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('createCurriculumTemplate:', error);
+    return { data: null, error };
+  }
+};
+
+export const updateCurriculumTemplate = async (id, payload) => {
+  try {
+    const { data, error } = await supabase
+      .from('curriculum_templates')
+      .update({
+        department_id: payload.department_id || null,
+        level_code: normalizeLevel(payload.level_code) || 'L1',
+        semester_code: payload.semester_code || 'S1',
+        course_id: Number(payload.course_id) || null,
+        coefficient: Number(payload.coefficient) || 1,
+        credits: Number(payload.credits) || 0,
+        is_optional: payload.is_optional === true
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('updateCurriculumTemplate:', error);
+    return { data: null, error };
+  }
+};
+
+export const deleteCurriculumTemplate = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('curriculum_templates')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    return { error: null };
+  } catch (error) {
+    console.error('deleteCurriculumTemplate:', error);
+    return { error };
+  }
+};
 
 /** Recupere les niveaux distincts des etudiants */
 export const getStudentLevels = async () => {
@@ -859,7 +1346,7 @@ export const getCoursesWithDepartments = async () => {
   try {
     const { data, error } = await supabase
       .from('courses')
-      .select('*, departments(name)')
+      .select('*, departments:department_id(name)')
       .order('name');
 
     if (error) throw error;
@@ -875,7 +1362,7 @@ export const createCourse = async (courseData) => {
   try {
     const { error } = await supabase
       .from('courses')
-      .insert(Array.isArray(courseData) ? courseData : [courseData]);
+      .insert(Array.isArray(courseData) ? courseData.map(normalizeCoursePayload) : [normalizeCoursePayload(courseData)]);
 
     if (error) throw error;
     return { error: null };
@@ -890,7 +1377,7 @@ export const updateCourse = async (id, updates) => {
   try {
     const { error } = await supabase
       .from('courses')
-      .update(updates)
+      .update(normalizeCoursePayload(updates))
       .eq('id', id);
 
     if (error) throw error;

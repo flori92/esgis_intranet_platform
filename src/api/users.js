@@ -51,22 +51,87 @@ const normalizeRole = (value) => {
   return role;
 };
 
+const getStudentStatusInput = (value = {}) => (
+  value.student_status
+  || value.studentStatus
+  || value.lifecycle_status
+  || value.account_status
+  || null
+);
+
+const getProfessorStatusInput = (value = {}) => (
+  value.professor_status
+  || value.professorStatus
+  || null
+);
+
+const normalizeStudentStatus = (value) => {
+  const normalized = `${value || 'active'}`.trim().toLowerCase();
+
+  const map = {
+    active: 'active',
+    actif: 'active',
+    graduated: 'graduated',
+    'diplomé': 'graduated',
+    diplome: 'graduated',
+    suspended: 'suspended',
+    suspendu: 'suspended',
+    withdrawn: 'withdrawn',
+    'radié': 'withdrawn',
+    radie: 'withdrawn'
+  };
+
+  return map[normalized] || 'active';
+};
+
+const normalizeProfessorStatus = (value) => {
+  const normalized = `${value || 'active'}`.trim().toLowerCase();
+
+  const map = {
+    active: 'active',
+    actif: 'active',
+    on_leave: 'on_leave',
+    'congé': 'on_leave',
+    conge: 'on_leave',
+    retired: 'retired',
+    retraite: 'retired',
+    terminated: 'terminated',
+    termine: 'terminated'
+  };
+
+  return map[normalized] || 'active';
+};
+
 const generateStudentNumber = () => `ETU${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
 const generateEmployeeNumber = () => `PROF${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
 
 const normalizeUserRow = (row) => {
   const department = getRelation(row.departments);
+  const student = getRelation(row.students || row.student);
+  const professor = getRelation(row.professors || row.professor);
 
   return {
     id: row.id,
     created_at: row.created_at,
     full_name: row.full_name,
     email: row.email,
+    phone: row.phone || '',
     role: row.role,
     department_id: row.department_id,
     department_name: department?.name || 'Non assigné',
     is_active: row.is_active !== false,
-    status: row.is_active === false ? 'inactive' : 'active'
+    status: row.is_active === false ? 'inactive' : 'active',
+    student_id: student?.id || null,
+    student_number: student?.student_number || '',
+    student_status: student?.status || null,
+    level: student?.level || null,
+    entry_year: student?.entry_year || null,
+    professor_id: professor?.id || null,
+    employee_number: professor?.employee_number || '',
+    hire_date: professor?.hire_date || null,
+    specialties: professor?.specialties || [],
+    specialization: (professor?.specialties || []).join(', '),
+    professor_status: professor?.status || null
   };
 };
 
@@ -84,7 +149,7 @@ const restorePreviousSession = async (session) => {
 const ensureStudentRecord = async (profileId, userData = {}) => {
   const { data: existing, error: existingError } = await supabase
     .from('students')
-    .select('id')
+    .select('id, student_number, entry_year, level, status')
     .eq('profile_id', profileId)
     .maybeSingle();
 
@@ -93,6 +158,36 @@ const ensureStudentRecord = async (profileId, userData = {}) => {
   }
 
   if (existing) {
+    const updates = {};
+    const studentStatus = getStudentStatusInput(userData);
+
+    if (userData.student_number) {
+      updates.student_number = userData.student_number;
+    }
+
+    if (userData.entry_year) {
+      updates.entry_year = Number(userData.entry_year);
+    }
+
+    if (userData.level) {
+      updates.level = normalizeLevel(userData.level);
+    }
+
+    if (studentStatus) {
+      updates.status = normalizeStudentStatus(studentStatus);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase
+        .from('students')
+        .update(updates)
+        .eq('id', existing.id);
+
+      if (error) {
+        throw error;
+      }
+    }
+
     return existing;
   }
 
@@ -104,7 +199,7 @@ const ensureStudentRecord = async (profileId, userData = {}) => {
       student_number: userData.student_number || generateStudentNumber(),
       entry_year: Number(userData.entry_year) || now.getFullYear(),
       level: normalizeLevel(userData.level),
-      status: 'active'
+      status: normalizeStudentStatus(getStudentStatusInput(userData) || 'active')
     });
 
   if (error) {
@@ -117,7 +212,7 @@ const ensureStudentRecord = async (profileId, userData = {}) => {
 const ensureProfessorRecord = async (profileId, userData = {}) => {
   const { data: existing, error: existingError } = await supabase
     .from('professors')
-    .select('id')
+    .select('id, employee_number, hire_date, specialties, status')
     .eq('profile_id', profileId)
     .maybeSingle();
 
@@ -126,6 +221,36 @@ const ensureProfessorRecord = async (profileId, userData = {}) => {
   }
 
   if (existing) {
+    const updates = {};
+    const professorStatus = getProfessorStatusInput(userData);
+
+    if (userData.employee_number) {
+      updates.employee_number = userData.employee_number;
+    }
+
+    if (userData.hire_date) {
+      updates.hire_date = userData.hire_date;
+    }
+
+    if (userData.specialties || userData.speciality) {
+      updates.specialties = parseSpecialties(userData.specialties || userData.speciality);
+    }
+
+    if (professorStatus) {
+      updates.status = normalizeProfessorStatus(professorStatus);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase
+        .from('professors')
+        .update(updates)
+        .eq('id', existing.id);
+
+      if (error) {
+        throw error;
+      }
+    }
+
     return existing;
   }
 
@@ -136,7 +261,7 @@ const ensureProfessorRecord = async (profileId, userData = {}) => {
       employee_number: userData.employee_number || generateEmployeeNumber(),
       hire_date: userData.hire_date || new Date().toISOString().slice(0, 10),
       specialties: parseSpecialties(userData.specialties || userData.speciality),
-      status: 'active'
+      status: normalizeProfessorStatus(getProfessorStatusInput(userData) || 'active')
     });
 
   if (error) {
@@ -204,10 +329,13 @@ export const getUsers = async (options = {}) => {
         created_at,
         full_name,
         email,
+        phone,
         role,
         department_id,
         is_active,
-        departments:department_id(name)
+        departments:department_id(name),
+        students(id, student_number, entry_year, level, status),
+        professors(id, employee_number, hire_date, specialties, status)
       `, { count: 'exact' });
 
     if (role) {
@@ -257,10 +385,13 @@ export const getUserById = async (userId) => {
         created_at,
         full_name,
         email,
+        phone,
         role,
         department_id,
         is_active,
-        departments:department_id(name)
+        departments:department_id(name),
+        students(id, student_number, entry_year, level, status),
+        professors(id, employee_number, hire_date, specialties, status)
       `)
       .eq('id', userId)
       .single();
@@ -309,37 +440,32 @@ export const createUser = async (userData) => {
       };
     }
 
-    const { data: profileData, error: profileError } = await supabase
+    const { error: profileError } = await supabase
       .from('profiles')
       .upsert({
         id: authData.user.id,
         email,
         full_name: fullName,
+        phone: userData.phone || null,
         role,
         department_id: userData.department_id || null,
         is_active: userData.status !== 'inactive',
         updated_at: new Date().toISOString()
-      })
-      .select(`
-        id,
-        created_at,
-        full_name,
-        email,
-        role,
-        department_id,
-        is_active,
-        departments:department_id(name)
-      `)
-      .single();
+      });
 
     if (profileError) {
       return { user: null, tempPassword: null, error: profileError };
     }
 
-    await ensureRoleRecord(profileData.id, role, userData);
+    await ensureRoleRecord(authData.user.id, role, userData);
+    const { user, error: userError } = await getUserById(authData.user.id);
+
+    if (userError) {
+      return { user: null, tempPassword: null, error: userError };
+    }
 
     return {
-      user: normalizeUserRow(profileData),
+      user,
       tempPassword,
       error: null
     };
@@ -356,26 +482,18 @@ export const updateUser = async (userId, updates) => {
     const role = normalizeRole(updates.role);
     const payload = {
       full_name: `${updates.full_name || ''}`.trim(),
+      phone: updates.phone || null,
       role,
       department_id: updates.department_id || null,
       is_active: updates.status !== 'inactive',
       updated_at: new Date().toISOString()
     };
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('profiles')
       .update(payload)
       .eq('id', userId)
-      .select(`
-        id,
-        created_at,
-        full_name,
-        email,
-        role,
-        department_id,
-        is_active,
-        departments:department_id(name)
-      `)
+      .select('id')
       .single();
 
     if (error) {
@@ -383,8 +501,13 @@ export const updateUser = async (userId, updates) => {
     }
 
     await ensureRoleRecord(userId, role, updates);
+    const { user, error: userError } = await getUserById(userId);
 
-    return { user: normalizeUserRow(data), error: null };
+    if (userError) {
+      return { user: null, error: userError };
+    }
+
+    return { user, error: null };
   } catch (error) {
     console.error(`Exception lors de la mise à jour de l'utilisateur ${userId}:`, error);
     return { user: null, error };

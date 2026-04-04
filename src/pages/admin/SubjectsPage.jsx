@@ -1,16 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   CardHeader,
+  Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -18,29 +26,39 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Typography,
-  Chip,
-  Alert,
-  CircularProgress,
-  Stack,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
+  Typography
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
-  Search as SearchIcon,
+  Edit as EditIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
-import { supabase } from '@/supabase';
-import { useAuth } from '../../hooks/useAuth';
+import {
+  createCourse,
+  deleteCourse,
+  getCoursesWithDepartments,
+  getCurriculumTemplates,
+  updateCourse
+} from '@/api/admin';
+import { getDepartments } from '@/api/departments';
+
+const LEVEL_OPTIONS = ['L1', 'L2', 'L3', 'M1', 'M2'];
+
+const createEmptySubject = () => ({
+  code: '',
+  name: '',
+  credits: 3,
+  semester: 1,
+  level: 'L1',
+  department_id: '',
+  description: ''
+});
 
 export default function SubjectsPage() {
-  const { authState } = useAuth();
   const [subjects, setSubjects] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [curriculumEntries, setCurriculumEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingSubject, setEditingSubject] = useState(null);
@@ -48,7 +66,6 @@ export default function SubjectsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Fetch subjects and departments
   useEffect(() => {
     fetchData();
   }, []);
@@ -58,125 +75,113 @@ export default function SubjectsPage() {
       setLoading(true);
       setError('');
 
-      // Fetch subjects (courses table)
-      const { data: subjectsData, error: subjectsError } = await supabase
-        .from('courses')
-        .select('*, departments(name)')
-        .order('name');
+      const [
+        { data: subjectsData, error: subjectsError },
+        { departments: departmentsData, error: departmentsError },
+        { data: curriculumData, error: curriculumError }
+      ] = await Promise.all([
+        getCoursesWithDepartments(),
+        getDepartments(),
+        getCurriculumTemplates()
+      ]);
 
       if (subjectsError) throw subjectsError;
-
-      // Fetch departments
-      const { data: deptsData, error: deptsError } = await supabase
-        .from('departments')
-        .select('*')
-        .order('name');
-
-      if (deptsError) throw deptsError;
+      if (departmentsError) throw departmentsError;
+      if (curriculumError) throw curriculumError;
 
       setSubjects(subjectsData || []);
-      setDepartments(deptsData || []);
+      setDepartments(departmentsData || []);
+      setCurriculumEntries(curriculumData || []);
     } catch (err) {
-      setError(`Error loading data: ${err.message}`);
+      setError(`Erreur lors du chargement des matières: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddClick = () => {
-    setEditingSubject({
-      code: '',
-      name: '',
-      credits: 3,
-      coefficient: 1.0,
-      semester: 1,
-      department_id: '',
-      description: '',
-      professor_id: '',
-    });
-  };
+  const curriculumByCourse = useMemo(() => {
+    const map = new Map();
 
-  const handleEditClick = (subject) => {
-    setEditingSubject({ ...subject });
+    curriculumEntries.forEach((entry) => {
+      const currentEntries = map.get(entry.course_id) || [];
+      currentEntries.push(entry);
+      map.set(entry.course_id, currentEntries);
+    });
+
+    return map;
+  }, [curriculumEntries]);
+
+  const filteredSubjects = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return subjects.filter((subject) => !query
+      || subject.name?.toLowerCase().includes(query)
+      || subject.code?.toLowerCase().includes(query));
+  }, [searchQuery, subjects]);
+
+  const getCoefficientLabel = (subjectId) => {
+    const entries = curriculumByCourse.get(subjectId) || [];
+    const coefficients = [...new Set(entries.map((entry) => Number(entry.coefficient).toFixed(1)))];
+
+    if (!coefficients.length) {
+      return 'Non défini';
+    }
+
+    return coefficients.length === 1 ? `${coefficients[0]}x` : 'Variable';
   };
 
   const handleSave = async () => {
     try {
-      if (!editingSubject.name || !editingSubject.code) {
-        setError('Name and code are required');
+      if (!editingSubject?.name || !editingSubject?.code) {
+        setError('Le nom et le code sont obligatoires.');
         return;
       }
 
-      const credits = parseInt(editingSubject.credits) || 0;
-      const coefficient = parseFloat(editingSubject.coefficient) || 1.0;
-      const semester = parseInt(editingSubject.semester) || 1;
-      const departmentId = editingSubject.department_id ? parseInt(editingSubject.department_id) : null;
+      const payload = {
+        name: editingSubject.name,
+        code: editingSubject.code,
+        credits: Number(editingSubject.credits),
+        semester: Number(editingSubject.semester),
+        level: editingSubject.level,
+        department_id: editingSubject.department_id ? Number(editingSubject.department_id) : null,
+        description: editingSubject.description
+      };
 
-      if (editingSubject.id) {
-        // Update existing
-        const { error: updateError } = await supabase
-          .from('courses')
-          .update({
-            name: editingSubject.name,
-            code: editingSubject.code,
-            credits,
-            coefficient,
-            semester,
-            department_id: departmentId,
-            description: editingSubject.description,
-          })
-          .eq('id', editingSubject.id);
+      const action = editingSubject.id
+        ? updateCourse(editingSubject.id, payload)
+        : createCourse(payload);
 
-        if (updateError) throw updateError;
-        setSuccess('Subject updated successfully');
-      } else {
-        // Create new
-        const { error: insertError } = await supabase
-          .from('courses')
-          .insert([{
-            name: editingSubject.name,
-            code: editingSubject.code,
-            credits,
-            coefficient,
-            semester,
-            department_id: departmentId,
-            description: editingSubject.description,
-          }]);
+      const { error: saveError } = await action;
 
-        if (insertError) throw insertError;
-        setSuccess('Subject created successfully');
+      if (saveError) {
+        throw saveError;
       }
 
+      setSuccess(editingSubject.id ? 'Matière mise à jour.' : 'Matière créée.');
       setEditingSubject(null);
       await fetchData();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError(`Error saving: ${err.message}`);
+      setError(`Erreur lors de l’enregistrement: ${err.message}`);
     }
   };
 
   const handleDelete = async () => {
     try {
-      const { error: deleteError } = await supabase
-        .from('courses')
-        .delete()
-        .eq('id', deleteConfirm.id);
+      const { error: deleteError } = await deleteCourse(deleteConfirm.id);
 
-      if (deleteError) throw deleteError;
+      if (deleteError) {
+        throw deleteError;
+      }
 
-      setSuccess('Subject deleted successfully');
+      setSuccess('Matière supprimée.');
       setDeleteConfirm(null);
       await fetchData();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError(`Error deleting: ${err.message}`);
+      setError(`Erreur lors de la suppression: ${err.message}`);
     }
   };
-
-  const filteredSubjects = subjects.filter((subject) =>
-    subject.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    subject.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   if (loading) {
     return (
@@ -191,28 +196,23 @@ export default function SubjectsPage() {
       <Card sx={{ mb: 3 }}>
         <CardHeader
           title="Gestion des Matières"
-          action={
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleAddClick}
-            >
+          subheader="Le coefficient est piloté par les maquettes pédagogiques, pas par la table courses."
+          action={(
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditingSubject(createEmptySubject())}>
               Ajouter Matière
             </Button>
-          }
+          )}
         />
         <CardContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
           {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
           <TextField
             fullWidth
             placeholder="Rechercher par nom ou code..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ mr: 1 }} />,
-            }}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1 }} /> }}
             sx={{ mb: 3 }}
           />
 
@@ -221,10 +221,11 @@ export default function SubjectsPage() {
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
                   <TableCell><strong>Code</strong></TableCell>
-                  <TableCell><strong>Nom de la Matière</strong></TableCell>
+                  <TableCell><strong>Matière</strong></TableCell>
+                  <TableCell><strong>Niveau</strong></TableCell>
+                  <TableCell><strong>Semestre</strong></TableCell>
                   <TableCell><strong>Crédits</strong></TableCell>
                   <TableCell><strong>Coefficient</strong></TableCell>
-                  <TableCell><strong>Semestre</strong></TableCell>
                   <TableCell><strong>Département</strong></TableCell>
                   <TableCell align="right"><strong>Actions</strong></TableCell>
                 </TableRow>
@@ -233,61 +234,34 @@ export default function SubjectsPage() {
                 {filteredSubjects.length > 0 ? (
                   filteredSubjects.map((subject) => (
                     <TableRow key={subject.id} hover>
-                      <TableCell>
-                        <Chip label={subject.code} size="small" variant="outlined" />
-                      </TableCell>
+                      <TableCell><Chip label={subject.code} size="small" variant="outlined" /></TableCell>
                       <TableCell>
                         <Stack>
                           <Typography variant="body2">{subject.name}</Typography>
                           {subject.description && (
-                            <Typography variant="caption" color="textSecondary">
-                              {subject.description.substring(0, 50)}...
+                            <Typography variant="caption" color="text.secondary">
+                              {subject.description.slice(0, 80)}
                             </Typography>
                           )}
                         </Stack>
                       </TableCell>
+                      <TableCell>{subject.level}</TableCell>
+                      <TableCell>{`S${subject.semester}`}</TableCell>
                       <TableCell>
-                        <Chip
-                          label={`${subject.credits} cr.`}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
+                        <Chip label={`${subject.credits} cr.`} size="small" color="primary" variant="outlined" />
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label={`${subject.coefficient.toFixed(1)}x`}
-                          size="small"
-                          variant="filled"
-                        />
+                        <Chip label={getCoefficientLabel(subject.id)} size="small" variant="filled" />
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">
-                          {subject.semester ? `S${subject.semester}` : '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={subject.departments?.name || 'N/A'}
-                          size="small"
-                          variant="outlined"
-                        />
+                        <Chip label={subject.departments?.name || 'Non assigné'} size="small" variant="outlined" />
                       </TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditClick(subject)}
-                            title="Modifier"
-                          >
+                          <IconButton size="small" onClick={() => setEditingSubject({ ...subject })} title="Modifier">
                             <EditIcon fontSize="small" />
                           </IconButton>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => setDeleteConfirm(subject)}
-                            title="Supprimer"
-                          >
+                          <IconButton size="small" color="error" onClick={() => setDeleteConfirm(subject)} title="Supprimer">
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Stack>
@@ -296,81 +270,76 @@ export default function SubjectsPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      <Typography color="textSecondary">Aucune matière trouvée</Typography>
+                    <TableCell colSpan={8} align="center">
+                      <Typography color="text.secondary">Aucune matière trouvée</Typography>
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </TableContainer>
-
-          <Typography sx={{ mt: 2 }} color="textSecondary" variant="body2">
-            Affichage: {filteredSubjects.length} matières sur {subjects.length} total
-          </Typography>
         </CardContent>
       </Card>
 
-      {/* Form Dialog */}
       <Dialog open={Boolean(editingSubject)} onClose={() => setEditingSubject(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingSubject?.id ? 'Modifier Matière' : 'Ajouter Matière'}
-        </DialogTitle>
+        <DialogTitle>{editingSubject?.id ? 'Modifier Matière' : 'Ajouter Matière'}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Stack spacing={2}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               fullWidth
               label="Code Matière"
               value={editingSubject?.code || ''}
-              onChange={(e) => setEditingSubject({ ...editingSubject, code: e.target.value })}
+              onChange={(event) => setEditingSubject({ ...editingSubject, code: event.target.value.toUpperCase() })}
               placeholder="Ex: MATH101"
             />
             <TextField
               fullWidth
               label="Nom de la Matière"
               value={editingSubject?.name || ''}
-              onChange={(e) => setEditingSubject({ ...editingSubject, name: e.target.value })}
-              placeholder="Ex: Mathématiques Avancées"
+              onChange={(event) => setEditingSubject({ ...editingSubject, name: event.target.value })}
+            />
+            <FormControl fullWidth>
+              <InputLabel>Niveau</InputLabel>
+              <Select
+                value={editingSubject?.level || 'L1'}
+                label="Niveau"
+                onChange={(event) => setEditingSubject({ ...editingSubject, level: event.target.value })}
+              >
+                {LEVEL_OPTIONS.map((level) => (
+                  <MenuItem key={level} value={level}>{level}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              fullWidth
+              type="number"
+              label="Semestre"
+              value={editingSubject?.semester || 1}
+              onChange={(event) => setEditingSubject({ ...editingSubject, semester: Number(event.target.value) })}
+              inputProps={{ min: 1, max: 2 }}
             />
             <TextField
               fullWidth
               type="number"
               label="Crédits"
               value={editingSubject?.credits || 3}
-              onChange={(e) => setEditingSubject({ ...editingSubject, credits: e.target.value })}
+              onChange={(event) => setEditingSubject({ ...editingSubject, credits: Number(event.target.value) })}
               inputProps={{ min: 0, max: 30 }}
-            />
-            <TextField
-              fullWidth
-              type="number"
-              label="Coefficient"
-              value={editingSubject?.coefficient || 1.0}
-              onChange={(e) => setEditingSubject({ ...editingSubject, coefficient: e.target.value })}
-              inputProps={{ min: 0, max: 10, step: 0.1 }}
-              helperText="Multiplicateur pour la moyenne générale"
-            />
-            <TextField
-              fullWidth
-              type="number"
-              label="Semestre"
-              value={editingSubject?.semester || 1}
-              onChange={(e) => setEditingSubject({ ...editingSubject, semester: e.target.value })}
-              inputProps={{ min: 1, max: 8 }}
             />
             <FormControl fullWidth>
               <InputLabel>Département</InputLabel>
               <Select
                 value={String(editingSubject?.department_id || '')}
                 label="Département"
-                onChange={(e) => setEditingSubject({
+                onChange={(event) => setEditingSubject({
                   ...editingSubject,
-                  department_id: e.target.value ? parseInt(e.target.value) : null,
+                  department_id: event.target.value ? Number(event.target.value) : null
                 })}
               >
-                <MenuItem value="">-- Sélectionner --</MenuItem>
-                {departments.map((dept) => (
-                  <MenuItem key={dept.id} value={String(dept.id)}>
-                    {dept.name}
+                <MenuItem value="">Non assigné</MenuItem>
+                {departments.map((department) => (
+                  <MenuItem key={department.id} value={String(department.id)}>
+                    {department.name}
                   </MenuItem>
                 ))}
               </Select>
@@ -381,9 +350,11 @@ export default function SubjectsPage() {
               rows={3}
               label="Description"
               value={editingSubject?.description || ''}
-              onChange={(e) => setEditingSubject({ ...editingSubject, description: e.target.value })}
-              placeholder="Description optionnelle de la matière"
+              onChange={(event) => setEditingSubject({ ...editingSubject, description: event.target.value })}
             />
+            <Alert severity="info">
+              Les coefficients et options de passage sont gérés dans la page maquettes pédagogiques.
+            </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -392,12 +363,11 @@ export default function SubjectsPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={Boolean(deleteConfirm)} onClose={() => setDeleteConfirm(null)}>
         <DialogTitle>Confirmer la suppression</DialogTitle>
         <DialogContent>
           <Typography>
-            Êtes-vous certain de vouloir supprimer la matière {deleteConfirm?.name} ?
+            Supprimer la matière {deleteConfirm?.name} ?
           </Typography>
         </DialogContent>
         <DialogActions>

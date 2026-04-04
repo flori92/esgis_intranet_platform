@@ -1,16 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   CardHeader,
+  Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -18,31 +25,21 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Typography,
-  Chip,
-  Alert,
-  CircularProgress,
-  Stack,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
+  Typography
 } from '@mui/material';
-import {
-  Edit as EditIcon,
-  Save as SaveIcon,
-  Block as BlockIcon,
-  CheckCircle as CheckCircleIcon,
-} from '@mui/icons-material';
-import { supabase } from '@/supabase';
+import { Edit as EditIcon } from '@mui/icons-material';
+import { getStudentAccountStatuses, updateStudentAccountStatus } from '@/api/admin';
 import { useAuth } from '../../hooks/useAuth';
 
 const ACCOUNT_STATUSES = [
-  { value: 'actif', label: 'Actif', color: 'success' },
-  { value: 'suspendu', label: 'Suspendu', color: 'warning' },
-  { value: 'diplomé', label: 'Diplomé', color: 'info' },
-  { value: 'radié', label: 'Radi\u00e9', color: 'error' },
+  { value: 'active', label: 'Actif', color: 'success' },
+  { value: 'suspended', label: 'Suspendu', color: 'warning' },
+  { value: 'graduated', label: 'Diplômé', color: 'info' },
+  { value: 'withdrawn', label: 'Radié', color: 'error' }
 ];
+
+const getStatusLabel = (status) => ACCOUNT_STATUSES.find((item) => item.value === status)?.label || status;
+const getStatusColor = (status) => ACCOUNT_STATUSES.find((item) => item.value === status)?.color || 'default';
 
 export default function AccountStatusPage() {
   const { authState } = useAuth();
@@ -50,14 +47,12 @@ export default function AccountStatusPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [editingStudent, setEditingStudent] = useState(null);
   const [statusChangeDialog, setStatusChangeDialog] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Fetch students with status
   useEffect(() => {
     fetchStudents();
   }, []);
@@ -67,96 +62,75 @@ export default function AccountStatusPage() {
       setLoading(true);
       setError('');
 
-      const { data, error: fetchError } = await supabase
-        .from('students')
-        .select('*, profiles(full_name, email), is_active:is_active')
-        .order('created_at', { ascending: false });
+      const { data, error: fetchError } = await getStudentAccountStatuses();
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        throw fetchError;
+      }
 
       setStudents(data || []);
     } catch (err) {
-      setError(`Error loading students: ${err.message}`);
+      setError(`Erreur lors du chargement des comptes étudiants: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleOpenDialog = (student) => {
+    setStatusChangeDialog(student);
+    setNewStatus(student.status || '');
+    setReason('');
+    setError('');
+  };
+
   const handleStatusChange = async () => {
     try {
       if (!statusChangeDialog || !newStatus) {
-        setError('Please select a status');
+        setError('Sélectionne un nouveau statut.');
         return;
       }
 
-      // Update student status
-      const { error: updateError } = await supabase
-        .from('students')
-        .update({
-          status: newStatus,
-          is_active: newStatus === 'actif',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', statusChangeDialog.id);
+      const actor = {
+        id: authState.profile?.id || authState.user?.id || null,
+        full_name: authState.profile?.full_name || authState.user?.email || 'Admin ESGIS',
+        role: authState.profile?.role || 'admin'
+      };
 
-      if (updateError) throw updateError;
+      const { error: updateError } = await updateStudentAccountStatus(statusChangeDialog.id, {
+        status: newStatus,
+        reason,
+        actor
+      });
 
-      // Log audit event
-      try {
-        await supabase.from('audit_log').insert([
-          {
-            user_id: authState.user?.id,
-            action: 'update',
-            resource_type: 'student',
-            resource_id: statusChangeDialog.id,
-            description: `Student status changed from actif to ${newStatus}${reason ? ` - Raison: ${reason}` : ''}`,
-          },
-        ]);
-      } catch (auditErr) {
-        console.warn('Audit log error:', auditErr);
+      if (updateError) {
+        throw updateError;
       }
 
-      setSuccess(`Student status updated to ${newStatus}`);
+      setSuccess(`Le compte de ${statusChangeDialog.full_name} est maintenant ${getStatusLabel(newStatus).toLowerCase()}.`);
       setStatusChangeDialog(null);
       setNewStatus('');
       setReason('');
       await fetchStudents();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError(`Error changing status: ${err.message}`);
+      setError(`Erreur lors du changement de statut: ${err.message}`);
     }
   };
 
-  const filteredStudents = students.filter((student) => {
-    const matchesSearch =
-      student.profiles?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.profiles?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.student_id?.toString().includes(searchQuery);
+  const filteredStudents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
 
-    const matchesStatus = !filterStatus || student.status === filterStatus;
+    return students.filter((student) => {
+      const matchesSearch = !query
+        || student.full_name?.toLowerCase().includes(query)
+        || student.email?.toLowerCase().includes(query)
+        || `${student.student_number || ''}`.toLowerCase().includes(query);
 
-    return matchesSearch && matchesStatus;
-  });
+      const matchesStatus = !filterStatus || student.status === filterStatus;
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'actif':
-        return 'success';
-      case 'suspendu':
-        return 'warning';
-      case 'diplomé':
-        return 'info';
-      case 'radié':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusLabel = (status) => {
-    const found = ACCOUNT_STATUSES.find(s => s.value === status);
-    return found?.label || status;
-  };
+      return matchesSearch && matchesStatus;
+    });
+  }, [filterStatus, searchQuery, students]);
 
   if (loading) {
     return (
@@ -174,25 +148,25 @@ export default function AccountStatusPage() {
           subheader="Activation, suspension, diplomation et radiation des étudiants"
         />
         <CardContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
           {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
             <TextField
               fullWidth
-              placeholder="Rechercher par nom, email ou ID..."
+              placeholder="Rechercher par nom, email ou numéro étudiant..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{ maxWidth: { md: 400 } }}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              sx={{ maxWidth: { md: 420 } }}
             />
-            <FormControl sx={{ minWidth: 200 }}>
+            <FormControl sx={{ minWidth: 220 }}>
               <InputLabel>Filtrer par statut</InputLabel>
               <Select
                 value={filterStatus}
                 label="Filtrer par statut"
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(event) => setFilterStatus(event.target.value)}
               >
-                <MenuItem value="">-- Tous les statuts --</MenuItem>
+                <MenuItem value="">Tous les statuts</MenuItem>
                 {ACCOUNT_STATUSES.map((status) => (
                   <MenuItem key={status.value} value={status.value}>
                     {status.label}
@@ -206,11 +180,13 @@ export default function AccountStatusPage() {
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                  <TableCell><strong>ID Étudiant</strong></TableCell>
-                  <TableCell><strong>Nom Complet</strong></TableCell>
+                  <TableCell><strong>Numéro étudiant</strong></TableCell>
+                  <TableCell><strong>Nom complet</strong></TableCell>
                   <TableCell><strong>Email</strong></TableCell>
-                  <TableCell><strong>Statut Actuel</strong></TableCell>
-                  <TableCell><strong>Date Création</strong></TableCell>
+                  <TableCell><strong>Niveau</strong></TableCell>
+                  <TableCell><strong>Statut</strong></TableCell>
+                  <TableCell><strong>Compte</strong></TableCell>
+                  <TableCell><strong>Département</strong></TableCell>
                   <TableCell align="right"><strong>Actions</strong></TableCell>
                 </TableRow>
               </TableHead>
@@ -218,9 +194,10 @@ export default function AccountStatusPage() {
                 {filteredStudents.length > 0 ? (
                   filteredStudents.map((student) => (
                     <TableRow key={student.id} hover>
-                      <TableCell sx={{ fontWeight: 'bold' }}>{student.student_id}</TableCell>
-                      <TableCell>{student.profiles?.full_name}</TableCell>
-                      <TableCell>{student.profiles?.email}</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{student.student_number}</TableCell>
+                      <TableCell>{student.full_name}</TableCell>
+                      <TableCell>{student.email}</TableCell>
+                      <TableCell>{student.level || '-'}</TableCell>
                       <TableCell>
                         <Chip
                           label={getStatusLabel(student.status)}
@@ -228,15 +205,21 @@ export default function AccountStatusPage() {
                           size="small"
                         />
                       </TableCell>
-                      <TableCell sx={{ fontSize: '0.85rem' }}>
-                        {new Date(student.created_at).toLocaleDateString('fr-FR')}
+                      <TableCell>
+                        <Chip
+                          label={student.is_active ? 'Ouvert' : 'Bloqué'}
+                          color={student.is_active ? 'success' : 'default'}
+                          size="small"
+                          variant="outlined"
+                        />
                       </TableCell>
+                      <TableCell>{student.department_name}</TableCell>
                       <TableCell align="right">
                         <Button
                           size="small"
                           variant="contained"
                           startIcon={<EditIcon />}
-                          onClick={() => setStatusChangeDialog(student)}
+                          onClick={() => handleOpenDialog(student)}
                         >
                           Modifier
                         </Button>
@@ -245,8 +228,8 @@ export default function AccountStatusPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      <Typography color="textSecondary">Aucun étudiant trouvé</Typography>
+                    <TableCell colSpan={8} align="center">
+                      <Typography color="text.secondary">Aucun étudiant trouvé</Typography>
                     </TableCell>
                   </TableRow>
                 )}
@@ -254,32 +237,30 @@ export default function AccountStatusPage() {
             </Table>
           </TableContainer>
 
-          <Typography sx={{ mt: 2 }} color="textSecondary" variant="body2">
-            Affichage: {filteredStudents.length} étudiants sur {students.length} total
+          <Typography sx={{ mt: 2 }} color="text.secondary" variant="body2">
+            Affichage: {filteredStudents.length} étudiants sur {students.length}
           </Typography>
         </CardContent>
       </Card>
 
-      {/* Status Change Dialog */}
       <Dialog open={Boolean(statusChangeDialog)} onClose={() => setStatusChangeDialog(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>Modifier le Statut du Compte</DialogTitle>
+        <DialogTitle>Modifier le statut du compte</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={2}>
-            <Typography variant="body2" color="textSecondary">
-              Étudiant: <strong>{statusChangeDialog?.profiles?.full_name}</strong>
+            <Typography variant="body2" color="text.secondary">
+              Étudiant: <strong>{statusChangeDialog?.full_name}</strong>
             </Typography>
-            <Typography variant="body2" color="textSecondary">
+            <Typography variant="body2" color="text.secondary">
               Statut actuel: <Chip label={getStatusLabel(statusChangeDialog?.status)} size="small" />
             </Typography>
 
             <FormControl fullWidth>
-              <InputLabel>Nouveau Statut</InputLabel>
+              <InputLabel>Nouveau statut</InputLabel>
               <Select
                 value={newStatus}
-                label="Nouveau Statut"
-                onChange={(e) => setNewStatus(e.target.value)}
+                label="Nouveau statut"
+                onChange={(event) => setNewStatus(event.target.value)}
               >
-                <MenuItem value="">-- Sélectionner --</MenuItem>
                 {ACCOUNT_STATUSES.map((status) => (
                   <MenuItem key={status.value} value={status.value}>
                     {status.label}
@@ -292,26 +273,21 @@ export default function AccountStatusPage() {
               fullWidth
               multiline
               rows={3}
-              label="Raison (optionnel)"
-              placeholder="Ex: Expulsion, Abandon, Diplomation..."
+              label="Raison"
+              placeholder="Ex: impayé, diplômé, abandon, décision disciplinaire..."
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={(event) => setReason(event.target.value)}
             />
 
             <Alert severity="info">
-              Cette action sera enregistrée dans le journal d'audit avec la date et l'heure.
+              Cette action met à jour le statut étudiant, l’activation du compte et le journal d’audit.
             </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStatusChangeDialog(null)}>Annuler</Button>
-          <Button
-            onClick={handleStatusChange}
-            variant="contained"
-            color="primary"
-            disabled={!newStatus}
-          >
-            Confirmer le Changement
+          <Button onClick={handleStatusChange} variant="contained" disabled={!newStatus}>
+            Confirmer
           </Button>
         </DialogActions>
       </Dialog>
