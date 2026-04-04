@@ -21,15 +21,10 @@ Une plateforme d'examen en ligne pour les étudiants de l'ESGIS, permettant de p
 
 ## Déploiement
 
-### Vercel (principal)
+### Vercel
 
 La plateforme est déployée sur Vercel à l'adresse suivante :
-https://project-qa574tdcn-flodrama-projects.vercel.app
-
-### GitHub Pages (alternatif)
-
-La plateforme est également déployée sur GitHub Pages à l'adresse suivante :
-https://flori92.github.io/exam_esgis_platform/
+https://esgis-intranet-platform.vercel.app
 
 ## Configuration de Supabase
 
@@ -47,10 +42,7 @@ Les scripts SQL pour créer ces tables se trouvent dans le dossier `scripts/`.
 3. Créez un fichier `.env` avec vos clés Supabase
 4. Lancez le serveur de développement avec `npm run dev`
 
-## Déploiement manuel sur GitHub Pages
-
-1. Construisez l'application avec `npm run build`
-2. Déployez le contenu du dossier `dist` sur la branche `gh-pages`
+Le déploiement du projet se fait désormais uniquement depuis la branche `main` via Vercel.
 
 ## Licence
 
