@@ -83,6 +83,15 @@ jobs:
           </body>
           </html>
           EOL
+
+      - name: Ajouter la configuration Vercel de skip pour gh-pages
+        run: |
+          cat > dist/vercel.json << 'EOL'
+          {
+            "$schema": "https://openapi.vercel.sh/vercel.json",
+            "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" = \"gh-pages\" ]; then echo \"Skipping gh-pages branch on Vercel\"; exit 0; fi; exit 1"
+          }
+          EOL
           
       - name: Vérification du contenu de env-config.js
         run: |
