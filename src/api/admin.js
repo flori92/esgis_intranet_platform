@@ -59,15 +59,38 @@ const countQuery = (table, filter) => {
 // DASHBOARD ADMIN
 // ============================================================
 
+const transformNotification = (notif) => {
+  if (!notif) return null;
+  return {
+    id: notif.id,
+    title: notif.title,
+    content: notif.content || notif.message,
+    priority: notif.priority || notif.type || 'medium',
+    read: notif.read ?? notif.is_read ?? false,
+    recipient_id: notif.recipient_id || notif.user_id,
+    recipient_role: notif.recipient_role,
+    created_at: notif.created_at,
+  };
+};
+
+const transformEvent = (event) => {
+  if (!event) return null;
+  return {
+    id: event.id,
+    title: event.title,
+    description: event.description,
+    start_date: event.start_date || event.start_time,
+    end_date: event.end_date || event.end_time,
+    location: event.location,
+    type: event.type || event.event_type || 'other',
+    event_type: event.event_type || event.type || 'other',
+    created_at: event.created_at,
+  };
+};
+
 /** Récupère les métriques et flux récents du dashboard admin */
 export const getAdminDashboardData = async (adminProfileId) => {
   try {
-    const notificationScope = [
-      adminProfileId ? `recipient_id.eq.${adminProfileId}` : null,
-      'recipient_role.eq.admin',
-      'recipient_role.eq.all'
-    ].filter(Boolean).join(',');
-
     const statsQueries = [
       countQuery('profiles', (query) => query.eq('role', 'student')),
       countQuery('profiles', (query) => query.eq('role', 'professor')),
@@ -77,19 +100,18 @@ export const getAdminDashboardData = async (adminProfileId) => {
       countQuery('requests', (query) => query.eq('status', 'pending')),
     ];
 
-    const notificationsQuery = supabase
+    let notificationsQuery = supabase
       .from('notifications')
-      .select('id, title, content, priority, read, recipient_id, recipient_role, created_at')
-      .or(notificationScope)
+      .select('id, title, content, message, priority, type, read, is_read, recipient_id, user_id, recipient_role, created_at')
+      .or(`recipient_id.eq.${adminProfileId},recipient_role.eq.admin,recipient_role.eq.all`)
       .order('created_at', { ascending: false })
       .limit(20);
 
     const eventsQuery = supabase
       .from('events')
-      .select('id, title, description, start_date, end_date, location, type, created_at')
-      .gte('start_date', new Date().toISOString())
+      .select('id, title, description, start_date, start_time, end_date, end_time, location, type, event_type, created_at')
       .order('start_date', { ascending: true })
-      .limit(20);
+      .limit(50);
 
     const [
       { count: totalStudents },
@@ -99,7 +121,7 @@ export const getAdminDashboardData = async (adminProfileId) => {
       { count: activeUsers },
       { count: pendingRequests },
       { data: notifications, error: notificationsError },
-      { data: events, error: eventsError }
+      { data: eventsData, error: eventsError }
     ] = await Promise.all([
       ...statsQueries,
       notificationsQuery,
@@ -108,6 +130,15 @@ export const getAdminDashboardData = async (adminProfileId) => {
 
     if (notificationsError) throw notificationsError;
     if (eventsError) throw eventsError;
+
+    const now = new Date();
+    const upcomingEvents = (eventsData || [])
+      .map(transformEvent)
+      .filter(e => {
+        const eventDate = new Date(e.start_date || e.start_time);
+        return eventDate >= now;
+      })
+      .slice(0, 20);
 
     return {
       data: {
@@ -119,8 +150,8 @@ export const getAdminDashboardData = async (adminProfileId) => {
           activeUsers: activeUsers || 0,
           pendingRequests: pendingRequests || 0,
         },
-        notifications: notifications || [],
-        events: events || [],
+        notifications: (notifications || []).map(transformNotification),
+        events: upcomingEvents,
       },
       error: null
     };
@@ -228,6 +259,98 @@ export const updateRole = async (id, roleData) => {
 export const deleteRole = async (id) => {
   try {
     const { error } = await supabase.from('custom_roles').delete().eq('id', id);
+    if (error) throw error;
+    return { error: null };
+  } catch (error) {
+    return { error };
+  }
+};
+
+// ============================================================
+// ASSIGNATION DE RÔLES AUX UTILISATEURS
+// ============================================================
+
+/** Récupère les rôles assignés à un utilisateur */
+export const getUserRoles = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('id, role_id, created_at, custom_roles(id, name, label, permissions)')
+      .eq('user_id', userId);
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    return { data: [], error };
+  }
+};
+
+/** Récupère tous les utilisateurs avec leurs rôles custom */
+export const getUsersWithRoles = async () => {
+  try {
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, role')
+      .eq('is_active', true)
+      .order('full_name');
+    if (profilesError) throw profilesError;
+
+    const { data: assignments, error: assignError } = await supabase
+      .from('user_roles')
+      .select('user_id, role_id, custom_roles(id, name, label)');
+    if (assignError) throw assignError;
+
+    const userRolesMap = {};
+    (assignments || []).forEach((a) => {
+      if (!userRolesMap[a.user_id]) userRolesMap[a.user_id] = [];
+      if (a.custom_roles) userRolesMap[a.user_id].push(a.custom_roles);
+    });
+
+    const result = (profiles || []).map((p) => ({
+      ...p,
+      custom_roles: userRolesMap[p.id] || [],
+    }));
+
+    return { data: result, error: null };
+  } catch (error) {
+    return { data: [], error };
+  }
+};
+
+/** Assigne un rôle à un utilisateur */
+export const assignRoleToUser = async (userId, roleId) => {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+
+    const { data, error } = await supabase
+      .from('user_roles')
+      .insert({
+        user_id: userId,
+        role_id: roleId,
+        assigned_by: session?.session?.user?.id || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error('Ce rôle est déjà assigné à cet utilisateur.');
+      }
+      throw error;
+    }
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
+/** Retire un rôle d'un utilisateur */
+export const removeRoleFromUser = async (userId, roleId) => {
+  try {
+    const { error } = await supabase
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId)
+      .eq('role_id', roleId);
     if (error) throw error;
     return { error: null };
   } catch (error) {
