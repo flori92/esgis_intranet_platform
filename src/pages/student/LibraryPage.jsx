@@ -17,6 +17,9 @@ import {
 
 import { supabase } from '@/supabase';
 
+/**
+ * Page de la Bibliothèque Numérique - ESGIS Campus
+ */
 const LibraryPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [tabValue, setTabValue] = useState(0);
