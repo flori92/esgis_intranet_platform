@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getAssetPath } from '@/utils/assetUtils';
 import Badge from '@mui/material/Badge';
 import { Outlet, useNavigate, Link as RouterLink } from 'react-router-dom';
