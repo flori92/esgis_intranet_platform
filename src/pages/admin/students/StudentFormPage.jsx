@@ -264,38 +264,58 @@ const StudentFormPage = () => {
     setError(null);
     
     try {
+      // Vérifier si un profil existe déjà avec cet email
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('email', student.email)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found
+        throw checkError;
+      }
+
       // Préparer les données du profil
       const profileData = {
         full_name: student.full_name,
         email: student.email,
         gender: student.gender,
-        date_of_birth: student.date_of_birth,
+        date_of_birth: student.date_of_birth || null,
         phone_number: student.phone_number,
         address: student.address,
         role: 'student',
         is_active: student.status === 'active',
-        student_id: student.student_id // Matricule aussi dans le profil
+        student_id: student.student_id
       };
       
       let profileId = student.profile_id;
       
-      // Si en mode création ou si le profil n'existe pas encore
       if (!isEditMode || !profileId) {
-        // Créer un profil
-        const { data: newProfiles, error: profileError } = await supabase
-          .from('profiles')
-          .insert([profileData])
-          .select();
-        
-        if (profileError) {
-          throw profileError;
+        if (existingProfile) {
+          // Si le profil existe déjà, on l'utilise (et on le met à jour pour s'assurer qu'il est 'student')
+          profileId = existingProfile.id;
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update(profileData)
+            .eq('id', profileId);
+          
+          if (updateError) throw updateError;
+        } else {
+          // Note: Créer un profil sans auth.users.id échouera si la FK est stricte
+          // Dans une application Supabase réelle, on utiliserait une Edge Function 
+          // ou l'API Admin pour créer l'utilisateur Auth d'abord.
+          // Ici, nous supposons que soit un trigger gère cela, soit la FK est assouplie.
+          const { data: newProfiles, error: profileError } = await supabase
+            .from('profiles')
+            .insert([profileData])
+            .select();
+          
+          if (profileError) throw profileError;
+          if (!newProfiles || newProfiles.length === 0) {
+            throw new Error('Le profil n\'a pas pu être créé.');
+          }
+          profileId = newProfiles[0].id;
         }
-        
-        if (!newProfiles || newProfiles.length === 0) {
-          throw new Error('Le profil n\'a pas pu être créé.');
-        }
-        
-        profileId = newProfiles[0].id;
       } else {
         // Mettre à jour le profil existant
         const { error: profileError } = await supabase
@@ -303,17 +323,15 @@ const StudentFormPage = () => {
           .update(profileData)
           .eq('id', profileId);
         
-        if (profileError) {
-          throw profileError;
-        }
+        if (profileError) throw profileError;
       }
       
-      // Préparer les données de l'étudiant
+      // Préparer les données de l'étudiant - Conversion des chaînes vides en NULL
       const studentData = {
         profile_id: profileId,
         student_number: student.student_id,
-        department_id: student.department_id,
-        filiere_id: student.filiere_id,
+        department_id: student.department_id || null,
+        filiere_id: student.filiere_id === '' || !student.filiere_id ? null : Number(student.filiere_id),
         level: student.level,
         academic_year: student.academic_year,
         status: student.status
