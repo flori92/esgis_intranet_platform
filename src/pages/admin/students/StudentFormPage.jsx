@@ -271,7 +271,10 @@ const StudentFormPage = () => {
         gender: student.gender,
         date_of_birth: student.date_of_birth,
         phone_number: student.phone_number,
-        address: student.address
+        address: student.address,
+        role: 'student',
+        is_active: student.status === 'active',
+        student_id: student.student_id // Matricule aussi dans le profil
       };
       
       let profileId = student.profile_id;
@@ -279,7 +282,7 @@ const StudentFormPage = () => {
       // Si en mode création ou si le profil n'existe pas encore
       if (!isEditMode || !profileId) {
         // Créer un profil
-        const { data: newProfile, error: profileError } = await supabase
+        const { data: newProfiles, error: profileError } = await supabase
           .from('profiles')
           .insert([profileData])
           .select();
@@ -288,7 +291,11 @@ const StudentFormPage = () => {
           throw profileError;
         }
         
-        profileId = newProfile[0].id;
+        if (!newProfiles || newProfiles.length === 0) {
+          throw new Error('Le profil n\'a pas pu être créé.');
+        }
+        
+        profileId = newProfiles[0].id;
       } else {
         // Mettre à jour le profil existant
         const { error: profileError } = await supabase
