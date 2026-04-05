@@ -104,9 +104,9 @@ const ReportsPage = () => {
         </FormControl>
       </Stack>
 
-      <Grid container spacing={3} mb={4}>
+      <Grid container spacing={3} mb={4} alignItems="stretch">
         <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: 'primary.main', color: 'white' }}>
+          <Card sx={{ bgcolor: 'primary.main', color: 'white', height: '100%' }}>
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}><TrendingUpIcon /></Avatar>
@@ -119,7 +119,7 @@ const ReportsPage = () => {
           </Card>
         </Grid>
         <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: 'secondary.main', color: 'white' }}>
+          <Card sx={{ bgcolor: 'secondary.main', color: 'white', height: '100%' }}>
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}><DescriptionIcon /></Avatar>
@@ -132,7 +132,7 @@ const ReportsPage = () => {
           </Card>
         </Grid>
         <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: 'success.main', color: 'white' }}>
+          <Card sx={{ bgcolor: 'success.main', color: 'white', height: '100%' }}>
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}><PeopleIcon /></Avatar>
