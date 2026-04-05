@@ -118,6 +118,24 @@ export const signOut = async () => {
 };
 
 /**
+ * Envoie une invitation par email (via reset password) pour qu'un utilisateur
+ * puisse configurer son accès initial.
+ * @param {string} email 
+ */
+export const sendAccessInvitation = async (email) => {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/update-password`,
+    });
+    if (error) throw error;
+    return { success: true, error: null };
+  } catch (err) {
+    console.error('Erreur lors de l\'envoi de l\'invitation:', err);
+    return { success: false, error: err };
+  }
+};
+
+/**
  * Récupération du mot de passe
  * @param {string} email - Email de l'utilisateur
  * @returns {Promise<Object>} Résultat contenant une erreur éventuelle

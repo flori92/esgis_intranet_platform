@@ -27,7 +27,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Avatar
+  Avatar,
+  Snackbar
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -39,13 +40,15 @@ import {
   Home as HomeIcon,
   CalendarToday as CalendarIcon,
   Person as PersonIcon,
-  Badge as BadgeIcon
+  Badge as BadgeIcon,
+  VpnKey as VpnKeyIcon
 } from '@mui/icons-material';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '../../../supabase';
+import { sendAccessInvitation } from '../../../api/auth';
 
 // Composant Tab Panel
 const TabPanel = (props) => {
@@ -78,7 +81,9 @@ const StudentDetailsPage = () => {
   const [paymentsList, setPaymentsList] = useState([]);
   const [documentsList, setDocumentsList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [inviting, setInviting] = useState(false);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
   const [tabValue, setTabValue] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
@@ -269,9 +274,24 @@ const StudentDetailsPage = () => {
     }
   }, [id]);
 
-  const fetchData = async () => {
-    if (fetchDataRef.current) {
-      await fetchDataRef.current();
+  /**
+   * Envoyer une invitation d'accès par email
+   */
+  const handleSendInvitation = async () => {
+    if (!student?.email) return;
+    
+    setInviting(true);
+    try {
+      const { success, error: invError } = await sendAccessInvitation(student.email);
+      if (success) {
+        setSuccessMessage(`Invitation envoyée avec succès à ${student.email}`);
+      } else {
+        throw invError;
+      }
+    } catch (err) {
+      setError(`Erreur lors de l'envoi de l'invitation : ${err.message}`);
+    } finally {
+      setInviting(false);
     }
   };
 
@@ -282,7 +302,7 @@ const StudentDetailsPage = () => {
 
   // Navigation vers la page d'édition
   const handleEdit = () => {
-    navigate(`/admin/students/${id}/edit`);
+    navigate(`/admin/students/edit/${id}`);
   };
 
   // Ouvrir le dialogue de confirmation de suppression
@@ -389,6 +409,16 @@ const StudentDetailsPage = () => {
 
   return (
     <Box sx={{ p: 3 }}>
+      <Snackbar 
+        open={!!successMessage} 
+        autoHideDuration={6000} 
+        onClose={() => setSuccessMessage(null)}
+      >
+        <Alert onClose={() => setSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
+
       {/* Fil d'Ariane */}
       <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
         <Link component={RouterLink} to="/admin" color="inherit">
@@ -449,31 +479,40 @@ const StudentDetailsPage = () => {
             </Box>
           </Grid>
           <Grid item>
-            <Button
-              variant="outlined"
-              startIcon={<ArrowBackIcon />}
-              onClick={handleBack}
-              sx={{ mr: 1 }}
-            >
-              Retour
-            </Button>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<EditIcon />}
-              onClick={handleEdit}
-              sx={{ mr: 1 }}
-            >
-              Modifier
-            </Button>
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<DeleteIcon />}
-              onClick={handleOpenDeleteDialog}
-            >
-              Supprimer
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                onClick={handleBack}
+              >
+                Retour
+              </Button>
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={<VpnKeyIcon />}
+                onClick={handleSendInvitation}
+                disabled={inviting}
+              >
+                {inviting ? 'Envoi...' : 'Inviter'}
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<EditIcon />}
+                onClick={handleEdit}
+              >
+                Modifier
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={handleOpenDeleteDialog}
+              >
+                Supprimer
+              </Button>
+            </Box>
           </Grid>
         </Grid>
       </Paper>
