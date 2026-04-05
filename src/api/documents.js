@@ -150,7 +150,7 @@ export const getCoursesForDocuments = async ({
     if (isStudent) {
       const { data, error } = await supabase
         .from('student_courses')
-        .select('course_id, status, courses:course_id(id, name, code)')
+        .select('course_id, status, courses(id, name, code)')
         .eq('student_id', studentId)
         .in('status', ['enrolled', 'completed']);
 
@@ -167,7 +167,7 @@ export const getCoursesForDocuments = async ({
     if (isProfessor) {
       const { data, error } = await supabase
         .from('professor_courses')
-        .select('course_id, courses:course_id(id, name, code)')
+        .select('course_id, courses(id, name, code)')
         .eq('professor_id', professorId);
 
       if (error) {
@@ -203,7 +203,7 @@ export const getUploadedDocuments = async () => {
         visibility,
         created_at,
         updated_at,
-        courses:course_id(id, name, code)
+        courses(id, name, code)
       `)
       .order('created_at', { ascending: false });
 
@@ -318,8 +318,8 @@ export const getGeneratedDocuments = async ({
         approval_date,
         created_at,
         updated_at,
-        document_templates:template_id(id, name, type),
-        profiles:student_id(
+        document_templates(id, name, type),
+        student:profiles!student_id(
           id,
           full_name,
           email,
@@ -427,7 +427,7 @@ export const getStudentGeneratedCertificates = async (studentId) => {
         status,
         created_at,
         approval_date,
-        document_templates:template_id(id, name, type)
+        document_templates(id, name, type)
       `)
       .eq('student_id', studentId)
       .order('created_at', { ascending: false });
@@ -744,7 +744,7 @@ export const uploadDocument = async ({
         visibility,
         created_at,
         updated_at,
-        courses:course_id(id, name, code)
+        courses(id, name, code)
       `)
       .single();
 
@@ -821,13 +821,11 @@ export const getDocumentGenereByReference = async (reference) => {
     const { data, error } = await supabase
       .from('documents_generes')
       .select(`
-        id, reference, date_generation, type_document, fichier_url,
-        etudiant:etudiant_id(
-          first_name, last_name,
-          inscriptions:inscriptions(
-            annee_academique,
-            niveaux:niveau_id(name, filieres:filiere_id(name))
-          )
+        id, reference, date_generation, type_document, fichier_url, verification_url,
+        etudiant:students!etudiant_id(
+          id, student_number, level, academic_year,
+          filieres(id, name, code),
+          profiles(first_name, last_name, full_name, email)
         )
       `)
       .eq('reference', reference)

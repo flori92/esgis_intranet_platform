@@ -4,7 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 // Configuration - utilise les variables d'environnement Vite
 // On utilise .replace(/\s/g, '') pour supprimer TOUS les espaces, tabulations et retours à la ligne
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.replace(/\s/g, '');
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.replace(/\s/g, '');
+const SUPABASE_ANON_KEY = (
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+)?.replace(/\s/g, '');
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error(

@@ -198,7 +198,7 @@ export const updateNotificationPreferences = async (userId, prefs) => {
 export const getCurriculumTemplates = async (departmentId = null, levelCode = null) => {
   try {
     let query = supabase.from('curriculum_templates')
-      .select('*, course:course_id(id, name, code, credits), department:department_id(id, name, code)')
+      .select('*, course:courses!course_id(id, name, code, credits), department:departments!department_id(id, name, code)')
       .order('semester_code').order('course_id');
 
     if (departmentId) query = query.eq('department_id', departmentId);

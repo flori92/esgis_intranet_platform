@@ -59,7 +59,7 @@ const AcademicManagerPage = () => {
         getCoursesWithDepartments(),
         getProfessorsList(),
         getAcademicLevels(),
-        supabase.from('theses').select('*, profiles:student_id(full_name, email), supervisor:supervisor_id(full_name)'),
+        supabase.from('theses').select('*, student:profiles!student_id(full_name, email), supervisor:profiles!supervisor_id(full_name)'),
         supabase.from('library_resources').select('*').order('title')
       ]);
 

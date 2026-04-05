@@ -45,7 +45,7 @@ const getProfessorMapByCourseIds = async (courseIds) => {
       .select(`
         id,
         profile_id,
-        profiles:profile_id(
+        profiles(
           id,
           full_name,
           avatar_url
@@ -215,7 +215,7 @@ export const getProfessorManagedCourses = async (professorProfileId) => {
       .select(`
         academic_year,
         is_principal,
-        courses:course_id(
+        courses(
           id,
           code,
           name,
@@ -224,7 +224,7 @@ export const getProfessorManagedCourses = async (professorProfileId) => {
           level,
           semester,
           department_id,
-          departments:department_id(
+          departments(
             id,
             code,
             name
@@ -290,7 +290,7 @@ export const getProfessorCourseChaptersAndResources = async (courseId, professor
             updated_at,
             chapter_id,
             course_id,
-            chapter:chapter_id(name),
+            chapter:course_chapters!chapter_id(name),
             uploaded_by:uploaded_by(
               id,
               full_name
@@ -645,8 +645,8 @@ export const searchResources = async (query, courseId = null) => {
         file_size,
         created_at,
         downloads_count,
-        chapter:chapter_id(name),
-        course:course_id(name, code),
+        chapter:course_chapters!chapter_id(name),
+        course:courses!course_id(name, code),
         uploaded_by:uploaded_by(full_name)
       `)
       .eq('status', 'published')
@@ -727,7 +727,7 @@ export const uploadResource = async (
         updated_at,
         chapter_id,
         course_id,
-        chapter:chapter_id(name),
+        chapter:course_chapters!chapter_id(name),
         uploaded_by:uploaded_by(
           id,
           full_name
@@ -789,7 +789,7 @@ export const updateCourseResource = async (resourceId, updates, professorProfile
         updated_at,
         chapter_id,
         course_id,
-        chapter:chapter_id(name),
+        chapter:course_chapters!chapter_id(name),
         uploaded_by:uploaded_by(
           id,
           full_name

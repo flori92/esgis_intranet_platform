@@ -420,10 +420,10 @@ export const getStudentExamLaunchData = async ({ examId, studentId }) => {
           total_points,
           passing_grade,
           status,
-          courses:course_id(id, name, code),
-          professors:professor_id(id, profile_id, profiles:profile_id(full_name, email)),
-          exam_sessions:exam_session_id(id, name, academic_year, semester, status),
-          exam_centers:exam_center_id(id, name, location, status)
+          courses(id, name, code),
+          professors(id, profile_id, profiles(full_name, email)),
+          exam_sessions(id, name, academic_year, semester, status),
+          exam_centers(id, name, location, status)
         `)
         .eq('id', numericExamId)
         .single(),
@@ -493,7 +493,7 @@ export const getStudentExamsListData = async (studentId) => {
         comments,
         created_at,
         updated_at,
-        exams:exam_id(
+        exams(
           id,
           title,
           description,
@@ -508,8 +508,8 @@ export const getStudentExamsListData = async (studentId) => {
           total_points,
           passing_grade,
           status,
-          courses:course_id(id, name, code),
-          professors:professor_id(id, profile_id, profiles:profile_id(full_name, email))
+          courses(id, name, code),
+          professors(id, profile_id, profiles(full_name, email))
         )
       `)
       .eq('student_id', studentId)
@@ -741,10 +741,10 @@ export const getProfessorExamMonitoringData = async (examId) => {
           total_points,
           passing_grade,
           status,
-          courses:course_id(id, name, code),
-          professors:professor_id(id, profile_id, profiles:profile_id(full_name, email)),
-          exam_sessions:exam_session_id(id, name, academic_year, semester, status),
-          exam_centers:exam_center_id(id, name, location, status)
+          courses(id, name, code),
+          professors(id, profile_id, profiles(full_name, email)),
+          exam_sessions(id, name, academic_year, semester, status),
+          exam_centers(id, name, location, status)
         `)
         .eq('id', numericExamId)
         .single(),
@@ -765,12 +765,12 @@ export const getProfessorExamMonitoringData = async (examId) => {
           answers,
           created_at,
           updated_at,
-          students:student_id(
+          students(
             id,
             profile_id,
             student_number,
             level,
-            profiles:profile_id(full_name, email, avatar_url)
+            profiles(full_name, email, avatar_url)
           )
         `)
         .eq('exam_id', numericExamId)
@@ -785,7 +785,7 @@ export const getProfessorExamMonitoringData = async (examId) => {
           last_ping,
           is_completed,
           cheating_attempts,
-          profiles:student_id(full_name, email, avatar_url)
+          student:profiles!student_id(full_name, email, avatar_url)
         `)
         .eq('exam_id', numericExamId),
       supabase
@@ -799,7 +799,7 @@ export const getProfessorExamMonitoringData = async (examId) => {
           attempt_count,
           timestamp,
           detected_at,
-          profiles:student_id(full_name, email)
+          student:profiles!student_id(full_name, email)
         `)
         .eq('exam_id', numericExamId)
         .order('timestamp', { ascending: false })
@@ -961,8 +961,8 @@ export const getStudentExamResultDetails = async ({ examId, studentId, profileId
           total_points,
           passing_grade,
           status,
-          courses:course_id(id, name, code),
-          professors:professor_id(id, profile_id, profiles:profile_id(full_name, email))
+          courses(id, name, code),
+          professors(id, profile_id, profiles(full_name, email))
         `)
         .eq('id', numericExamId)
         .single(),
@@ -1360,7 +1360,7 @@ export const getStudentsByIds = async (studentIds) => {
 
     const { data, error } = await supabase
       .from('students')
-      .select('id, profile_id, profiles:profile_id(full_name, email, avatar_url)')
+      .select('id, profile_id, profiles(full_name, email, avatar_url)')
       .in('id', studentIds);
 
     if (error) throw error;
@@ -1447,12 +1447,12 @@ export const getCourseStudentsForExam = async (courseId) => {
         student_id,
         academic_year,
         status,
-        profiles:student_id(
+        student:profiles!student_id(
           id,
           full_name,
           email,
           department_id,
-          departments:department_id(name),
+          departments(name),
           students(
             id,
             student_number,
@@ -1509,7 +1509,7 @@ export const getAllActiveStudents = async () => {
       .select(`
         id,
         profile_id,
-        profiles:profile_id(full_name, email, department_id, departments:department_id(name)),
+        profiles(full_name, email, department_id, departments(name)),
         student_number,
         level,
         entry_year,

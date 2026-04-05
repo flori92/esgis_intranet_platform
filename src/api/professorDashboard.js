@@ -135,13 +135,13 @@ export const getProfessorDashboardData = async ({ profileId, professorId }) => {
       professorEntityId
         ? supabase
             .from('exams')
-            .select('id, title, course_id, date, status, created_at, courses:course_id(name, code)')
+            .select('id, title, course_id, date, status, created_at, courses(name, code)')
             .eq('professor_id', professorEntityId)
             .order('date', { ascending: true })
         : courseIds.length
           ? supabase
               .from('exams')
-              .select('id, title, course_id, date, status, created_at, courses:course_id(name, code)')
+              .select('id, title, course_id, date, status, created_at, courses(name, code)')
               .in('course_id', courseIds)
               .order('date', { ascending: true })
           : Promise.resolve({ data: [], error: null })

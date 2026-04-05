@@ -55,8 +55,8 @@ export const getMessages = async (profileId, direction = 'received') => {
         content,
         read,
         created_at,
-        sender:sender_id(id, full_name, email, avatar_url, role),
-        recipient:recipient_id(id, full_name, email, avatar_url, role)
+        sender:profiles!sender_id(id, full_name, email, avatar_url, role),
+        recipient:profiles!recipient_id(id, full_name, email, avatar_url, role)
       `)
       .order('created_at', { ascending: false });
 

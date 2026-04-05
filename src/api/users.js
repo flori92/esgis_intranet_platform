@@ -356,7 +356,7 @@ export const getUsers = async (options = {}) => {
         role,
         department_id,
         is_active,
-        departments:department_id(name)
+        departments(name)
       `, { count: 'exact' });
 
     if (role) {
@@ -422,7 +422,7 @@ export const getUserById = async (userId) => {
         role,
         department_id,
         is_active,
-        departments:department_id(name)
+        departments(name)
       `)
       .eq('id', userId)
       .single();

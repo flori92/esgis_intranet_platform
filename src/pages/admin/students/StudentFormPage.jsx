@@ -101,7 +101,7 @@ const StudentFormPage = () => {
           .from('students')
           .select(`
             id,
-            profiles:profile_id(id, full_name, email, gender, date_of_birth, phone_number, address),
+            profiles(id, full_name, email, gender, date_of_birth, phone_number, address),
             student_number,
             department_id,
             filiere_id,

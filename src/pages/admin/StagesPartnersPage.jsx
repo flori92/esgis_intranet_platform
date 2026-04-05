@@ -55,14 +55,14 @@ const StagesPartnersPage = () => {
         .from('stage_candidatures')
         .select(`
           *,
-          etudiant:etudiant_id(
+          etudiant:students!etudiant_id(
             id,
-            profiles:profile_id(full_name, email)
+            profiles(full_name, email)
           ),
-          offre:offre_id(
+          offre:stage_offres!offre_id(
             id,
             titre,
-            entreprises:entreprise_id(nom)
+            entreprises:stage_entreprises!entreprise_id(nom)
           )
         `);
       

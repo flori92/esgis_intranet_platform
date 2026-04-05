@@ -62,10 +62,10 @@ export const getForums = async (userId, role) => {
             .select(`
               course_id,
               is_principal,
-              professors:professor_id(
+              professors(
                 id,
                 profile_id,
-                profiles:profile_id(
+                profiles(
                   full_name
                 )
               )
@@ -135,7 +135,7 @@ export const getForumPosts = async (forumId) => {
       .from('forum_posts')
       .select(`
         id, content, pinned, likes_count, created_at, updated_at,
-        author:author_id(id, full_name, avatar_url, role)
+        author:profiles!author_id(id, full_name, avatar_url, role)
       `)
       .eq('forum_id', forumId)
       .order('pinned', { ascending: false })
@@ -148,7 +148,7 @@ export const getForumPosts = async (forumId) => {
         .from('forum_replies')
         .select(`
           id, content, likes_count, created_at,
-          author:author_id(id, full_name, avatar_url, role)
+          author:profiles!author_id(id, full_name, avatar_url, role)
         `)
         .eq('post_id', post.id)
         .order('created_at');
@@ -169,7 +169,7 @@ export const createForumPost = async (forumId, authorId, content) => {
     const { data, error } = await supabase
       .from('forum_posts')
       .insert({ forum_id: forumId, author_id: authorId, content })
-      .select(`*, author:author_id(id, full_name, avatar_url, role)`);
+      .select(`*, author:profiles!author_id(id, full_name, avatar_url, role)`);
     if (error) throw error;
     return { data: data?.[0], error: null };
   } catch (error) {
@@ -183,7 +183,7 @@ export const createForumReply = async (postId, authorId, content) => {
     const { data, error } = await supabase
       .from('forum_replies')
       .insert({ post_id: postId, author_id: authorId, content })
-      .select(`*, author:author_id(id, full_name, avatar_url, role)`);
+      .select(`*, author:profiles!author_id(id, full_name, avatar_url, role)`);
     if (error) throw error;
     return { data: data?.[0], error: null };
   } catch (error) {
@@ -262,7 +262,7 @@ export const searchForumPosts = async (forumId, query) => {
       .from('forum_posts')
       .select(`
         id, content, pinned, likes_count, created_at, updated_at,
-        author:author_id(id, full_name, role)
+        author:profiles!author_id(id, full_name, role)
       `)
       .eq('forum_id', forumId)
       .ilike('content', searchTerm)

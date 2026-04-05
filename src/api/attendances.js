@@ -10,10 +10,10 @@ export const getSessionAttendances = async (sessionId) => {
       .from('attendances')
       .select(`
         *,
-        students:student_id(
+        students(
           id,
           student_number,
-          profiles:profile_id(full_name, email)
+          profiles(full_name, email)
         )
       `)
       .eq('session_id', sessionId);
@@ -89,10 +89,10 @@ export const getStudentAbsences = async (studentId) => {
       .from('attendances')
       .select(`
         *,
-        course_sessions:session_id(
+        course_sessions(
           date,
           duration,
-          courses:course_id(name, code)
+          courses(name, code)
         )
       `)
       .eq('student_id', studentId)

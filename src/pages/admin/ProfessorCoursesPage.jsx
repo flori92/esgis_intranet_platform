@@ -80,7 +80,7 @@ const ProfessorCoursesPage = () => {
         .from('professors')
         .select(`
           id, 
-          profiles:profile_id(id, full_name, department_id),
+          profiles(id, full_name, department_id),
           employee_number,
           status
         `)

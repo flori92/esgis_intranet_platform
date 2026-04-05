@@ -105,9 +105,9 @@ const StudentDetailsPage = () => {
         .from('students')
         .select(`
           id,
-          profiles:profile_id(id, full_name, email, gender, date_of_birth, phone_number, address),
+          profiles(id, full_name, email, gender, date_of_birth, phone_number, address),
           student_number,
-          departments:department_id(id, name, code),
+          departments(id, name, code),
           level,
           academic_year,
           status,
@@ -183,14 +183,14 @@ const StudentDetailsPage = () => {
           semester,
           enrollment_date,
           status,
-          courses:course_id(
+          courses(
             id, 
             name, 
             code, 
             credits,
             professor_courses(
               professor_id,
-              professors:professor_id(id, profiles(full_name))
+              professors(id, profiles(full_name))
             )
           )
         `)
@@ -240,8 +240,8 @@ const StudentDetailsPage = () => {
           course_id,
           grade,
           status,
-          exams:exam_id(id, date, type),
-          courses:course_id(id, name, code)
+          exams(id, date, type),
+          courses(id, name, code)
         `)
         .eq('student_id', studentProfileId)
         .order('exams(date)', { ascending: false });

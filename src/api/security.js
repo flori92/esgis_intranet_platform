@@ -116,7 +116,7 @@ export const generateIntegrityReport = async (examId, generatedBy) => {
           attempt_status,
           answers,
           updated_at,
-          profiles:student_id(
+          profiles(
             id,
             full_name,
             students(
@@ -138,7 +138,7 @@ export const generateIntegrityReport = async (examId, generatedBy) => {
           timestamp,
           detected_at,
           created_at,
-          profiles:student_id(full_name, email)
+          profiles(full_name, email)
         `)
         .eq('exam_id', numericExamId),
       supabase
@@ -150,7 +150,7 @@ export const generateIntegrityReport = async (examId, generatedBy) => {
           score,
           completion_time,
           completed_at,
-          profiles:student_id(full_name, email)
+          profiles(full_name, email)
         `)
         .eq('exam_id', numericExamId),
     ]);
@@ -324,7 +324,7 @@ export const submitDataAccessRequest = async (userId, requestType, details) => {
 export const getDataAccessRequests = async (filters = {}) => {
   try {
     let query = supabase.from('data_access_requests')
-      .select('*, user:user_id(full_name, email), processor:processed_by(full_name)')
+      .select('*, user:profiles!user_id(full_name, email), processor:profiles!processed_by(full_name)')
       .order('created_at', { ascending: false });
 
     if (filters.status) query = query.eq('status', filters.status);

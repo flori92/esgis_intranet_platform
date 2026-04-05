@@ -44,8 +44,8 @@ export const getStageOffers = async (filters = {}) => {
       .from('stage_offres')
       .select(`
         *,
-        entreprises:entreprise_id(*),
-        professors:professeur_id(id, profiles:profile_id(full_name))
+        entreprises:stage_entreprises!entreprise_id(*),
+        professors:professors!professeur_id(id, profiles(full_name))
       `)
       .order('created_at', { ascending: false });
 
@@ -68,10 +68,10 @@ export const getStudentStageApplications = async (studentId) => {
       .from('stage_candidatures')
       .select(`
         *,
-        stage_offres:offre_id(
+        offre:stage_offres!offre_id(
           *,
-          entreprises:entreprise_id(*),
-          professors:professeur_id(id, profiles:profile_id(full_name))
+          entreprises:stage_entreprises!entreprise_id(*),
+          professors:professors!professeur_id(id, profiles(full_name))
         )
       `)
       .eq('etudiant_id', studentId)

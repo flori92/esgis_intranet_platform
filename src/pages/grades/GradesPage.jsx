@@ -288,10 +288,10 @@ export default function GradesPage() {
                 semester
               )
             ),
-            students:student_id(
+            students(
               id,
               profile_id,
-              profiles:profile_id(
+              profiles(
                 id,
                 email,
                 full_name

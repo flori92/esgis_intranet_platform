@@ -434,11 +434,11 @@ export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademiqu
       .select(`
         id,
         level,
-        profile:profile_id(
+        profile:profiles!profile_id(
           id,
           full_name,
           department_id,
-          departments:department_id(name)
+          departments(name)
         )
       `)
       .eq('level', normalizedLevel)
@@ -468,10 +468,10 @@ export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademiqu
         id,
         student_id,
         grade,
-        exams:exam_id(
+        exams(
           id,
           weight,
-          courses:course_id(
+          courses(
             id,
             credits,
             semester
@@ -605,8 +605,8 @@ export const getPracticeQuizzes = async (studentId) => {
         duration_minutes,
         difficulty,
         created_at,
-        course:course_id(id, name, code, level, semester),
-        professeur:professeur_id(id, full_name)
+        course:courses!course_id(id, name, code, level, semester),
+        professeur:professors!professeur_id(id, full_name)
       `)
       .eq('is_active', true)
       .in('course_id', courseIds)
@@ -798,13 +798,13 @@ export const getStudentAccountStatuses = async () => {
         level,
         status,
         created_at,
-        profile:profile_id(
+        profile:profiles!profile_id(
           id,
           full_name,
           email,
           is_active,
           department_id,
-          departments:department_id(name)
+          departments(name)
         )
       `)
       .order('created_at', { ascending: false });
@@ -848,7 +848,7 @@ export const updateStudentAccountStatus = async (studentId, { status, reason = '
         profile_id,
         student_number,
         status,
-        profile:profile_id(full_name, email)
+        profile:profiles!profile_id(full_name, email)
       `)
       .eq('id', studentId)
       .single();
@@ -1178,8 +1178,8 @@ export const getCurriculumTemplates = async (filters = {}) => {
       .from('curriculum_templates')
       .select(`
         *,
-        course:course_id(id, name, code, credits, level, semester),
-        department:department_id(id, name, code)
+        course:courses!course_id(id, name, code, credits, level, semester),
+        department:departments!department_id(id, name, code)
       `)
       .order('level_code')
       .order('semester_code')
@@ -1527,7 +1527,7 @@ export const getCoursesWithDepartments = async () => {
   try {
     const { data, error } = await supabase
       .from('courses')
-      .select('*, departments:department_id(name)')
+      .select('*, departments(name)')
       .order('name');
 
     if (error) throw error;
@@ -1799,7 +1799,7 @@ export const getFilieres = async (filters = {}) => {
   try {
     let query = supabase
       .from('filieres')
-      .select('*, departments:department_id(id, name, code)')
+      .select('*, departments(id, name, code)')
       .order('name');
 
     if (filters.department_id) {

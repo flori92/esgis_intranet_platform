@@ -32,7 +32,7 @@ const ThesesPage = () => {
     try {
       const { data, error: fetchErr } = await supabase
         .from('theses')
-        .select('*, profiles:supervisor_id(full_name)')
+        .select('*, supervisor:profiles!supervisor_id(full_name)')
         .eq('student_id', authState.profile?.id)
         .maybeSingle();
       

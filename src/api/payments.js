@@ -37,7 +37,7 @@ export const getAllPaymentStatuses = async (filters = {}) => {
         id,
         level,
         status,
-        profile:profile_id(
+        profile:profiles!profile_id(
           id,
           full_name,
           department_id

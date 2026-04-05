@@ -11,7 +11,7 @@ export const getAnnouncements = async (filters = {}) => {
         id, title, content, target, priority, status,
         send_push, send_email, send_sms, views_count,
         published_at, created_at, updated_at,
-        author:author_id(id, full_name)
+        author:profiles!author_id(id, full_name)
       `)
       .order('created_at', { ascending: false });
 
@@ -31,7 +31,7 @@ export const getPublishedAnnouncements = async (userTarget = null) => {
       .from('announcements')
       .select(`
         id, title, content, target, priority, views_count, published_at,
-        author:author_id(id, full_name)
+        author:profiles!author_id(id, full_name)
       `)
       .eq('status', 'published')
       .order('published_at', { ascending: false })

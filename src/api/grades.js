@@ -224,14 +224,14 @@ export const getProfessorCourses = async (professorProfileId) => {
       .select(`
         academic_year,
         is_principal,
-        courses:course_id(
+        courses(
           id,
           code,
           name,
           credits,
           level,
           semester,
-          departments:department_id(id, code, name)
+          departments(id, code, name)
         )
       `)
       .eq('professor_id', professorProfileId)
@@ -272,7 +272,7 @@ export const getStudentsByCourse = async (courseId) => {
       .select(`
         id,
         academic_year,
-        profiles:student_id(
+        profiles(
           id,
           full_name,
           avatar_url,
@@ -338,19 +338,19 @@ export const getGradesByCourse = async (courseId, typeEvaluation) => {
         published_at,
         created_at,
         updated_at,
-        students:student_id(
+        students(
           id,
           profile_id,
           student_number,
           level,
-          profiles:profile_id(id, full_name, avatar_url, email)
+          profiles(id, full_name, avatar_url, email)
         ),
-        professors:professor_id(
+        professors(
           id,
           profile_id,
-          profiles:profile_id(id, full_name)
+          profiles(id, full_name)
         ),
-        courses:course_id(
+        courses(
           id,
           name,
           code,
@@ -400,19 +400,19 @@ export const getStudentGradesForCourse = async (studentId, courseId) => {
         published_at,
         created_at,
         updated_at,
-        students:student_id(
+        students(
           id,
           profile_id,
           student_number,
           level,
-          profiles:profile_id(id, full_name, avatar_url, email)
+          profiles(id, full_name, avatar_url, email)
         ),
-        professors:professor_id(
+        professors(
           id,
           profile_id,
-          profiles:profile_id(id, full_name)
+          profiles(id, full_name)
         ),
-        courses:course_id(
+        courses(
           id,
           name,
           code,
@@ -455,19 +455,19 @@ export const getStudentPublishedGrades = async (studentId) => {
         published_at,
         created_at,
         updated_at,
-        students:student_id(
+        students(
           id,
           profile_id,
           student_number,
           level,
-          profiles:profile_id(id, full_name, avatar_url, email)
+          profiles(id, full_name, avatar_url, email)
         ),
-        professors:professor_id(
+        professors(
           id,
           profile_id,
-          profiles:profile_id(id, full_name)
+          profiles(id, full_name)
         ),
-        courses:course_id(
+        courses(
           id,
           name,
           code,
@@ -571,8 +571,8 @@ export const publishGrades = async (courseId, evaluationTypes, professorProfileI
         value,
         evaluation_type,
         student_id,
-        students:student_id(id, profile_id),
-        courses:course_id(id, name, code)
+        students(id, profile_id),
+        courses(id, name, code)
       `);
 
     if (types.length === 1) {
@@ -632,14 +632,14 @@ export const getProfessorPublishedGrades = async (professorProfileId) => {
         published_at,
         created_at,
         updated_at,
-        students:student_id(
+        students(
           id,
           profile_id,
           student_number,
           level,
-          profiles:profile_id(id, full_name, avatar_url, email)
+          profiles(id, full_name, avatar_url, email)
         ),
-        courses:course_id(
+        courses(
           id,
           name,
           code,
@@ -761,19 +761,19 @@ export const getProfessorCorrections = async (professorProfileId) => {
           published_at,
           created_at,
           updated_at,
-          students:student_id(
+          students(
             id,
             profile_id,
             student_number,
             level,
-            profiles:profile_id(id, full_name, avatar_url, email)
+            profiles(id, full_name, avatar_url, email)
           ),
-          professors:professor_id(
+          professors(
             id,
             profile_id,
-            profiles:profile_id(id, full_name)
+            profiles(id, full_name)
           ),
-          courses:course_id(
+          courses(
             id,
             name,
             code,

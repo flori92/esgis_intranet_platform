@@ -73,7 +73,7 @@ const CalendarManagerPage = () => {
         getDepartments(),
         getAcademicLevels(),
         supabase.from('courses').select('id, name, code, department_id, level').order('name'),
-        supabase.from('professors').select('id, profile_id, profiles:profile_id(full_name)').order('profiles(full_name)'),
+        supabase.from('professors').select('id, profile_id, profiles(full_name)').order('profiles(full_name)'),
       ]);
 
       const formatted = (sessionsRes.data || []).map(e => ({

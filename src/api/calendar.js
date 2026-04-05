@@ -55,17 +55,17 @@ export const getScheduleEvents = async (filters = {}) => {
         status,
         created_at,
         updated_at,
-        courses:course_id(
+        courses(
           id,
           code,
           name,
           level,
           semester
         ),
-        professors:professor_id(
+        professors(
           id,
           profile_id,
-          profiles:profile_id(
+          profiles(
             id,
             full_name
           )

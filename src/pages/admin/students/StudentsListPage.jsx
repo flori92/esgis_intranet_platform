@@ -105,8 +105,8 @@ const StudentsListPage = () => {
           academic_year,
           status,
           created_at,
-          profiles:profile_id(id, full_name, email, gender, date_of_birth, phone_number, address),
-          departments:department_id(id, name)
+          profiles(id, full_name, email, gender, date_of_birth, phone_number, address),
+          departments(id, name)
         `)
         .order('id');
       

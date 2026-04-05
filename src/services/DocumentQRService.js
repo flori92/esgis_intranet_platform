@@ -382,18 +382,21 @@ export async function verifyDocument(reference) {
       throw error;
     }
 
+    const etu = data.etudiant;
+    const prof = etu?.profiles;
+    const nameFromProfile = prof
+      ? [prof.last_name, prof.first_name].filter(Boolean).join(' ').trim() || prof.full_name
+      : '';
     return {
       verified: true,
       document: {
         reference: data.reference,
         type: data.type_document,
         dateGeneration: data.date_generation,
-        studentName: data.etudiant
-          ? `${data.etudiant.last_name} ${data.etudiant.first_name}`
-          : 'Inconnu',
-        filiere: data.etudiant?.inscriptions?.[0]?.niveaux?.filieres?.name || '-',
-        niveau: data.etudiant?.inscriptions?.[0]?.niveaux?.name || '-',
-        anneeAcademique: data.etudiant?.inscriptions?.[0]?.annee_academique || '-',
+        studentName: nameFromProfile || 'Inconnu',
+        filiere: etu?.filieres?.name || '-',
+        niveau: etu?.level || '-',
+        anneeAcademique: etu?.academic_year || '-',
       },
       message: 'Document authentique — délivré par l\'ESGIS.'
     };
