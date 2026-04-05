@@ -183,10 +183,15 @@ const StudentDetailsPage = () => {
           semester,
           enrollment_date,
           status,
-          courses:course_id(id, name, code, credits),
-          professor_courses(
-            professor_id,
-            professors:professor_id(id, profiles:profile_id(full_name))
+          courses:course_id(
+            id, 
+            name, 
+            code, 
+            credits,
+            professor_courses(
+              professor_id,
+              professors:professor_id(id, profiles:profile_id(full_name))
+            )
           )
         `)
         .eq('student_id', studentProfileId)
@@ -197,19 +202,25 @@ const StudentDetailsPage = () => {
       }
       
       // Transformer les données des cours
-      const transformedCourses = (coursesData || []).map(course => {
-        const courseRef = getRelation(course.courses);
-        const profCourse = getRelation(course.professor_courses);
+      const transformedCourses = (coursesData || []).map(item => {
+        const courseRef = getRelation(item.courses);
+        
+        // Trouver le professeur pour cette année académique spécifique
+        const profCourse = (courseRef?.professor_courses || []).find(
+          pc => pc.academic_year === item.academic_year || !pc.academic_year
+        ) || (courseRef?.professor_courses?.[0]);
+
         const profRef = getRelation(profCourse?.professors);
         const profProfile = getRelation(profRef?.profiles);
+
         return {
-          id: course.id,
-          student_id: course.student_id,
-          course_id: course.course_id,
-          academic_year: course.academic_year,
-          semester: course.semester,
-          enrollment_date: course.enrollment_date,
-          status: course.status,
+          id: item.id,
+          student_id: item.student_id,
+          course_id: item.course_id,
+          academic_year: item.academic_year,
+          semester: item.semester,
+          enrollment_date: item.enrollment_date,
+          status: item.status,
           course_name: courseRef?.name || 'Cours inconnu',
           course_code: courseRef?.code || '',
           credits: courseRef?.credits || 0,
