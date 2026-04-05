@@ -83,6 +83,24 @@ const ProfessorRolesPage = () => {
     'manage_internships', 'view_finances', 'edit_finances'
   ];
 
+  const permissionLabels = {
+    'view_courses': 'Voir les cours',
+    'edit_courses': 'Gérer les cours',
+    'view_students': 'Voir les étudiants',
+    'edit_students': 'Gérer les étudiants',
+    'view_grades': 'Voir les notes',
+    'edit_grades': 'Saisir les notes',
+    'view_departments': 'Voir les départements',
+    'edit_departments': 'Gérer les départements',
+    'view_professors': 'Voir les professeurs',
+    'edit_professors': 'Gérer les professeurs',
+    'manage_roles': 'Gérer les rôles',
+    'approve_documents': 'Valider les documents',
+    'manage_internships': 'Gérer les stages',
+    'view_finances': 'Voir les finances',
+    'edit_finances': 'Gérer les finances'
+  };
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -276,7 +294,14 @@ const ProfessorRolesPage = () => {
                   <TableCell>{role.description}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {(role.permissions || []).map(p => <Chip key={p} label={p.replace(/_/g, ' ')} size="small" variant="outlined" />)}
+                      {(role.permissions || []).map(p => (
+                        <Chip 
+                          key={p} 
+                          label={permissionLabels[p] || p.replace(/_/g, ' ')} 
+                          size="small" 
+                          variant="outlined" 
+                        />
+                      ))}
                     </Box>
                   </TableCell>
                   <TableCell align="right">
@@ -304,7 +329,7 @@ const ProfessorRolesPage = () => {
                   <Grid item xs={6} sm={4} key={p}>
                     <FormControlLabel control={<Checkbox checked={rolePermissions.includes(p)} onChange={() => {
                       setRolePermissions(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
-                    }} />} label={p.replace(/_/g, ' ')} />
+                    }} />} label={permissionLabels[p] || p.replace(/_/g, ' ')} />
                   </Grid>
                 ))}
               </Grid>
