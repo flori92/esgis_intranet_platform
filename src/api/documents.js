@@ -619,11 +619,9 @@ export const getAllGeneratedDocuments = async () => {
       .from('generated_documents')
       .select(`
         *,
-        students (
+        profiles:student_id (
           id,
-          profiles (
-            full_name
-          )
+          full_name
         ),
         document_templates (
           id,

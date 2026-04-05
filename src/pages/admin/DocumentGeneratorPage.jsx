@@ -161,7 +161,7 @@ const DocumentGeneratorPage = () => {
       // Transformer les données pour inclure le nom de l'étudiant et du modèle
       const formattedDocuments = limitedDocs.map(doc => ({
         ...doc,
-        student_name: doc.students?.profiles?.full_name || 'Étudiant inconnu',
+        student_name: doc.profiles?.full_name || 'Étudiant inconnu',
         template_name: doc.document_templates?.name || 'Modèle inconnu'
       }));
       
