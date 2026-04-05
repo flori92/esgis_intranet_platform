@@ -1326,7 +1326,7 @@ export const getExamWithDetails = async (examId) => {
         course_id,
         courses(name, code),
         professor_id,
-        professors(profiles(full_name)),
+        professor:profiles!professor_id(full_name),
         date,
         duration,
         type,

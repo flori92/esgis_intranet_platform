@@ -23,8 +23,8 @@ export const getReportsData = async () => {
       supabase.from('filieres').select('*'),
       supabase.from('students').select('*, departments(name), filieres(name)'),
       supabase.from('professors').select('*, departments(name)'),
-      supabase.from('exams').select('*, professors(id, profile_id), courses(id, name)'),
-      supabase.from('grades').select('id, student_id, course_id, note, max_value, is_published'),
+      supabase.from('exams').select('*, professor:profiles!professor_id(id, full_name), courses(id, name)'),
+      supabase.from('grades').select('id, student_id, course_id, value, max_value, is_published'),
       supabase.from('generated_documents').select('id, created_at, status')
     ]);
 

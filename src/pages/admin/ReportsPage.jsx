@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useState, useMemo } from 'react';
 import {
   Box, Typography, Paper, FormControl, InputLabel, Select,
   MenuItem, Tab, Tabs, CircularProgress, Grid, Card, CardContent,
-  Stack, Divider, Button
+  Stack, Divider, Button, Avatar
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
@@ -53,8 +53,8 @@ const ReportsPage = () => {
       const { departments, filieres, students, professors, exams, grades, documents } = rawData;
 
       // KPI: Success Rate (Grades >= 10/20)
-      const validGrades = grades.filter(g => g.note !== null);
-      const successCount = validGrades.filter(g => (g.note / (g.max_value || 20)) * 20 >= 10).length;
+      const validGrades = grades.filter(g => g.value !== null);
+      const successCount = validGrades.filter(g => (g.value / (g.max_value || 20)) * 20 >= 10).length;
       const successRate = validGrades.length > 0 ? (successCount / validGrades.length) * 100 : 0;
 
       // Dept Stats
