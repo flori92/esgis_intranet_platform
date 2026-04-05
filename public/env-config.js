@@ -4,7 +4,7 @@
 window.ENV = {
   // Configuration Supabase - URL uniquement
   // La clé anon est déjà dans le bundle de l'application
-  SUPABASE_URL: 'https://epnhnjkbxgciojevrwfq.supabase.co',
+  SUPABASE_URL: 'https://zsuszjlgatsylleuopff.supabase.co',
   
   // Configuration de l'application
   APP_NAME: 'Intranet ESGIS',

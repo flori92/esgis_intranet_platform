@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Configuration Supabase
-const SUPABASE_URL = 'https://epnhnjkbxgciojevrwfq.supabase.co';
+const SUPABASE_URL = 'https://zsuszjlgatsylleuopff.supabase.co';
 const SUPABASE_SERVICE_ROLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjIwNjkwNiwiZXhwIjoyMDYxNzgyOTA2fQ.kbEs9bN0vpsf9cE8TZuj0-sBz6LCQ3o3LU0sptEx-mY';
 
 // Lire le fichier SQL
@@ -21,7 +21,7 @@ async function executeQuery(sql) {
   return new Promise((resolve, reject) => {
     // Créer une requête HTTP POST
     const options = {
-      hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+      hostname: 'zsuszjlgatsylleuopff.supabase.co',
       path: '/rest/v1/active_students',
       method: 'GET', // Utiliser GET pour vérifier l'existence de la table
       headers: {

@@ -1,5 +1,5 @@
 -- Script de création des tables et d'initialisation des données pour le module de gestion des stages
--- À exécuter avec la commande : PGPASSWORD="Apollonf@vi92" psql -h db.epnhnjkbxgciojevrwfq.supabase.co -p 5432 -U postgres -d postgres -f scripts/create-and-initialize-stages-module-corrected.sql
+-- À exécuter avec la commande : PGPASSWORD="Apollonf@vi92" psql -h db.zsuszjlgatsylleuopff.supabase.co -p 5432 -U postgres -d postgres -f scripts/create-and-initialize-stages-module-corrected.sql
 
 -- 1. Création des tables pour le module de gestion des stages
 

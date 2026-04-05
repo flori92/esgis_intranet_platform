@@ -1,5 +1,5 @@
 -- Script d'initialisation des données de test pour le module de gestion des stages
--- À exécuter avec la commande : psql postgresql://postgres:Apollonf@vi92@db.epnhnjkbxgciojevrwfq.supabase.co:5432/postgres -f scripts/initialize-test-data.sql
+-- À exécuter avec la commande : psql postgresql://postgres:Apollonf@vi92@db.zsuszjlgatsylleuopff.supabase.co:5432/postgres -f scripts/initialize-test-data.sql
 
 -- 1. Ajout des entreprises
 INSERT INTO entreprises (nom, secteur, adresse, telephone, email, site_web, description, logo_url)

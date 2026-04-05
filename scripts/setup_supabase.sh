@@ -7,10 +7,10 @@ echo "🔧 Configuration de Supabase pour la plateforme d'examen ESGIS"
 echo "------------------------------------------------------------"
 
 # Configuration
-SUPABASE_URL="https://epnhnjkbxgciojevrwfq.supabase.co"
+SUPABASE_URL="https://zsuszjlgatsylleuopff.supabase.co"
 SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjIwNjkwNiwiZXhwIjoyMDYxNzgyOTA2fQ.kbEs9bN0vpsf9cE8TZuj0-sBz6LCQ3o3LU0sptEx-mY"
 SUPABASE_DB_PASSWORD="Apollonf@vi92"
-SUPABASE_DB_HOST="db.epnhnjkbxgciojevrwfq.supabase.co"
+SUPABASE_DB_HOST="db.zsuszjlgatsylleuopff.supabase.co"
 SUPABASE_DB_PORT="5432"
 SUPABASE_DB_NAME="postgres"
 SUPABASE_DB_USER="postgres"
@@ -98,7 +98,7 @@ CORS_RESPONSE=$(curl -s -X PUT "$SUPABASE_URL/rest/v1/" \
 if echo "$CORS_RESPONSE" | grep -q "error"; then
     echo "⚠️ Avertissement: Impossible de configurer les règles CORS via l'API."
     echo "   Veuillez les configurer manuellement dans l'interface Supabase:"
-    echo "   1. Allez à https://epnhnjkbxgciojevrwfq.supabase.co/project/settings/api"
+    echo "   1. Allez à https://zsuszjlgatsylleuopff.supabase.co/project/settings/api"
     echo "   2. Dans la section 'API Settings', configurez 'Allow-Origin' sur '*'"
 else
     echo "✅ Règles CORS configurées avec succès!"
@@ -115,7 +115,7 @@ REALTIME_RESPONSE=$(curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/enable_realtime" 
 if echo "$REALTIME_RESPONSE" | grep -q "error"; then
     echo "⚠️ Avertissement: Impossible d'activer les notifications temps réel via l'API."
     echo "   Veuillez les activer manuellement dans l'interface Supabase:"
-    echo "   1. Allez à https://epnhnjkbxgciojevrwfq.supabase.co/project/database/replication"
+    echo "   1. Allez à https://zsuszjlgatsylleuopff.supabase.co/project/database/replication"
     echo "   2. Activez la réplication pour la table 'quiz_results'"
 else
     echo "✅ Notifications temps réel activées avec succès!"

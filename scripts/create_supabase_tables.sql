@@ -1,5 +1,5 @@
 -- Script de création des tables dans Supabase
--- À exécuter dans l'éditeur SQL de Supabase (https://epnhnjkbxgciojevrwfq.supabase.co/project/sql)
+-- À exécuter dans l'éditeur SQL de Supabase (https://zsuszjlgatsylleuopff.supabase.co/project/sql)
 
 -- Création de la table quiz_results pour stocker les résultats des examens
 CREATE TABLE IF NOT EXISTS public.quiz_results (

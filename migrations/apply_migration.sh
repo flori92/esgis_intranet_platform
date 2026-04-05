@@ -10,9 +10,9 @@ YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
 # Paramètres de connexion directe à Supabase
-SUPABASE_URL="https://epnhnjkbxgciojevrwfq.supabase.co"
+SUPABASE_URL="https://zsuszjlgatsylleuopff.supabase.co"
 SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyMDY5MDYsImV4cCI6MjA2MTc4MjkwNn0.VeqmGA56qySH_f4rwk6bnsvPS6173BtoRA0iCjXnogM"
-SUPABASE_DB_HOST="db.epnhnjkbxgciojevrwfq.supabase.co"
+SUPABASE_DB_HOST="db.zsuszjlgatsylleuopff.supabase.co"
 SUPABASE_DB_PORT="5432"
 SUPABASE_DB_NAME="postgres"
 SUPABASE_DB_USER="postgres"

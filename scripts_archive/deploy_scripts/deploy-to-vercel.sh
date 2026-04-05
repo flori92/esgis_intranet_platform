@@ -50,7 +50,7 @@ if [ "$PROJECT_EXISTS" = false ]; then
             \"environmentVariables\": [
                 {
                     \"key\": \"VITE_SUPABASE_URL\",
-                    \"value\": \"https://epnhnjkbxgciojevrwfq.supabase.co\",
+                    \"value\": \"https://zsuszjlgatsylleuopff.supabase.co\",
                     \"target\": [\"production\", \"preview\", \"development\"]
                 },
                 {

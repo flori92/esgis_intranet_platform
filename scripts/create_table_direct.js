@@ -4,7 +4,7 @@ const path = require('path');
 const https = require('https');
 
 // Configuration Supabase
-const SUPABASE_URL = 'https://epnhnjkbxgciojevrwfq.supabase.co';
+const SUPABASE_URL = 'https://zsuszjlgatsylleuopff.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjIwNjkwNiwiZXhwIjoyMDYxNzgyOTA2fQ.kbEs9bN0vpsf9cE8TZuj0-sBz6LCQ3o3LU0sptEx-mY';
 
 // Lire le contenu du fichier SQL
@@ -20,7 +20,7 @@ const data = JSON.stringify({
 
 // Options de la requête
 const options = {
-  hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+  hostname: 'zsuszjlgatsylleuopff.supabase.co',
   path: '/rest/v1/rpc/exec_sql',
   method: 'POST',
   headers: {
@@ -63,7 +63,7 @@ req.end();
 // Fonction pour vérifier que la table existe
 function checkTableExists() {
   const checkOptions = {
-    hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+    hostname: 'zsuszjlgatsylleuopff.supabase.co',
     path: '/rest/v1/active_students?select=id&limit=1',
     method: 'GET',
     headers: {

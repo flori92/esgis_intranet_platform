@@ -50,7 +50,7 @@ async function checkTableExists() {
   console.log('Vérification de l\'existence de la table active_students...');
   
   const options = {
-    hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+    hostname: 'zsuszjlgatsylleuopff.supabase.co',
     path: '/rest/v1/active_students?select=count&limit=1',
     method: 'GET',
     headers: {
@@ -123,7 +123,7 @@ async function createTable() {
   
   // Création de la table via l'API REST de Supabase
   const options = {
-    hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+    hostname: 'zsuszjlgatsylleuopff.supabase.co',
     path: '/rest/v1/active_students',
     method: 'POST',
     headers: {

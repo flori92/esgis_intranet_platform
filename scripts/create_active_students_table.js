@@ -1,7 +1,7 @@
 // Script pour créer la table active_students directement via l'API SQL de Supabase
 import { request } from 'https';
 
-const SUPABASE_URL = 'epnhnjkbxgciojevrwfq.supabase.co';
+const SUPABASE_URL = 'zsuszjlgatsylleuopff.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjIwNjkwNiwiZXhwIjoyMDYxNzgyOTA2fQ.kbEs9bN0vpsf9cE8TZuj0-sBz6LCQ3o3LU0sptEx-mY';
 
 // SQL pour créer la table

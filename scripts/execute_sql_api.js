@@ -162,7 +162,7 @@ async function executeAlternativeApproach() {
   const checkColumnExists = () => {
     return new Promise((resolve, reject) => {
       const options = {
-        hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+        hostname: 'zsuszjlgatsylleuopff.supabase.co',
         path: '/rest/v1/active_students?select=has_completed&limit=1',
         method: 'GET',
         headers: {

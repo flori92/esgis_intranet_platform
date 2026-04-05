@@ -2,7 +2,7 @@
 import https from 'https';
 
 // Configuration Supabase
-const SUPABASE_URL = 'https://epnhnjkbxgciojevrwfq.supabase.co';
+const SUPABASE_URL = 'https://zsuszjlgatsylleuopff.supabase.co';
 const SUPABASE_SERVICE_ROLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwbmhuamtieGdjaW9qZXZyd2ZxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjIwNjkwNiwiZXhwIjoyMDYxNzgyOTA2fQ.kbEs9bN0vpsf9cE8TZuj0-sBz6LCQ3o3LU0sptEx-mY';
 
 // Fonction pour effectuer une requête HTTP
@@ -50,7 +50,7 @@ async function checkColumnExists() {
   console.log('Vérification de l\'existence du champ has_completed...');
   
   const options = {
-    hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+    hostname: 'zsuszjlgatsylleuopff.supabase.co',
     path: '/rest/v1/active_students?select=has_completed&limit=1',
     method: 'GET',
     headers: {
@@ -85,7 +85,7 @@ async function executeSqlViaPostgrest() {
   
   // Étape 1: Récupérer un ID existant ou en créer un nouveau
   const options1 = {
-    hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+    hostname: 'zsuszjlgatsylleuopff.supabase.co',
     path: '/rest/v1/active_students?select=student_id&limit=1',
     method: 'GET',
     headers: {
@@ -104,7 +104,7 @@ async function executeSqlViaPostgrest() {
       
       // Étape 2: Mettre à jour l'enregistrement avec le nouveau champ
       const options2 = {
-        hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+        hostname: 'zsuszjlgatsylleuopff.supabase.co',
         path: '/rest/v1/active_students',
         method: 'POST',
         headers: {
@@ -140,7 +140,7 @@ async function executeSqlViaPostgrest() {
       
       // Créer un nouvel enregistrement avec le champ has_completed
       const options2 = {
-        hostname: 'epnhnjkbxgciojevrwfq.supabase.co',
+        hostname: 'zsuszjlgatsylleuopff.supabase.co',
         path: '/rest/v1/active_students',
         method: 'POST',
         headers: {
