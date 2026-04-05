@@ -42,6 +42,7 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
 
 import { useAuth } from '@/context/AuthContext';
 import { getDepartments } from '@/api/departments';
@@ -53,6 +54,7 @@ import {
   toggleUserActive,
   updateUser
 } from '@/api/users';
+import { sendAccessInvitation } from '@/api/auth';
 import Papa from 'papaparse';
 import { triggerDownload } from '@/utils/DownloadLinkUtil';
 
@@ -132,6 +134,7 @@ const UserManagementPage = () => {
   
   // État pour l'importation d'utilisateurs
   const [importing, setImporting] = useState(false);
+  const [invitingId, setInvitingId] = useState(null);
   
   // Référence pour l'input de fichier
   const fileInputRef = useRef(null);
@@ -258,6 +261,25 @@ const UserManagementPage = () => {
     } catch (error) {
       console.error('Erreur lors de la soumission:', error);
       showSnackbar(`Erreur: ${error.message}`, 'error');
+    }
+  };
+
+  const handleSendInvitation = async (email, userId) => {
+    if (!email) return;
+    
+    setInvitingId(userId);
+    try {
+      const { success, error } = await sendAccessInvitation(email);
+      if (success) {
+        showSnackbar(`Invitation envoyée avec succès à ${email}`, 'success');
+      } else {
+        throw error;
+      }
+    } catch (error) {
+      console.error('Erreur invitation:', error);
+      showSnackbar(`Erreur lors de l'envoi: ${error.message}`, 'error');
+    } finally {
+      setInvitingId(null);
     }
   };
 
@@ -503,6 +525,15 @@ const UserManagementPage = () => {
                           />
                         </TableCell>
                         <TableCell align="right">
+                          <IconButton 
+                            onClick={() => handleSendInvitation(user.email, user.id)} 
+                            size="small"
+                            color="secondary"
+                            disabled={invitingId === user.id}
+                            title="Envoyer invitation d'accès"
+                          >
+                            {invitingId === user.id ? <CircularProgress size={20} color="inherit" /> : <VpnKeyIcon fontSize="small" />}
+                          </IconButton>
                           <IconButton onClick={() => handleOpenDialog(true, user)} size="small">
                             <EditIcon fontSize="small" />
                           </IconButton>

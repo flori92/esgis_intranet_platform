@@ -32,10 +32,12 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  VpnKey as VpnKeyIcon
 } from '@mui/icons-material';
 import { getDepartments } from '@/api/departments';
 import { createUser, deleteUser, getProfessors, updateUser } from '@/api/users';
+import { sendAccessInvitation } from '@/api/auth';
 
 const PROFESSOR_STATUSES = [
   { value: 'active', label: 'Actif', color: 'success' },
@@ -62,6 +64,7 @@ export default function ProfessorsListPage() {
   const [professors, setProfessors] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [invitingId, setInvitingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingProf, setEditingProf] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -95,6 +98,24 @@ export default function ProfessorsListPage() {
       setError(`Erreur lors du chargement des professeurs: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendInvitation = async (email, profId) => {
+    if (!email) return;
+    setInvitingId(profId);
+    try {
+      const { success, error } = await sendAccessInvitation(email);
+      if (success) {
+        setSuccess(`Invitation envoyée avec succès à ${email}`);
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        throw error;
+      }
+    } catch (err) {
+      setError(`Erreur lors de l'envoi: ${err.message}`);
+    } finally {
+      setInvitingId(null);
     }
   };
 
@@ -252,6 +273,15 @@ export default function ProfessorsListPage() {
                       </TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          <IconButton 
+                            size="small" 
+                            color="secondary" 
+                            onClick={() => handleSendInvitation(prof.email, prof.id)} 
+                            disabled={invitingId === prof.id}
+                            title="Inviter (Mot de passe)"
+                          >
+                            {invitingId === prof.id ? <CircularProgress size={20} color="inherit" /> : <VpnKeyIcon fontSize="small" />}
+                          </IconButton>
                           <IconButton size="small" onClick={() => handleEditClick(prof)} title="Modifier">
                             <EditIcon fontSize="small" />
                           </IconButton>
