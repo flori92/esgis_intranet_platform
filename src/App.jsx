@@ -1,7 +1,8 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import RouteLoader from './components/common/RouteLoader';
+import notificationService from './services/NotificationService';
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
@@ -76,6 +77,11 @@ const RoleBasedRedirect = () => {
  * Composant principal de l'application
  */
 function App() {
+  // Initialisation des services globaux
+  useEffect(() => {
+    notificationService.init();
+  }, []);
+
   return (
     <Router>
       <AuthProvider>

@@ -157,6 +157,15 @@ export const useSupabaseAuth = () => {
           error: null,
           loading: false
         });
+
+        // Initialiser OneSignal et connecter l'utilisateur
+        import('../services/NotificationService').then(({ default: notificationService }) => {
+          notificationService.loginUser({
+            id: session.user.id,
+            email: session.user.email,
+            role: role
+          });
+        });
       } catch (error) {
         console.error('Erreur lors de la récupération du profil:', error);
         setAuthState({

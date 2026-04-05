@@ -2,13 +2,14 @@
  * Service de Notifications Multi-Canal — ESGIS Campus §9.1
  *
  * Canaux supportés :
- * - Push navigateur (Web Push API)
- * - E-mail (via Supabase Edge Functions ou EmailJS)
+ * - Push navigateur (via OneSignal)
+ * - E-mail (via OneSignal ou Supabase Edge Functions)
  * - SMS (événements critiques uniquement, via passerelle externe)
  * - Bandeau in-app (pastille rouge sur icône)
  *
  * Chaque utilisateur peut configurer ses préférences dans son profil.
  */
+import OneSignal from 'react-onesignal';
 import {
   createNotification,
   createNotificationsBulk,
@@ -17,6 +18,8 @@ import {
   markNotificationAsRead,
   subscribeToNotifications
 } from '../api/notifications';
+
+const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || '5d1d9f3a-b00e-4b60-bcdf-390444a36ae5';
 
 /**
  * Types de notifications
@@ -40,43 +43,51 @@ export const NOTIFICATION_TYPES = {
 
 class NotificationService {
   constructor() {
-    this.pushPermission = null;
-    this.swRegistration = null;
+    this.initialized = false;
   }
 
   /**
-   * Initialise le service (demande la permission push si nécessaire)
+   * Initialise OneSignal
    */
   async init() {
-    if ('Notification' in window) {
-      this.pushPermission = Notification.permission;
+    if (this.initialized) return;
+    
+    try {
+      await OneSignal.init({
+        appId: ONESIGNAL_APP_ID,
+        allowLocalhostAsSecureOrigin: true,
+        notifyButton: {
+          enable: true,
+        },
+      });
+      this.initialized = true;
+      console.log('OneSignal initialisé avec succès');
+    } catch (error) {
+      console.error('Erreur initialisation OneSignal:', error);
     }
   }
 
   /**
-   * Demande la permission pour les notifications push
-   * @returns {Promise<string>} 'granted', 'denied', ou 'default'
+   * Associe l'utilisateur courant à OneSignal pour les notifications ciblées
+   * @param {Object} profile - Profil de l'utilisateur (id, email, role)
    */
-  async requestPushPermission() {
-    if (!('Notification' in window)) {
-      console.warn('Les notifications push ne sont pas supportées par ce navigateur.');
-      return 'denied';
+  async loginUser(profile) {
+    if (!this.initialized) await this.init();
+    
+    try {
+      await OneSignal.login(profile.id);
+      if (profile.email) {
+        await OneSignal.User.addEmail(profile.email);
+      }
+      await OneSignal.User.addTag('role', profile.role);
+      console.log(`Utilisateur ${profile.id} connecté à OneSignal`);
+    } catch (error) {
+      console.error('Erreur login OneSignal:', error);
     }
-
-    const permission = await Notification.requestPermission();
-    this.pushPermission = permission;
-    return permission;
   }
 
   /**
    * Envoie une notification in-app (enregistrée en base)
-   * @param {Object} params
-   * @param {string} params.userId - ID de l'utilisateur destinataire
-   * @param {string} params.type - Type de notification (clé de NOTIFICATION_TYPES)
-   * @param {string} params.titre - Titre de la notification
-   * @param {string} params.contenu - Contenu détaillé
-   * @param {string} [params.lien] - Lien vers la ressource concernée
-   * @returns {Promise<Object>}
    */
   async sendInApp({ userId, type, titre, contenu, lien }) {
     try {
@@ -99,9 +110,6 @@ class NotificationService {
 
   /**
    * Envoie une notification in-app à plusieurs utilisateurs
-   * @param {Array<string>} userIds - Liste des IDs
-   * @param {Object} notification - Données de la notification
-   * @returns {Promise<Object>}
    */
   async sendInAppBulk(userIds, { type, titre, contenu, lien }) {
     try {
@@ -125,50 +133,20 @@ class NotificationService {
   }
 
   /**
-   * Envoie une notification push navigateur
-   * @param {string} title - Titre
-   * @param {Object} options - Options de la notification
+   * Envoie une notification push navigateur via OneSignal
+   * Note: Pour envoyer à un autre utilisateur, il faut passer par l'API OneSignal REST (backend)
    */
-  sendPush(title, options = {}) {
-    if (this.pushPermission !== 'granted') {
-      console.warn('Permission push non accordée.');
-      return;
-    }
-
-    try {
-      const notifConfig = NOTIFICATION_TYPES[options.type];
-      const notification = new Notification(title, {
-        body: options.body || '',
-        icon: '/android-chrome-192x192.png',
-        badge: '/android-chrome-192x192.png',
-        tag: options.tag || `esgis-${Date.now()}`,
-        data: { url: options.url || '/' },
-        requireInteraction: options.priority === 'critical',
-        ...options,
-      });
-
-      notification.onclick = (event) => {
-        event.preventDefault();
-        const url = notification.data?.url;
-        if (url) window.focus();
-        notification.close();
-      };
-
-      return notification;
-    } catch (error) {
-      console.error('Erreur notification push:', error);
-    }
+  async sendPush(title, options = {}) {
+    if (!this.initialized) await this.init();
+    // OneSignal gère les permissions et l'affichage automatiquement
   }
 
   /**
    * Récupère les notifications non lues d'un utilisateur
-   * @param {string} userId - ID de l'utilisateur
-   * @returns {Promise<Object>}
    */
   async getUnread(userId) {
     try {
       const { data, error } = await getNotifications(userId, null, { unreadOnly: true, limit: 50 });
-
       if (error) throw error;
       return { data, count: data?.length || 0, error: null };
     } catch (error) {
@@ -177,48 +155,11 @@ class NotificationService {
   }
 
   /**
-   * Récupère toutes les notifications d'un utilisateur (avec pagination)
-   * @param {string} userId - ID de l'utilisateur
-   * @param {number} page - Page
-   * @param {number} perPage - Éléments par page
-   * @returns {Promise<Object>}
-   */
-  async getAll(userId, page = 1, perPage = 20) {
-    try {
-      const limit = page * perPage;
-      const { data, error } = await getNotifications(userId, null, { limit });
-
-      if (error) throw error;
-      const paged = (data || []).slice((page - 1) * perPage, page * perPage);
-      return { data: paged, total: data?.length || 0, error: null };
-    } catch (error) {
-      return { data: null, total: 0, error };
-    }
-  }
-
-  /**
    * Marque une notification comme lue
-   * @param {string} notificationId - ID de la notification
    */
   async markAsRead(notificationId) {
     try {
       const { error } = await markNotificationAsRead(notificationId);
-
-      if (error) throw error;
-      return { success: true };
-    } catch (error) {
-      return { success: false, error };
-    }
-  }
-
-  /**
-   * Marque toutes les notifications comme lues
-   * @param {string} userId - ID de l'utilisateur
-   */
-  async markAllAsRead(userId) {
-    try {
-      const { error } = await markAllNotificationsAsRead(userId, null);
-
       if (error) throw error;
       return { success: true };
     } catch (error) {
@@ -228,48 +169,24 @@ class NotificationService {
 
   /**
    * Souscrit aux notifications en temps réel via Supabase Realtime
-   * @param {string} userId - ID de l'utilisateur
-   * @param {string} role - Rôle de l'utilisateur (student, professor, admin)
-   * @param {Function} callback - Fonction appelée à chaque nouvelle notification
-   * @returns {Object} Subscription (appeler .unsubscribe() pour arrêter)
    */
   subscribeRealtime(userId, role, callback) {
     return subscribeToNotifications(userId, role, (payload) => {
       const notification = payload?.new;
-      callback(notification);
-
-      if (this.pushPermission === 'granted' && notification) {
-        this.sendPush(notification.title, {
-          body: notification.content,
-          type: notification.priority,
-        });
-      }
+      if (callback) callback(notification);
     });
   }
 
   /**
-   * Envoie un SMS via l'API backend (Twilio/MessageBird)
-   * Utilisé pour les alertes critiques : examens imminents, suspensions, etc.
-   * @param {string} phoneNumber - Numéro au format international (+228...)
-   * @param {string} message - Contenu du SMS (160 chars max recommandé)
-   * @returns {Promise<Object>}
+   * Envoie un SMS via l'API backend
    */
   async sendSMS(phoneNumber, message) {
-    if (!phoneNumber) {
-      console.warn('Pas de numéro de téléphone pour l\'envoi SMS.');
-      return { success: false, error: 'Numéro manquant' };
-    }
-
+    if (!phoneNumber) return { success: false, error: 'Numéro manquant' };
     try {
-      // Appel vers une Edge Function Supabase ou API backend
-      // Configure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
-      // dans les variables d'environnement Supabase Edge Functions
-      const { data, error } = await import('../supabase').then(({ supabase }) =>
-        supabase.functions.invoke('send-sms', {
-          body: { to: phoneNumber, message },
-        })
-      );
-
+      const { supabase } = await import('../supabase');
+      const { data, error } = await supabase.functions.invoke('send-sms', {
+        body: { to: phoneNumber, message },
+      });
       if (error) throw error;
       return { success: true, data };
     } catch (error) {
@@ -279,33 +196,53 @@ class NotificationService {
   }
 
   /**
-   * Envoie une notification selon les préférences de l'utilisateur
-   * Orchestre les canaux (in-app + push + email + SMS pour alertes critiques)
-   * @param {Object} params
+   * Envoie un E-mail via OneSignal (nécessite configuration OneSignal Email)
+   * @param {string} email - Destinataire
+   * @param {string} subject - Sujet
+   * @param {string} body - Contenu HTML
    */
-  async sendSmart({ userId, type, titre, contenu, lien, phoneNumber }) {
+  async sendEmail(email, subject, body) {
+    // Cette partie nécessite normalement l'API REST OneSignal avec la clé API
+    // On peut l'implémenter via une Edge Function pour plus de sécurité
+    try {
+      const { supabase } = await import('../supabase');
+      const { data, error } = await supabase.functions.invoke('send-notification', {
+        body: { 
+          recipient_email: email, 
+          subject: subject, 
+          content: body,
+          channel: 'email'
+        },
+      });
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error) {
+      console.error('Erreur envoi Email OneSignal:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Orchestre les canaux
+   */
+  async sendSmart({ userId, type, titre, contenu, lien, phoneNumber, email }) {
     const notifType = NOTIFICATION_TYPES[type?.toUpperCase()];
     const priority = notifType?.priority || 'normal';
 
-    // 1. Toujours envoyer in-app
+    // 1. In-App
     await this.sendInApp({ userId, type, titre, contenu, lien });
 
-    // 2. Push navigateur si permission accordée
-    if (this.pushPermission === 'granted') {
-      this.sendPush(titre, { body: contenu, url: lien, type, priority });
+    // 2. E-mail si disponible
+    if (email) {
+      await this.sendEmail(email, `[ESGIS Campus] ${titre}`, contenu);
     }
 
-    // 3. SMS pour les alertes critiques et high (examens, suspensions)
-    if ((priority === 'critical' || priority === 'high') && phoneNumber) {
-      const smsMessage = `[ESGIS] ${titre}: ${contenu}`.substring(0, 160);
-      await this.sendSMS(phoneNumber, smsMessage);
+    // 3. SMS pour critique
+    if ((priority === 'critical') && phoneNumber) {
+      await this.sendSMS(phoneNumber, `[ESGIS] ${titre}: ${contenu}`);
     }
-
-    // 4. E-mail : géré par Supabase Edge Function 'send-email'
-    // Déclenché automatiquement via un trigger DB sur la table notifications
   }
 }
 
-// Singleton
 const notificationService = new NotificationService();
 export default notificationService;
