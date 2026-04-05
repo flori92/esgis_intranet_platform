@@ -40,13 +40,9 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { getReportsData } from '../../api/reports';
+import { supabase } from '../../supabase';
 import {
-  mockAdminStats,
-  mockActiveUsers,
-  mockSystemAlerts,
-  mockPerformanceMetrics,
-  mockPendingRequests,
-  mockNewRegistrations,
   getTimeAgo,
   formatDateTime
 } from '../../utils/adminMockData';
@@ -71,15 +67,67 @@ const AdminDashboardPage = () => {
   const navigate = useNavigate();
   
   // États pour les données
-  const [stats] = useState(mockAdminStats);
-  const [activeUsers] = useState(mockActiveUsers);
-  const [systemAlerts] = useState(mockSystemAlerts);
-  const [performanceMetrics] = useState(mockPerformanceMetrics);
-  const [pendingRequests] = useState(mockPendingRequests);
-  const [newRegistrations] = useState(mockNewRegistrations);
+  const [stats, setStats] = useState({
+    totalStudents: 0,
+    totalProfessors: 0,
+    totalCourses: 0,
+    totalDepartments: 0
+  });
+  const [activeUsers, setActiveUsers] = useState([]);
+  const [systemAlerts, setSystemAlerts] = useState([]);
+  const [performanceMetrics, setPerformanceMetrics] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [newRegistrations, setNewRegistrations] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   // État pour les onglets
   const [tabValue, setTabValue] = useState(0);
+
+  // Charger les données réelles
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await getReportsData();
+        if (data) {
+          setStats({
+            totalStudents: data.students.length,
+            totalProfessors: data.professors.length,
+            totalCourses: data.exams.length, // Ou une requête courses
+            totalDepartments: data.departments.length
+          });
+        }
+
+        // Charger les demandes en attente réelles
+        const { data: vqData } = await supabase
+          .from('validation_queue')
+          .select('*')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (vqData) {
+          setPendingRequests(vqData.map(r => ({
+            id: r.id,
+            title: `Demande: ${r.request_type}`,
+            from: 'Étudiant',
+            timestamp: r.created_at,
+            type: r.request_type,
+            priority: r.priority
+          })));
+        }
+
+      } catch (err) {
+        console.error('Dashboard fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (authState.isAdmin) {
+      fetchDashboardData();
+    }
+  }, [authState.isAdmin]);
 
   // Liste des modules administratifs
   const adminModules = [
@@ -126,7 +174,7 @@ const AdminDashboardPage = () => {
       icon: <PeopleIcon fontSize="large" />,
       path: '/admin/students',
       color: '#d32f2f',
-      implemented: false
+      implemented: true
     },
     {
       id: 'documents',
@@ -153,7 +201,7 @@ const AdminDashboardPage = () => {
       icon: <PaymentIcon fontSize="large" />,
       path: '/admin/payments',
       color: '#00796b',
-      implemented: false
+      implemented: true
     },
     {
       id: 'reports',
@@ -162,33 +210,6 @@ const AdminDashboardPage = () => {
       icon: <BarChartIcon fontSize="large" />,
       path: '/admin/reports',
       color: '#5c6bc0',
-      implemented: true
-    },
-    {
-      id: 'settings',
-      title: 'Paramètres & Configuration',
-      description: 'Configurer le système et les paramètres globaux',
-      icon: <SettingsIcon fontSize="large" />,
-      path: '/admin/settings',
-      color: '#455a64',
-      implemented: false
-    },
-    {
-      id: 'init',
-      title: 'Initialisation des données',
-      description: 'Réinitialiser et configurer les données du système',
-      icon: <SettingsIcon fontSize="large" />,
-      path: '/admin/initialize-data',
-      color: '#3949ab',
-      implemented: true
-    },
-    {
-      id: 'users',
-      title: 'Gestion des utilisateurs',
-      description: 'Gérer les utilisateurs et les permissions',
-      icon: <PeopleIcon fontSize="large" />,
-      path: '/admin/users',
-      color: '#2196f3',
       implemented: true
     }
   ];
@@ -203,12 +224,9 @@ const AdminDashboardPage = () => {
   /**
    * Navigation vers un module
    */
-  const navigateToModule = (path, implemented) => {
+  const navigateToModule = (path, implemented = true) => {
     if (implemented) {
       navigate(path);
-    } else {
-      // Dans une version réelle, on pourrait afficher une notification
-      console.info('Ce module n\'est pas encore implémenté.');
     }
   };
 
@@ -219,39 +237,93 @@ const AdminDashboardPage = () => {
     }
   }, [authState.isAdmin, navigate]);
 
+  if (loading) return <Box sx={{ p: 3 }}><LinearProgress /></Box>;
+
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" fontWeight="bold" gutterBottom>
         Tableau de bord administrateur
       </Typography>
       
-      {/* Statistiques principales */}
+      {/* Statistiques principales (Interactives) */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="h6">{stats.totalStudents}</Typography>
-            <Typography variant="body2" color="textSecondary">Étudiants</Typography>
+          <Paper 
+            elevation={3}
+            sx={{ 
+              p: 3, 
+              textAlign: 'center', 
+              cursor: 'pointer',
+              transition: 'transform 0.2s',
+              '&:hover': { transform: 'translateY(-5px)', bgcolor: 'rgba(211, 47, 47, 0.04)' },
+              borderBottom: '4px solid #d32f2f'
+            }}
+            onClick={() => navigate('/admin/students')}
+          >
+            <Avatar sx={{ bgcolor: '#d32f2f', mx: 'auto', mb: 1 }}><PeopleIcon /></Avatar>
+            <Typography variant="h4" fontWeight="bold">{stats.totalStudents}</Typography>
+            <Typography variant="subtitle1" color="textSecondary">Étudiants inscrits</Typography>
+            <Typography variant="caption" color="primary">Voir la liste →</Typography>
           </Paper>
         </Grid>
         
         <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="h6">{stats.totalProfessors}</Typography>
-            <Typography variant="body2" color="textSecondary">Professeurs</Typography>
+          <Paper 
+            elevation={3}
+            sx={{ 
+              p: 3, 
+              textAlign: 'center', 
+              cursor: 'pointer',
+              transition: 'transform 0.2s',
+              '&:hover': { transform: 'translateY(-5px)', bgcolor: 'rgba(156, 39, 176, 0.04)' },
+              borderBottom: '4px solid #9c27b0'
+            }}
+            onClick={() => navigate('/admin/users')}
+          >
+            <Avatar sx={{ bgcolor: '#9c27b0', mx: 'auto', mb: 1 }}><PersonIcon /></Avatar>
+            <Typography variant="h4" fontWeight="bold">{stats.totalProfessors}</Typography>
+            <Typography variant="subtitle1" color="textSecondary">Professeurs</Typography>
+            <Typography variant="caption" color="secondary">Gérer le corps enseignant →</Typography>
           </Paper>
         </Grid>
         
         <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="h6">{stats.totalCourses}</Typography>
-            <Typography variant="body2" color="textSecondary">Cours</Typography>
+          <Paper 
+            elevation={3}
+            sx={{ 
+              p: 3, 
+              textAlign: 'center', 
+              cursor: 'pointer',
+              transition: 'transform 0.2s',
+              '&:hover': { transform: 'translateY(-5px)', bgcolor: 'rgba(46, 125, 50, 0.04)' },
+              borderBottom: '4px solid #2e7d32'
+            }}
+            onClick={() => navigate('/admin/courses')}
+          >
+            <Avatar sx={{ bgcolor: '#2e7d32', mx: 'auto', mb: 1 }}><MenuBookIcon /></Avatar>
+            <Typography variant="h4" fontWeight="bold">{stats.totalCourses}</Typography>
+            <Typography variant="subtitle1" color="textSecondary">Examens / Cours</Typography>
+            <Typography variant="caption" color="success.main">Gérer le catalogue →</Typography>
           </Paper>
         </Grid>
         
         <Grid item xs={12} sm={6} md={3}>
-          <Paper sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="h6">{stats.totalDepartments}</Typography>
-            <Typography variant="body2" color="textSecondary">Départements</Typography>
+          <Paper 
+            elevation={3}
+            sx={{ 
+              p: 3, 
+              textAlign: 'center', 
+              cursor: 'pointer',
+              transition: 'transform 0.2s',
+              '&:hover': { transform: 'translateY(-5px)', bgcolor: 'rgba(25, 118, 210, 0.04)' },
+              borderBottom: '4px solid #1976d2'
+            }}
+            onClick={() => navigate('/admin/departments')}
+          >
+            <Avatar sx={{ bgcolor: '#1976d2', mx: 'auto', mb: 1 }}><ApartmentIcon /></Avatar>
+            <Typography variant="h4" fontWeight="bold">{stats.totalDepartments}</Typography>
+            <Typography variant="subtitle1" color="textSecondary">Départements</Typography>
+            <Typography variant="caption" color="primary.main">Organisation académique →</Typography>
           </Paper>
         </Grid>
       </Grid>
