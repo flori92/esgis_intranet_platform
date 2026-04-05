@@ -190,7 +190,7 @@ const StudentDetailsPage = () => {
             credits,
             professor_courses(
               professor_id,
-              professors:professor_id(id, profiles:profile_id(full_name))
+              professors:professor_id(id, profiles(full_name))
             )
           )
         `)
