@@ -32,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
+import { supabase } from '../../../supabase';
 
 const StudentFormPage = () => {
   const { authState } = useAuth();

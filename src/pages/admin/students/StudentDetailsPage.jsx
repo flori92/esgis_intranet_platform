@@ -143,8 +143,9 @@ const StudentDetailsPage = () => {
       };
       
       setStudent(transformedStudent);
+      const studentProfileId = profile?.id;
       
-      // Fetch payments
+      // Fetch payments (integer ID)
       const { data: paymentsData } = await supabase
         .from('payments')
         .select('*')
@@ -152,7 +153,7 @@ const StudentDetailsPage = () => {
         .order('payment_date', { ascending: false });
       setPaymentsList(paymentsData || []);
 
-      // Fetch documents
+      // Fetch documents (UUID profile_id)
       const { data: docsData } = await supabase
         .from('generated_documents')
         .select(`
@@ -162,11 +163,11 @@ const StudentDetailsPage = () => {
           created_at,
           document_templates(name, type)
         `)
-        .eq('student_id', parseInt(id))
+        .eq('student_id', studentProfileId)
         .order('created_at', { ascending: false });
       setDocumentsList(docsData || []);
       
-      // Récupérer les cours de l'étudiant
+      // Récupérer les cours de l'étudiant (UUID profile_id)
       const { data: coursesData, error: coursesError } = await supabase
         .from('student_courses')
         .select(`
@@ -178,12 +179,12 @@ const StudentDetailsPage = () => {
           enrollment_date,
           status,
           courses:course_id(id, name, code, credits),
-          professor_courses!inner(
+          professor_courses(
             professor_id,
             professors:professor_id(id, profiles:profile_id(full_name))
           )
         `)
-        .eq('student_id', parseInt(id))
+        .eq('student_id', studentProfileId)
         .order('academic_year', { ascending: false });
       
       if (coursesError) {
@@ -213,7 +214,7 @@ const StudentDetailsPage = () => {
       
       setStudentCourses(transformedCourses);
       
-      // Récupérer les examens de l'étudiant
+      // Récupérer les examens de l'étudiant (UUID profile_id)
       const { data: examsData, error: examsError } = await supabase
         .from('student_exams')
         .select(`
@@ -226,7 +227,7 @@ const StudentDetailsPage = () => {
           exams:exam_id(id, date, type),
           courses:course_id(id, name, code)
         `)
-        .eq('student_id', parseInt(id))
+        .eq('student_id', studentProfileId)
         .order('exams(date)', { ascending: false });
       
       if (examsError) {

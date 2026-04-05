@@ -89,11 +89,9 @@ const ProfessorRolesPage = () => {
       setError(null);
       
       // 1. Charger les professeurs avec leurs assignations
-      const { data: professorsData, error: professorsError } = await getRecordsWithRelation('professors', {
+      const professorsData = await getRecordsWithRelation('professors', {
         select: '*, profiles(id, full_name, email), departments(id, name, code), assignments:professor_role_assignments(role:professor_roles(*))'
       });
-
-      if (professorsError) throw professorsError;
 
       const formattedProfessors = (professorsData || []).map(prof => ({
         id: prof.id,
@@ -109,12 +107,11 @@ const ProfessorRolesPage = () => {
       setProfessors(formattedProfessors);
 
       // 2. Charger les départements
-      const { data: departmentsData } = await getRecordsWithRelation('departments');
+      const departmentsData = await getRecordsWithRelation('departments');
       setDepartments(departmentsData || []);
 
       // 3. Charger les définitions de rôles
-      const { data: rolesData, error: rolesError } = await getRecordsWithRelation('professor_roles');
-      if (rolesError) throw rolesError;
+      const rolesData = await getRecordsWithRelation('professor_roles');
       setRoles(rolesData || []);
 
     } catch (err) {

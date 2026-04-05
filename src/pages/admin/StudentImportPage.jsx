@@ -141,8 +141,8 @@ const StudentImportPage = () => {
               const { data: existing } = await supabase
                 .from('students')
                 .select('id')
-                .eq('student_id', student.student_id)
-                .single();
+                .eq('student_number', student.student_id)
+                .maybeSingle();
 
               if (existing) {
                 importResults.warnings.push({
@@ -153,18 +153,18 @@ const StudentImportPage = () => {
               }
 
               // Créer le profil
-              const { data: profile, error: profileError } = await supabase
+              const { data: newProfiles, error: profileError } = await supabase
                 .from('profiles')
                 .insert({
                   full_name: student.full_name,
                   email: student.email,
-                  phone: student.phone,
-                  email_notifications: true,
-                });
+                  role: 'student',
+                  is_active: true
+                })
+                .select();
 
               if (profileError) throw profileError;
-              // @ts-ignore - Null check is done, profile is not null after this line
-              const profileId = profile?.[0]?.id;
+              const profileId = newProfiles?.[0]?.id;
               if (!profileId) throw new Error('Profile creation failed');
 
               // Créer l'étudiant
@@ -172,7 +172,7 @@ const StudentImportPage = () => {
                 .from('students')
                 .insert({
                   profile_id: profileId,
-                  student_id: student.student_id,
+                  student_number: student.student_id,
                   level: student.level || 'L1',
                   department_id: parseInt(student.department_id) || null,
                   filiere_id: parseInt(student.filiere_id) || null,

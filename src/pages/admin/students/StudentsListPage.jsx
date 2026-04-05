@@ -44,6 +44,8 @@ import { useNavigate } from 'react-router-dom';
 import { triggerDownload } from '@/utils/DownloadLinkUtil';
 import { supabase } from '../../../supabase';
 
+const getRelation = (value) => (Array.isArray(value) ? value[0] : value);
+
 const StudentsListPage = () => {
   const { authState } = useAuth();
   const navigate = useNavigate();
@@ -92,18 +94,19 @@ const StudentsListPage = () => {
         throw departmentsError;
       }
       
-      // Récupérer les étudiants
+      // Récupérer les étudiants avec leurs profils et départements directement
       const { data: studentsData, error: studentsError } = await supabase
         .from('students')
         .select(`
           id,
-          profiles:profile_id(id, full_name, email, gender, date_of_birth, phone_number, address),
           student_number,
           department_id,
           level,
           academic_year,
           status,
-          created_at
+          created_at,
+          profiles:profile_id(id, full_name, email, gender, date_of_birth, phone_number, address),
+          departments:department_id(id, name)
         `)
         .order('id');
       
@@ -112,18 +115,20 @@ const StudentsListPage = () => {
       }
       
       // Transformer les données des étudiants
-      const transformedStudents = studentsData.map(student => {
-        const department = departmentsData?.find(d => d.id === student.department_id);
+      const transformedStudents = (studentsData || []).map(student => {
+        const profile = getRelation(student.profiles);
+        const department = getRelation(student.departments);
+        
         return {
           id: student.id,
-          profile_id: student.profiles?.id || '',
-          student_id: student.student_number,
-          full_name: student.profiles?.full_name || 'Nom inconnu',
-          email: student.profiles?.email || 'Email inconnu',
-          gender: student.profiles?.gender || '',
-          date_of_birth: student.profiles?.date_of_birth || '',
-          phone_number: student.profiles?.phone_number || '',
-          address: student.profiles?.address || '',
+          profile_id: profile?.id || '',
+          student_id: student.student_number || '',
+          full_name: profile?.full_name || 'Nom inconnu',
+          email: profile?.email || 'Email inconnu',
+          gender: profile?.gender || '',
+          date_of_birth: profile?.date_of_birth || '',
+          phone_number: profile?.phone_number || '',
+          address: profile?.address || '',
           department_id: student.department_id,
           department_name: department ? department.name : 'Département inconnu',
           level: student.level,
@@ -156,9 +161,9 @@ const StudentsListPage = () => {
     const filtered = students.filter(student => {
       // Filtre par terme de recherche
       const searchMatches = searchTerm === '' || 
-        student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        student.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        student.student_id.toLowerCase().includes(searchTerm.toLowerCase());
+        (student.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (student.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (student.student_id || '').toString().toLowerCase().includes(searchTerm.toLowerCase());
       
       // Filtre par département
       const departmentMatches = !filterDepartment || student.department_id === filterDepartment;
