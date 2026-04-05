@@ -3,12 +3,7 @@
 // ESGIS Campus 2025-2026
 // ==========================================
 
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
-)
+import { supabase } from '../supabase'
 
 // ==========================================
 // 1. STUDENT GROUPS SERVICE

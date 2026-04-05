@@ -45,9 +45,13 @@ export function useAsync(asyncFunction, dependencies = []) {
     }
   }, [asyncFunction])
 
+  // Use a ref to store the dependencies array to avoid ESLint warning about non-literal dependency list
+  const depsRef = useRef(dependencies)
+  
   useEffect(() => {
     execute()
-  }, dependencies)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [execute, ...dependencies])
 
   return { data, loading: status === 'pending', error, status, execute }
 }
@@ -90,7 +94,7 @@ export function useCache(key, fetcher, ttl = 5 * 60 * 1000) {
 
   useEffect(() => {
     refetch()
-  }, [key])
+  }, [refetch])
 
   return { data, loading, error, refetch }
 }

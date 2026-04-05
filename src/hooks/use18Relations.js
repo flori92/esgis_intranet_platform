@@ -20,7 +20,7 @@ import {
   AnnouncementsService,
   PeerFeedbackService,
   PartnershipsService
-} from './18Relations.service'
+} from './18Relations.service.js'
 
 // ==========================================
 // 1. useStudentGroups - Manage student groups and memberships

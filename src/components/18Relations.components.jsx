@@ -8,7 +8,7 @@ import {
   useStudentGroups,
   useStudentAlerts,
   useInternshipPipeline
-} from '@/hooks/use18Relations'
+} from '@/hooks/use18Relations.enhanced'
 
 // ==========================================
 // 1. STUDENT GROUPS MANAGER

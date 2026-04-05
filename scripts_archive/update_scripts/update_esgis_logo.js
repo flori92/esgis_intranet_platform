@@ -56,6 +56,11 @@ function updateLogo() {
     
     console.log('\n✨ Logo SVG ESGIS mis à jour avec succès!');
     console.log('📝 N\'oubliez pas de committer et pousser ces modifications vers GitHub.');
+
+    const assetUtilsPath = path.join(process.cwd(), 'src', 'utils', 'assetUtils.js');
+    if (fs.existsSync(assetUtilsPath)) {
+      let assetUtilsContent = fs.readFileSync(assetUtilsPath, 'utf8');
+      if (assetUtilsContent.includes("logo-esgis-white.svg")) {
         console.log("Le fichier utilise déjà le bon nom de fichier.");
       } else {
         assetUtilsContent = assetUtilsContent.replace(
