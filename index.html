@@ -14,6 +14,22 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>ESGIS Campus</title>
+    <!-- OneSignal SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "5d1d9f3a-b00e-4b60-bcdf-390444a36ae5",
+          allowLocalhostAsSecureOrigin: true,
+          welcomeNotification: {
+            disable: false,
+            title: "ESGIS Campus",
+            message: "Merci de vous être abonné aux notifications !"
+          }
+        });
+      });
+    </script>
     <!-- Police Montserrat pour le thème -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

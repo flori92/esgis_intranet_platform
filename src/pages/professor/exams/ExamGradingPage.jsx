@@ -48,7 +48,7 @@ import {
   getExamGradingData,
   updateStudentExam
 } from '@/api/exams';
-import { createNotification } from '@/api/notifications';
+import notificationService from '@/services/NotificationService';
 import {
   computeExamQuestionScore,
   isExamQuestionAutoGradable,
@@ -339,19 +339,17 @@ const ExamGradingPage = () => {
         throw updateError;
       }
       
-      // Insérer une notification pour l'étudiant
-      const { error: notificationError } = await createNotification({
-        sender_id: authState.profile?.id || null,
-        recipient_id: selectedStudent.profile_id,
-        recipient_role: 'student',
-        title: `Note disponible pour l'examen: ${exam.title}`,
-        content: `Votre note pour l'examen "${exam.title}" est maintenant disponible. Vous avez obtenu ${totalScore}/${totalPoints} points (${percentageScore.toFixed(2)}%).`,
-        priority: 'medium',
-        read: false
-      });
-      
-      if (notificationError) {
-        console.error('Erreur lors de la création de la notification:', notificationError);
+      // Notifier l'étudiant via NotificationService (In-App, Push, Email)
+      try {
+        await notificationService.sendGradePublished(
+          selectedStudent.profile_id,
+          selectedStudent.email,
+          exam.title,
+          totalScore,
+          totalPoints
+        );
+      } catch (notificationError) {
+        console.error('Erreur lors de la notification de l\'étudiant:', notificationError);
       }
       
       // Mettre à jour la liste des étudiants

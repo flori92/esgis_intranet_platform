@@ -2,6 +2,7 @@
  * Service d'authentification - Gestion de toutes les opérations liées à l'auth
  */
 import { supabase } from '../supabase';
+import notificationService from '../services/NotificationService';
 
 /**
  * Types exportés en TypeScript, remplacés par des commentaires JSDoc
@@ -93,26 +94,15 @@ export const signUpWithEmail = async (email, password, userData = {}) => {
       };
     }
 
-    // 3. Envoyer un e-mail de bienvenue via la Edge Function (OneSignal)
+    // 3. Envoyer un e-mail de bienvenue via le NotificationService
     try {
-      await supabase.functions.invoke('send-notification', {
-        body: {
-          recipient_email: email,
-          subject: "Bienvenue sur ESGIS Campus",
-          content: `
-            <h1>Bienvenue sur ESGIS Campus !</h1>
-            <p>Bonjour ${userData.full_name || email},</p>
-            <p>Votre compte a été créé avec succès sur l'intranet de l'ESGIS.</p>
-            <p>Vous pouvez maintenant vous connecter avec votre adresse email et votre mot de passe.</p>
-            <p><a href="${window.location.origin}/login">Se connecter à l'intranet</a></p>
-            <br/>
-            <p>L'équipe ESGIS Campus</p>
-          `,
-          channel: 'email'
-        }
-      });
+      await notificationService.sendWelcome(
+        data.user.id,
+        email,
+        userData.full_name
+      );
     } catch (notifErr) {
-      console.warn('Compte créé mais erreur lors de l\'envoi de l\'e-mail de bienvenue:', notifErr);
+      console.warn('Compte créé mais erreur lors de l\'envoi de la notification de bienvenue:', notifErr);
     }
 
     return {

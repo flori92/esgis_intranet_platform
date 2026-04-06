@@ -41,8 +41,10 @@ import {
   deleteExamQuestions,
   insertExamQuestions,
   deleteStudentExams,
-  insertStudentExams
+  insertStudentExams,
+  getStudentsByIds
 } from '@/api/exams';
+import notificationService from '@/services/NotificationService';
 import { normalizeExamQuestion, serializeExamQuestion } from '@/utils/examQuestionUtils';
 
 // Composants du formulaire
@@ -497,6 +499,27 @@ const ExamFormPage = () => {
         
         if (insertStudentsError) {
           throw insertStudentsError;
+        }
+
+        // Si l'examen est publié, on notifie tous les étudiants assignés
+        if (publish) {
+          try {
+            const studentIds = assignedStudents.map(s => s.student_id);
+            const { data: studentsInfo, error: fetchError } = await getStudentsByIds(studentIds);
+            
+            if (!fetchError && studentsInfo) {
+              const profileIds = studentsInfo.map(s => s.profile_id).filter(Boolean);
+              if (profileIds.length > 0) {
+                await notificationService.sendNewExamScheduled(
+                  profileIds,
+                  examData.title,
+                  examData.date
+                );
+              }
+            }
+          } catch (notifError) {
+            console.warn('Examen publié mais erreur lors de la notification des étudiants:', notifError);
+          }
         }
       }
       

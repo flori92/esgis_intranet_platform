@@ -36,6 +36,7 @@ import { fr } from 'date-fns/locale';
 
 import { useAuth } from '@/context/AuthContext';
 import { getContacts as fetchContactsApi, getMessages as fetchMessagesApi, markMessageAsRead, sendMessage } from '@/api/messages';
+import notificationService from '@/services/NotificationService';
 
 const defaultDraft = {
   recipient_id: '',
@@ -247,6 +248,17 @@ const MessagesPage = () => {
 
       if (insertError) {
         throw insertError;
+      }
+
+      // Notifier le destinataire
+      try {
+        await notificationService.sendMessageNotification(
+          draft.recipient_id,
+          authState.profile?.full_name || 'Un utilisateur',
+          draft.subject.trim()
+        );
+      } catch (notifErr) {
+        console.warn('Message envoyé mais erreur notification:', notifErr);
       }
 
       closeCompose();
