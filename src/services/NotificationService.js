@@ -6,8 +6,6 @@
  * - E-mail (via OneSignal ou Supabase Edge Functions)
  * - SMS (événements critiques uniquement, via passerelle externe)
  * - Bandeau in-app (pastille rouge sur icône)
- *
- * Chaque utilisateur peut configurer ses préférences dans son profil.
  */
 import OneSignal from 'react-onesignal';
 import {
@@ -76,8 +74,7 @@ class NotificationService {
   }
 
   /**
-   * Associe l'utilisateur courant à OneSignal pour les notifications ciblées
-   * @param {Object} profile - Profil de l'utilisateur (id, email, role)
+   * Associe l'utilisateur courant à OneSignal
    */
   async loginUser(profile) {
     if (!this.initialized) await this.init();
@@ -85,29 +82,18 @@ class NotificationService {
     try {
       if (profile?.id) {
         await OneSignal.login(profile.id);
-        console.log(`Utilisateur ${profile.id} connecté à OneSignal`);
       }
-      
-      if (profile?.email) {
-        // OneSignal User API for v16+ (react-onesignal 3.x)
-        if (OneSignal.User) {
-          await OneSignal.User.addEmail(profile.email);
-        }
+      if (profile?.email && OneSignal.User) {
+        await OneSignal.User.addEmail(profile.email);
       }
-      
-      if (profile?.role) {
-        if (OneSignal.User) {
-          await OneSignal.User.addTag('role', profile.role);
-        }
+      if (profile?.role && OneSignal.User) {
+        await OneSignal.User.addTag('role', profile.role);
       }
     } catch (error) {
       console.error('Erreur login OneSignal:', error);
     }
   }
 
-  /**
-   * Déconnecte l'utilisateur de OneSignal
-   */
   async logoutUser() {
     try {
       if (this.initialized) {
@@ -119,7 +105,43 @@ class NotificationService {
   }
 
   /**
-   * Envoie une notification in-app (enregistrée en base)
+   * Récupère les notifications non lues d'un utilisateur
+   */
+  async getUnread(userId) {
+    try {
+      const { data, error } = await getNotifications(userId, null, { unreadOnly: true, limit: 50 });
+      if (error) throw error;
+      return { data, count: data?.length || 0, error: null };
+    } catch (error) {
+      return { data: null, count: 0, error };
+    }
+  }
+
+  /**
+   * Marque une notification comme lue
+   */
+  async markAsRead(notificationId) {
+    try {
+      const { error } = await markNotificationAsRead(notificationId);
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+
+  /**
+   * Souscrit aux notifications en temps réel via Supabase Realtime
+   */
+  subscribeRealtime(userId, role, callback) {
+    return subscribeToNotifications(userId, role, (payload) => {
+      const notification = payload?.new;
+      if (callback) callback(notification);
+    });
+  }
+
+  /**
+   * Envoie une notification in-app (base de données)
    */
   async sendInApp({ userId, type, titre, contenu, lien }) {
     try {
@@ -141,7 +163,7 @@ class NotificationService {
   }
 
   /**
-   * Envoie une notification in-app à plusieurs utilisateurs
+   * Envoie des notifications in-app en lot
    */
   async sendInAppBulk(userIds, { type, titre, contenu, lien }) {
     try {
@@ -165,10 +187,7 @@ class NotificationService {
   }
 
   /**
-   * Envoie une notification push à un utilisateur spécifique via l'API OneSignal
-   * @param {string} userId - ID de l'utilisateur (UUID profiles)
-   * @param {string} heading - Titre de la notification
-   * @param {string} content - Message de la notification
+   * Envoie une notification push via Edge Function
    */
   async sendPushToUser(userId, heading, content) {
     try {
@@ -184,25 +203,13 @@ class NotificationService {
       if (error) throw error;
       return { success: true, data };
     } catch (error) {
-      console.error('Erreur envoi push ciblée:', error);
+      console.error('Erreur envoi push:', error);
       return { success: false, error: error.message };
     }
   }
 
   /**
-   * Envoie une notification push navigateur locale (pour l'utilisateur courant)
-   */
-  async sendLocalPush(title, message) {
-    if (!this.initialized) await this.init();
-    // OneSignal ne permet plus vraiment d'envoyer un push local simple via SDK v16+
-    // sans passer par leurs serveurs. On utilise Notification API standard si possible
-    if (Notification.permission === "granted") {
-      new Notification(title, { body: message, icon: '/favicon.ico' });
-    }
-  }
-
-  /**
-   * Génère un template HTML commun pour les emails
+   * Génère le template HTML des e-mails
    */
   _generateEmailHTML(title, content, actionLabel = null, actionUrl = null) {
     const primaryColor = '#1a56db';
@@ -244,7 +251,7 @@ class NotificationService {
   }
 
   /**
-   * Envoie un E-mail via OneSignal/Edge Function
+   * Envoie un E-mail via OneSignal
    */
   async sendEmail(email, subject, body) {
     try {
@@ -265,17 +272,14 @@ class NotificationService {
     }
   }
 
-  /**
-   * Notification de bienvenue
-   */
+  // --- Scénarios spécifiques ---
+
   async sendWelcome(userId, email, name) {
     const title = "Bienvenue sur ESGIS Campus !";
     const content = `Bonjour ${name || email}, votre compte a été activé avec succès.`;
     
-    // In-App
     await this.sendInApp({ userId, type: 'BIENVENUE', titre: title, contenu: content });
     
-    // Email
     if (email) {
       const html = this._generateEmailHTML(
         "Félicitations !",
@@ -288,15 +292,11 @@ class NotificationService {
       await this.sendEmail(email, title, html);
     }
 
-    // Push si déjà connecté OneSignal
     if (userId) {
       await this.sendPushToUser(userId, title, content);
     }
   }
 
-  /**
-   * Notification de réinitialisation de mot de passe
-   */
   async sendPasswordResetLink(email, resetLink) {
     const title = "Réinitialisation de votre mot de passe";
     const html = this._generateEmailHTML(
@@ -309,31 +309,12 @@ class NotificationService {
     return await this.sendEmail(email, title, html);
   }
 
-  /**
-   * Notification de validation d'email
-   */
-  async sendEmailVerification(email, verificationLink) {
-    const title = "Validez votre adresse email";
-    const html = this._generateEmailHTML(
-      "Validation de votre compte",
-      `<p>Merci de vous être inscrit sur ESGIS Campus. Veuillez valider votre adresse email pour activer toutes les fonctionnalités de votre compte.</p>`,
-      "Valider mon email",
-      verificationLink
-    );
-    return await this.sendEmail(email, title, html);
-  }
-
-  /**
-   * Notification de publication de note
-   */
   async sendGradePublished(userId, email, examTitle, grade, totalPoints) {
     const title = `Note disponible : ${examTitle}`;
     const content = `Votre note pour l'examen "${examTitle}" est disponible : ${grade}/${totalPoints}.`;
     
-    // In-App
     await this.sendInApp({ userId, type: 'NOTE_PUBLIEE', titre: title, contenu: content, lien: '/grades' });
     
-    // Email
     if (email) {
       const html = this._generateEmailHTML(
         "Une nouvelle note a été publiée",
@@ -345,20 +326,15 @@ class NotificationService {
       await this.sendEmail(email, `[ESGIS] Note publiée : ${examTitle}`, html);
     }
 
-    // Push
     if (userId) {
       await this.sendPushToUser(userId, title, content);
     }
   }
 
-  /**
-   * Notification de nouvel examen planifié
-   */
   async sendNewExamScheduled(userIds, examTitle, date, profileIds = []) {
     const title = "Nouvel examen planifié";
     const content = `L'examen "${examTitle}" a été planifié pour le ${new Date(date).toLocaleDateString()}.`;
     
-    // In-App Bulk
     await this.sendInAppBulk(userIds, {
       type: 'NOUVEL_EXAMEN',
       titre: title,
@@ -366,24 +342,17 @@ class NotificationService {
       lien: '/student/exams'
     });
 
-    // Pour les emails et pushs individuels, on itère si nécessaire ou on laisse faire l'API OneSignal segmentée
-    // Ici on suppose que profileIds contient les IDs OneSignal
     for (const pid of profileIds) {
       await this.sendPushToUser(pid, title, content);
     }
   }
 
-  /**
-   * Notification de nouveau message
-   */
   async sendMessageNotification(recipientId, recipientEmail, senderName, subject) {
     const title = "Nouveau message reçu";
     const content = `${senderName} vous a envoyé un message : ${subject}`;
     
-    // In-App
     await this.sendInApp({ userId: recipientId, type: 'NOUVEAU_MESSAGE', titre: title, contenu: content, lien: '/messages' });
     
-    // Email
     if (recipientEmail) {
       const html = this._generateEmailHTML(
         "Vous avez reçu un nouveau message",
@@ -395,61 +364,15 @@ class NotificationService {
       await this.sendEmail(recipientEmail, `[ESGIS] Nouveau message : ${subject}`, html);
     }
 
-    // Push
     if (recipientId) {
       await this.sendPushToUser(recipientId, title, content);
     }
   }
 
   /**
-   * Notification de rappel de paiement
+   * Orchestre l'envoi intelligent sur plusieurs canaux
    */
-  async sendPaymentReminder(userId, email, amount, dueDate) {
-    const title = "Rappel de paiement";
-    const content = `Un paiement de ${amount} est attendu avant le ${new Date(dueDate).toLocaleDateString()}.`;
-    
-    await this.sendInApp({ userId, type: 'PAIEMENT', titre: title, contenu: content });
-    
-    if (email) {
-      const html = this._generateEmailHTML(
-        "Rappel d'échéance de paiement",
-        `<p>Ceci est un rappel concernant vos frais de scolarité.</p>
-         <p style="font-size: 18px; color: #ef4444; font-weight: bold;">Montant attendu : ${amount}</p>
-         <p>Date d'échéance : ${new Date(dueDate).toLocaleDateString()}</p>
-         <p>Merci de régulariser votre situation auprès du service comptabilité.</p>`,
-        "Consulter mon compte",
-        `${window.location.origin}/profile`
-      );
-      await this.sendEmail(email, "[ESGIS] Rappel de paiement", html);
-    }
-  }
-
-  /**
-   * Notification de compte suspendu
-   */
-  async sendAccountSuspension(userId, email, reason) {
-    const title = "Votre compte a été suspendu";
-    const content = `Motif : ${reason || 'Inconnu'}. Veuillez contacter l'administration.`;
-    
-    await this.sendInApp({ userId, type: 'COMPTE_SUSPENDU', titre: title, contenu: content });
-    
-    if (email) {
-      const html = this._generateEmailHTML(
-        "Notification de suspension de compte",
-        `<p>Nous vous informons que votre accès à l'intranet ESGIS Campus a été suspendu.</p>
-         <p><strong>Motif de la suspension :</strong> ${reason || 'Non spécifié'}</p>
-         <p>Veuillez contacter le secrétariat administratif de votre campus pour plus d'informations.</p>`,
-        "Contacter le support",
-        "mailto:support@esgis.org"
-      );
-      await this.sendEmail(email, "[ESGIS] Suspension de votre compte", html);
-    }
-  }
-
-  /**
-   * Orchestre les canaux
-   */
-  async sendSmart({ userId, type, titre, contenu, lien, phoneNumber, email }) {
+  async sendSmart({ userId, type, titre, contenu, lien, email }) {
     const notifType = NOTIFICATION_TYPES[type?.toUpperCase()];
     const priority = notifType?.priority || 'normal';
 
@@ -461,9 +384,9 @@ class NotificationService {
       await this.sendEmail(email, `[ESGIS Campus] ${titre}`, contenu);
     }
 
-    // 3. SMS pour critique
-    if ((priority === 'critical') && phoneNumber) {
-      await this.sendSMS(phoneNumber, `[ESGIS] ${titre}: ${contenu}`);
+    // 3. Push si critique
+    if (priority === 'critical' || priority === 'high') {
+      await this.sendPushToUser(userId, titre, contenu);
     }
   }
 }

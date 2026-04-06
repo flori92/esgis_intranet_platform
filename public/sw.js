@@ -24,6 +24,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Ne pas intercepter les requêtes vers les CDN externes (OneSignal, Google Fonts, etc.)
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(OFFLINE_URL))
