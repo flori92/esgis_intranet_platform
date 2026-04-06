@@ -49,7 +49,7 @@ const TakeExamPage = () => {
 
         const { exam: examData, studentExam, error: launchError } = await getStudentExamLaunchData({
           examId: id,
-          studentId: authState.student.id
+          profileId: authState.user.id
         });
 
         if (launchError) {

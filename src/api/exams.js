@@ -401,7 +401,7 @@ const normalizeStudentRecord = (record) => {
   };
 };
 
-export const getStudentExamLaunchData = async ({ examId, studentId }) => {
+export const getStudentExamLaunchData = async ({ examId, profileId }) => {
   try {
     const numericExamId = Number(examId);
 
@@ -449,7 +449,7 @@ export const getStudentExamLaunchData = async ({ examId, studentId }) => {
           updated_at
         `)
         .eq('exam_id', numericExamId)
-        .eq('student_id', studentId)
+        .eq('student_id', profileId)
         .maybeSingle()
     ]);
 
@@ -480,7 +480,7 @@ export const getStudentExamLaunchData = async ({ examId, studentId }) => {
   }
 };
 
-export const getStudentExamsListData = async (studentId) => {
+export const getStudentExamsListData = async (profileId) => {
   try {
     const { data, error } = await supabase
       .from('student_exams')
@@ -517,7 +517,7 @@ export const getStudentExamsListData = async (studentId) => {
           exam_centers!exam_center_id(id, name, location, status)
         )
       `)
-      .eq('student_id', studentId)
+      .eq('student_id', profileId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -992,7 +992,7 @@ export const getStudentExamResultDetails = async ({ examId, studentId, profileId
           updated_at
         `)
         .eq('exam_id', numericExamId)
-        .eq('student_id', studentId)
+        .eq('student_id', profileId)
         .maybeSingle(),
       supabase
         .from('quiz_results')

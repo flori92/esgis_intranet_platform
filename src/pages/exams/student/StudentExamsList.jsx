@@ -100,11 +100,11 @@ const StudentExamsList = () => {
     setError(null);
     
     try {
-      if (!authState.student) {
-        throw new Error('Données d\'étudiant non disponibles');
+      if (!authState.user?.id) {
+        throw new Error('Données d\'utilisateur non disponibles');
       }
       
-      const { data: mappedExams, error: fetchError } = await getStudentExamsListData(authState.student.id);
+      const { data: mappedExams, error: fetchError } = await getStudentExamsListData(authState.user.id);
 
       if (fetchError) {
         throw fetchError;

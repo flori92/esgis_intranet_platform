@@ -200,7 +200,7 @@ export const useQuiz = () => {
 
         const { exam, studentExam, error: launchError } = await getStudentExamLaunchData({
           examId,
-          studentId: authState.student.id
+          profileId: authState.user.id
         });
 
         if (launchError) {
