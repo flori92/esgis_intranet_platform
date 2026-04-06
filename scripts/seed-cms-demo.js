@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Script de seed de données de démonstration pour le CMS
  * Utilise l'API REST de Supabase pour insérer les données
@@ -9,7 +7,8 @@
 import https from 'https';
 
 const SUPABASE_URL = 'https://zsuszjlgatsylleuopff.supabase.co';
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzdXN6amxnYXRzeWxsZXVvcGZmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTIwMDk2NiwiZXhwIjoyMDkwNzY5NjY2fQ.KoZX_65H9eeGDrV4FrYi3b-i0xxLa4GVLah-nKlHUhw';
+// Note: This key should ideally be provided via environment variables for security
+const SUPABASE_SERVICE_ROLE = 'sb_publishable_WhDH9xamIFx17hcjukOtuQ_L96ItmW0';
 
 // Fonction utilitaire pour effectuer requête HTTPS
 function makeRequest(options, data = null) {
@@ -261,6 +260,9 @@ const demoData = {
   ]
 };
 
+/**
+ * Fonction principale pour insérer les données
+ */
 async function seedCMSData() {
   console.log('🌱 Début du seed des données de démonstration CMS...\n');
 
@@ -316,4 +318,5 @@ async function seedCMSData() {
   }
 }
 
+// Exécution
 seedCMSData();
