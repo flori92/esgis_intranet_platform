@@ -43,6 +43,7 @@ import {
   Book as BookIcon,
   BarChart as BarChartIcon,
   Email as EmailIcon,
+  PhotoCamera as PhotoCameraIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 // Suppression de l'import de AuthContextType
@@ -269,18 +270,43 @@ const MainLayout = () => {
       
       {/* Informations utilisateur */}
       <Box sx={{ p: 2, textAlign: 'center' }}>
-        <Avatar 
-          alt={profile?.full_name || user?.email || 'Utilisateur'} 
-          src={profile?.avatar_url}
-          sx={{ 
-            width: 64, 
-            height: 64, 
-            mx: 'auto', 
-            mb: 1,
-            bgcolor: '#CC0000', // Rouge ESGIS
-            fontFamily: 'Montserrat'
-          }}
-        />
+        <Box sx={{ position: 'relative', display: 'inline-block' }}>
+          <Avatar 
+            alt={profile?.full_name || user?.email || 'Utilisateur'} 
+            src={profile?.avatar_url}
+            component={RouterLink}
+            to="/profile"
+            sx={{ 
+              width: 64, 
+              height: 64, 
+              mx: 'auto', 
+              mb: 1,
+              bgcolor: '#CC0000', // Rouge ESGIS
+              fontFamily: 'Montserrat',
+              cursor: 'pointer',
+              '&:hover': {
+                opacity: 0.8,
+                transform: 'scale(1.05)',
+                transition: 'all 0.2s'
+              }
+            }}
+          />
+          <IconButton
+            component={RouterLink}
+            to="/profile"
+            size="small"
+            sx={{
+              position: 'absolute',
+              bottom: 8,
+              right: -4,
+              bgcolor: 'white',
+              boxShadow: 2,
+              '&:hover': { bgcolor: '#f5f5f5' }
+            }}
+          >
+            <PhotoCameraIcon sx={{ fontSize: 16, color: '#003366' }} />
+          </IconButton>
+        </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2, mb: 2 }}>
           {profile?.full_name && (
             <Typography variant="subtitle1" fontWeight="bold" fontFamily="Montserrat" sx={{ mt: 1, textAlign: 'center' }}>
@@ -445,6 +471,19 @@ const MainLayout = () => {
                 horizontal: 'right',
               }}
             >
+              <MenuItem component={RouterLink} to="/profile" onClick={handleCloseUserMenu}>
+                <ListItemIcon>
+                  <PersonIcon fontSize="small" color="primary" />
+                </ListItemIcon>
+                <Typography textAlign="center" fontFamily="Montserrat">Mon Profil</Typography>
+              </MenuItem>
+              <MenuItem component={RouterLink} to="/profile" onClick={handleCloseUserMenu}>
+                <ListItemIcon>
+                  <PhotoCameraIcon fontSize="small" color="primary" />
+                </ListItemIcon>
+                <Typography textAlign="center" fontFamily="Montserrat">Changer ma photo</Typography>
+              </MenuItem>
+              <Divider />
               <MenuItem onClick={handleLogout}>
                 <ListItemIcon>
                   <LogoutIcon fontSize="small" sx={{ color: '#CC0000' }} />
