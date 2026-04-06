@@ -4,7 +4,7 @@ import {
   TextField, Chip, Card, CardContent, Divider, IconButton, Tooltip,
   Tabs, Tab, FormControl, InputLabel, Select, MenuItem, Badge,
   List, ListItem, ListItemIcon, ListItemText, ListItemSecondaryAction,
-  Breadcrumbs, Link
+  Breadcrumbs, Link, Avatar, Stack, alpha
 } from '@mui/material';
 import {
   School as SchoolIcon,
@@ -288,31 +288,86 @@ const StudentCoursesPage = () => {
 
           {/* Grille des cours */}
           {filteredCourses.length > 0 ? (
-            <Grid container spacing={2}>
+            <Grid container spacing={3}>
               {filteredCourses.map(course => (
-                <Grid item xs={12} md={6} lg={4} key={course.id}>
-                  <Card elevation={2} sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 }, height: '100%' }}
-                    onClick={() => setSelectedCourse(course)}>
-                    <CardContent>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Grid item xs={12} sm={6} lg={4} key={course.id}>
+                  <Card 
+                    elevation={0} 
+                    sx={{ 
+                      cursor: 'pointer', 
+                      height: '100%',
+                      borderRadius: 5,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      '&:hover': { 
+                        boxShadow: '0 12px 30px rgba(0,0,0,0.08)',
+                        transform: 'translateY(-6px)',
+                        borderColor: 'primary.main'
+                      },
+                      position: 'relative',
+                      overflow: 'visible'
+                    }}
+                    onClick={() => setSelectedCourse(course)}
+                  >
+                    {course.new_count > 0 && (
+                      <Chip 
+                        label={`${course.new_count} NOUVEAU`} 
+                        color="error" 
+                        size="small" 
+                        sx={{ 
+                          position: 'absolute', 
+                          top: -10, 
+                          right: 20, 
+                          fontWeight: '900',
+                          fontSize: '0.65rem',
+                          boxShadow: '0 4px 8px rgba(211, 47, 47, 0.3)'
+                        }} 
+                      />
+                    )}
+                    <CardContent sx={{ p: 3 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2, gap: 2 }}>
+                        <Avatar sx={{ bgcolor: alpha('#003366', 0.1), color: '#003366', borderRadius: 3, width: 48, height: 48 }}>
+                          <SchoolIcon />
+                        </Avatar>
                         <Box>
-                          <Typography variant="h6" fontWeight="bold">{course.name}</Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {course.code} — {course.professor}
+                          <Typography variant="h6" fontWeight="800" sx={{ lineHeight: 1.2, mb: 0.5 }}>
+                            {course.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" fontWeight="600" sx={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            {course.code} • {course.professor}
                           </Typography>
                         </Box>
-                        {course.new_count > 0 && (
-                          <Badge badgeContent={course.new_count} color="error">
-                            <BookIcon color="action" />
-                          </Badge>
-                        )}
                       </Box>
-                      <Divider sx={{ my: 1 }} />
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        <Chip label={course.semester} size="small" variant="outlined" />
-                        <Chip label={`${course.credits} crédits`} size="small" variant="outlined" />
-                        <Chip label={`${course.resources_count} ressources`} size="small" color="primary" variant="outlined" />
-                        <Chip label={`${(course.chapters || []).length} chapitres`} size="small" variant="outlined" />
+                      
+                      <Divider sx={{ my: 2, borderStyle: 'dashed' }} />
+                      
+                      <Grid container spacing={1}>
+                        <Grid item xs={6}>
+                          <Box sx={{ p: 1.5, borderRadius: 3, backgroundColor: alpha('#f8fafc', 0.8), textAlign: 'center' }}>
+                            <Typography variant="caption" color="text.secondary" display="block">Semestre</Typography>
+                            <Typography variant="body2" fontWeight="bold">{course.semester}</Typography>
+                          </Box>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Box sx={{ p: 1.5, borderRadius: 3, backgroundColor: alpha('#f8fafc', 0.8), textAlign: 'center' }}>
+                            <Typography variant="caption" color="text.secondary" display="block">Crédits</Typography>
+                            <Typography variant="body2" fontWeight="bold">{course.credits} ECTS</Typography>
+                          </Box>
+                        </Grid>
+                      </Grid>
+
+                      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="body2" color="primary" fontWeight="bold">
+                          {course.resources_count} ressources
+                        </Typography>
+                        <Button 
+                          size="small" 
+                          variant="soft" 
+                          sx={{ fontWeight: 'bold', borderRadius: 2 }}
+                        >
+                          Accéder
+                        </Button>
                       </Box>
                     </CardContent>
                   </Card>

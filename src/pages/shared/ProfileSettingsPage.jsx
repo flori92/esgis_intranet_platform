@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Grid, CircularProgress, Alert, Button,
   TextField, Avatar, Divider, Tabs, Tab, Switch, FormControlLabel,
   Card, CardContent, Snackbar, IconButton, Chip, FormControl,
-  InputLabel, Select, MenuItem
+  InputLabel, Select, MenuItem, Stack
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -272,272 +272,308 @@ const ProfileSettingsPage = () => {
   }
 
   return (
-    <Box sx={{ p: { xs: 1, md: 2 }, maxWidth: 900, mx: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <SettingsIcon sx={{ mr: 1, color: 'primary.main', fontSize: 32 }} />
-        <Typography variant="h5" fontWeight="bold">Mon Profil & Paramètres</Typography>
+    <Box sx={{ 
+      p: { xs: 2, md: 4 }, 
+      maxWidth: 1000, 
+      mx: 'auto',
+      animation: 'fadeIn 0.5s ease-out',
+      '@keyframes fadeIn': {
+        from: { opacity: 0, transform: 'translateY(10px)' },
+        to: { opacity: 1, transform: 'translateY(0)' }
+      }
+    }}>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight="900" sx={{ letterSpacing: '-0.5px' }}>
+          Profil & Paramètres
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Gérez vos informations personnelles et configurez vos préférences de compte.
+        </Typography>
       </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError(null)} variant="filled">{error}</Alert>}
       <Snackbar open={!!successMessage} autoHideDuration={4000} onClose={() => setSuccessMessage('')} message={successMessage} />
 
-      {/* Carte profil résumé */}
-      <Paper elevation={2} sx={{ p: 3, mb: 3, display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
-        <Box sx={{ position: 'relative' }}>
-          <Avatar
-            src={avatarPreview}
-            alt={`${profileData.first_name} ${profileData.last_name}`}
-            sx={{ width: 100, height: 100, bgcolor: '#CC0000', fontSize: '2rem' }}
-          >
-            {profileData.first_name?.[0]}{profileData.last_name?.[0]}
-          </Avatar>
-          <IconButton
-            sx={{
-              position: 'absolute', bottom: -4, right: -4,
-              bgcolor: 'primary.main', color: 'white',
-              '&:hover': { bgcolor: 'primary.dark' }, width: 32, height: 32
-            }}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <PhotoCameraIcon fontSize="small" />
-          </IconButton>
-          <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleAvatarChange} />
-        </Box>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5" fontWeight="bold">
-            {profileData.first_name} {profileData.last_name}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">{user?.email}</Typography>
-          <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-            <Chip label={getRoleLabel()} color={getRoleColor()} size="small" />
-          </Box>
-        </Box>
-      </Paper>
+      <Grid container spacing={4}>
+        {/* Colonne Gauche: Résumé Profil */}
+        <Grid item xs={12} md={4}>
+          <Card sx={{ 
+            borderRadius: 5, 
+            boxShadow: '0 8px 30px rgba(0,0,0,0.05)',
+            textAlign: 'center',
+            p: 4,
+            height: '100%',
+            backgroundColor: 'white',
+            border: '1px solid',
+            borderColor: 'divider'
+          }}>
+            <Box sx={{ position: 'relative', display: 'inline-block', mb: 3 }}>
+              <Avatar
+                src={avatarPreview}
+                alt={`${profileData.first_name} ${profileData.last_name}`}
+                sx={{ 
+                  width: 140, 
+                  height: 140, 
+                  mx: 'auto',
+                  border: '4px solid white',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                  bgcolor: '#CC0000', 
+                  fontSize: '3rem',
+                  fontWeight: 'bold'
+                }}
+              >
+                {profileData.first_name?.[0]}{profileData.last_name?.[0]}
+              </Avatar>
+              <IconButton
+                sx={{
+                  position: 'absolute', bottom: 4, right: 4,
+                  bgcolor: 'primary.main', color: 'white',
+                  boxShadow: '0 4px 12px rgba(26, 86, 219, 0.4)',
+                  '&:hover': { bgcolor: 'primary.dark' }, width: 40, height: 40
+                }}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <PhotoCameraIcon />
+              </IconButton>
+              <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleAvatarChange} />
+            </Box>
+            
+            <Typography variant="h5" fontWeight="800" gutterBottom>
+              {profileData.first_name} {profileData.last_name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              {user?.email}
+            </Typography>
+            
+            <Divider sx={{ mb: 3 }} />
+            
+            <Stack spacing={2}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary">RÔLE</Typography>
+                <Chip label={getRoleLabel()} color={getRoleColor()} size="small" sx={{ fontWeight: 'bold', px: 1 }} />
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="caption" fontWeight="bold" color="text.secondary">STATUT</Typography>
+                <Chip label="ACTIF" color="success" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+              </Box>
+            </Stack>
 
-      {/* Onglets */}
-      <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ mb: 3 }} variant="scrollable" scrollButtons="auto">
-        <Tab icon={<PersonIcon />} label="Informations" iconPosition="start" />
-        <Tab icon={<LockIcon />} label="Sécurité" iconPosition="start" />
-        <Tab icon={<NotificationsIcon />} label="Notifications" iconPosition="start" />
-        <Tab icon={<LanguageIcon />} label="Préférences" iconPosition="start" />
-      </Tabs>
-
-      {/* === ONGLET 0 : Informations personnelles === */}
-      {tabValue === 0 && (
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" fontWeight="bold" gutterBottom>Informations personnelles</Typography>
-          <Divider sx={{ mb: 2 }} />
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <TextField label="Prénom" fullWidth value={profileData.first_name}
-                onChange={(e) => setProfileData(p => ({ ...p, first_name: e.target.value }))} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField label="Nom" fullWidth value={profileData.last_name}
-                onChange={(e) => setProfileData(p => ({ ...p, last_name: e.target.value }))} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField label="Téléphone" fullWidth value={profileData.phone}
-                onChange={(e) => setProfileData(p => ({ ...p, phone: e.target.value }))} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField label="E-mail secondaire" fullWidth type="email" value={profileData.secondary_email}
-                onChange={(e) => setProfileData(p => ({ ...p, secondary_email: e.target.value }))} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField label="Date de naissance" fullWidth type="date" value={profileData.birth_date}
-                onChange={(e) => setProfileData(p => ({ ...p, birth_date: e.target.value }))}
-                InputLabelProps={{ shrink: true }} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="Adresse" fullWidth value={profileData.address}
-                onChange={(e) => setProfileData(p => ({ ...p, address: e.target.value }))} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="Biographie / Description" fullWidth multiline rows={3}
-                value={profileData.bio}
-                onChange={(e) => setProfileData(p => ({ ...p, bio: e.target.value }))} />
-            </Grid>
             {isStudent && (
-              <Grid item xs={12}>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Curriculum Vitae</Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Button variant="outlined" startIcon={<UploadIcon />}
-                    onClick={() => cvInputRef.current?.click()}>
-                    {cvUrl ? 'Mettre à jour le CV' : 'Téléverser mon CV'}
-                  </Button>
-                  <input ref={cvInputRef} type="file" accept=".pdf,.doc,.docx" hidden onChange={handleCvChange} />
-                  {(cvUrl || cvFile) && (
-                    <Chip icon={<DescriptionIcon />}
-                      label={cvFile ? cvFile.name : 'CV téléversé'} color="success" variant="outlined"
-                      onDelete={cvFile ? () => setCvFile(null) : undefined} />
-                  )}
-                </Box>
-              </Grid>
+              <Box sx={{ mt: 4 }}>
+                <Button 
+                  fullWidth 
+                  variant="outlined" 
+                  startIcon={<UploadIcon />}
+                  onClick={() => cvInputRef.current?.click()}
+                  sx={{ borderRadius: 2, py: 1.2, mb: 2 }}
+                >
+                  {cvUrl ? 'Actualiser le CV' : 'Téléverser mon CV'}
+                </Button>
+                <input ref={cvInputRef} type="file" accept=".pdf,.doc,.docx" hidden onChange={handleCvChange} />
+                {(cvUrl || cvFile) && (
+                  <Chip 
+                    icon={<DescriptionIcon />}
+                    label={cvFile ? cvFile.name : 'CV en ligne'} 
+                    color="primary" 
+                    variant="soft" 
+                    sx={{ backgroundColor: alpha('#1a56db', 0.05), width: '100%' }}
+                    onDelete={cvFile ? () => setCvFile(null) : undefined} 
+                  />
+                )}
+              </Box>
             )}
-          </Grid>
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSaveProfile}
-              disabled={saving} size="large">
-              {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-            </Button>
-          </Box>
-        </Paper>
-      )}
+          </Card>
+        </Grid>
 
-      {/* === ONGLET 1 : Sécurité === */}
-      {tabValue === 1 && (
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" fontWeight="bold" gutterBottom>Changer le mot de passe</Typography>
-          <Divider sx={{ mb: 2 }} />
-          <Grid container spacing={2} sx={{ maxWidth: 500 }}>
-            <Grid item xs={12}>
-              <TextField label="Mot de passe actuel" fullWidth
-                type={showPasswords.current ? 'text' : 'password'}
-                value={passwordData.currentPassword}
-                onChange={(e) => setPasswordData(p => ({ ...p, currentPassword: e.target.value }))}
-                InputProps={{
-                  endAdornment: (
-                    <IconButton onClick={() => setShowPasswords(p => ({ ...p, current: !p.current }))}>
-                      {showPasswords.current ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                    </IconButton>
-                  )
-                }} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="Nouveau mot de passe" fullWidth helperText="Minimum 8 caractères"
-                type={showPasswords.new ? 'text' : 'password'}
-                value={passwordData.newPassword}
-                onChange={(e) => setPasswordData(p => ({ ...p, newPassword: e.target.value }))}
-                InputProps={{
-                  endAdornment: (
-                    <IconButton onClick={() => setShowPasswords(p => ({ ...p, new: !p.new }))}>
-                      {showPasswords.new ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                    </IconButton>
-                  )
-                }} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="Confirmer le nouveau mot de passe" fullWidth
-                type={showPasswords.confirm ? 'text' : 'password'}
-                value={passwordData.confirmPassword}
-                onChange={(e) => setPasswordData(p => ({ ...p, confirmPassword: e.target.value }))}
-                error={!!passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword}
-                helperText={passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword ? 'Les mots de passe ne correspondent pas' : ''}
-                InputProps={{
-                  endAdornment: (
-                    <IconButton onClick={() => setShowPasswords(p => ({ ...p, confirm: !p.confirm }))}>
-                      {showPasswords.confirm ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                    </IconButton>
-                  )
-                }} />
-            </Grid>
-          </Grid>
-          <Box sx={{ mt: 3 }}>
-            <Button variant="contained" startIcon={<LockIcon />} onClick={handleChangePassword}
-              disabled={saving || !passwordData.newPassword || !passwordData.confirmPassword}>
-              {saving ? 'Modification...' : 'Modifier le mot de passe'}
-            </Button>
-          </Box>
-        </Paper>
-      )}
+        {/* Colonne Droite: Paramètres */}
+        <Grid item xs={12} md={8}>
+          <Paper sx={{ borderRadius: 5, overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.05)', border: '1px solid', borderColor: 'divider' }}>
+            <Tabs 
+              value={tabValue} 
+              onChange={(_, v) => setTabValue(v)} 
+              variant="fullWidth"
+              sx={{ 
+                borderBottom: 1, 
+                borderColor: 'divider',
+                backgroundColor: alpha('#f8fafc', 0.5),
+                '& .MuiTab-root': { py: 3, fontWeight: 'bold' }
+              }}
+            >
+              <Tab icon={<PersonIcon />} label="Infos" iconPosition="start" />
+              <Tab icon={<LockIcon />} label="Sécurité" iconPosition="start" />
+              <Tab icon={<NotificationsIcon />} label="Alertes" iconPosition="start" />
+              <Tab icon={<LanguageIcon />} label="Langue" iconPosition="start" />
+            </Tabs>
 
-      {/* === ONGLET 2 : Notifications === */}
-      {tabValue === 2 && (
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" fontWeight="bold" gutterBottom>Préférences de notification</Typography>
-          <Divider sx={{ mb: 2 }} />
+            <Box sx={{ p: 4 }}>
+              {/* === ONGLET 0 : Informations personnelles === */}
+              {tabValue === 0 && (
+                <Grid container spacing={3}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField label="Prénom" fullWidth value={profileData.first_name} variant="filled"
+                      onChange={(e) => setProfileData(p => ({ ...p, first_name: e.target.value }))} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField label="Nom" fullWidth value={profileData.last_name} variant="filled"
+                      onChange={(e) => setProfileData(p => ({ ...p, last_name: e.target.value }))} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField label="Téléphone" fullWidth value={profileData.phone} variant="filled"
+                      onChange={(e) => setProfileData(p => ({ ...p, phone: e.target.value }))} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField label="E-mail secondaire" fullWidth type="email" value={profileData.secondary_email} variant="filled"
+                      onChange={(e) => setProfileData(p => ({ ...p, secondary_email: e.target.value }))} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField label="Date de naissance" fullWidth type="date" value={profileData.birth_date} variant="filled"
+                      onChange={(e) => setProfileData(p => ({ ...p, birth_date: e.target.value }))}
+                      InputLabelProps={{ shrink: true }} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField label="Adresse" fullWidth value={profileData.address} variant="filled"
+                      onChange={(e) => setProfileData(p => ({ ...p, address: e.target.value }))} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField label="Biographie / Description" fullWidth multiline rows={4} variant="filled"
+                      value={profileData.bio}
+                      onChange={(e) => setProfileData(p => ({ ...p, bio: e.target.value }))} />
+                  </Grid>
+                  <Grid item xs={12} sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button 
+                      variant="contained" 
+                      startIcon={<SaveIcon />} 
+                      onClick={handleSaveProfile}
+                      disabled={saving} 
+                      size="large"
+                      sx={{ borderRadius: 3, px: 4, py: 1.5, fontWeight: 'bold' }}
+                    >
+                      {saving ? 'Sauvegarde...' : 'Enregistrer les modifications'}
+                    </Button>
+                  </Grid>
+                </Grid>
+              )}
 
-          <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>Canaux</Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 2 }}>
-            <FormControlLabel
-              control={<Switch checked={notifPrefs.push_enabled}
-                onChange={(e) => setNotifPrefs(p => ({ ...p, push_enabled: e.target.checked }))} />}
-              label="Notifications push (navigateur/mobile)" />
-            <FormControlLabel
-              control={<Switch checked={notifPrefs.email_enabled}
-                onChange={(e) => setNotifPrefs(p => ({ ...p, email_enabled: e.target.checked }))} />}
-              label="Notifications par e-mail" />
-            <FormControlLabel
-              control={<Switch checked={notifPrefs.sms_enabled}
-                onChange={(e) => setNotifPrefs(p => ({ ...p, sms_enabled: e.target.checked }))} />}
-              label="Notifications par SMS (événements critiques uniquement)" />
-          </Box>
+              {/* === ONGLET 1 : Sécurité === */}
+              {tabValue === 1 && (
+                <Box sx={{ maxWidth: 500 }}>
+                  <Typography variant="h6" fontWeight="bold" sx={{ mb: 3 }}>Changer le mot de passe</Typography>
+                  <Stack spacing={3}>
+                    <TextField label="Nouveau mot de passe" fullWidth helperText="Minimum 8 caractères"
+                      type={showPasswords.new ? 'text' : 'password'}
+                      value={passwordData.newPassword}
+                      variant="outlined"
+                      onChange={(e) => setPasswordData(p => ({ ...p, newPassword: e.target.value }))}
+                      InputProps={{
+                        endAdornment: (
+                          <IconButton onClick={() => setShowPasswords(p => ({ ...p, new: !p.new }))}>
+                            {showPasswords.new ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                          </IconButton>
+                        )
+                      }} />
+                    <TextField label="Confirmer le nouveau mot de passe" fullWidth
+                      type={showPasswords.confirm ? 'text' : 'password'}
+                      value={passwordData.confirmPassword}
+                      variant="outlined"
+                      onChange={(e) => setPasswordData(p => ({ ...p, confirmPassword: e.target.value }))}
+                      error={!!passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword}
+                      helperText={passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword ? 'Les mots de passe ne correspondent pas' : ''}
+                      InputProps={{
+                        endAdornment: (
+                          <IconButton onClick={() => setShowPasswords(p => ({ ...p, confirm: !p.confirm }))}>
+                            {showPasswords.confirm ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                          </IconButton>
+                        )
+                      }} />
+                    <Button 
+                      variant="contained" 
+                      startIcon={<LockIcon />} 
+                      onClick={handleChangePassword}
+                      disabled={saving || !passwordData.newPassword || !passwordData.confirmPassword}
+                      sx={{ borderRadius: 2, py: 1.5, fontWeight: 'bold' }}
+                    >
+                      {saving ? 'Modification...' : 'Modifier mon mot de passe'}
+                    </Button>
+                  </Stack>
+                </Box>
+              )}
 
-          {notifPrefs.email_enabled && (
-            <FormControl size="small" sx={{ mb: 3, minWidth: 250 }}>
-              <InputLabel>Fréquence e-mail</InputLabel>
-              <Select value={notifPrefs.email_digest} label="Fréquence e-mail"
-                onChange={(e) => setNotifPrefs(p => ({ ...p, email_digest: e.target.value }))}>
-                <MenuItem value="immediate">Immédiate</MenuItem>
-                <MenuItem value="daily">Résumé quotidien</MenuItem>
-                <MenuItem value="weekly">Résumé hebdomadaire</MenuItem>
-              </Select>
-            </FormControl>
-          )}
+              {/* === ONGLET 2 : Notifications === */}
+              {tabValue === 2 && (
+                <Box>
+                  <Typography variant="h6" fontWeight="bold" sx={{ mb: 3 }}>Préférences de notification</Typography>
+                  
+                  <Paper variant="outlined" sx={{ p: 3, borderRadius: 3, mb: 4 }}>
+                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>Canaux de réception</Typography>
+                    <Stack spacing={1}>
+                      <FormControlLabel
+                        control={<Switch checked={notifPrefs.push_enabled} color="primary"
+                          onChange={(e) => setNotifPrefs(p => ({ ...p, push_enabled: e.target.checked }))} />}
+                        label="Notifications push navigateur" />
+                      <FormControlLabel
+                        control={<Switch checked={notifPrefs.email_enabled} color="primary"
+                          onChange={(e) => setNotifPrefs(p => ({ ...p, email_enabled: e.target.checked }))} />}
+                        label="Notifications par e-mail" />
+                      <FormControlLabel
+                        control={<Switch checked={notifPrefs.sms_enabled} color="primary"
+                          onChange={(e) => setNotifPrefs(p => ({ ...p, sms_enabled: e.target.checked }))} />}
+                        label="SMS (alertes urgentes)" />
+                    </Stack>
+                  </Paper>
 
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>Types d'alertes</Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            <FormControlLabel
-              control={<Switch checked={notifPrefs.notify_new_grade}
-                onChange={(e) => setNotifPrefs(p => ({ ...p, notify_new_grade: e.target.checked }))} />}
-              label="Nouvelle note publiée" />
-            <FormControlLabel
-              control={<Switch checked={notifPrefs.notify_new_exam}
-                onChange={(e) => setNotifPrefs(p => ({ ...p, notify_new_exam: e.target.checked }))} />}
-              label="Nouvel examen planifié" />
-            <FormControlLabel
-              control={<Switch checked={notifPrefs.notify_new_document}
-                onChange={(e) => setNotifPrefs(p => ({ ...p, notify_new_document: e.target.checked }))} />}
-              label="Nouveau document déposé" />
-            <FormControlLabel
-              control={<Switch checked={notifPrefs.notify_new_message}
-                onChange={(e) => setNotifPrefs(p => ({ ...p, notify_new_message: e.target.checked }))} />}
-              label="Nouveau message reçu" />
-            <FormControlLabel
-              control={<Switch checked={notifPrefs.notify_schedule_change}
-                onChange={(e) => setNotifPrefs(p => ({ ...p, notify_schedule_change: e.target.checked }))} />}
-              label="Modification d'emploi du temps" />
-            <FormControlLabel
-              control={<Switch checked={notifPrefs.notify_internship}
-                onChange={(e) => setNotifPrefs(p => ({ ...p, notify_internship: e.target.checked }))} />}
-              label="Nouvelle offre de stage correspondant à mon profil" />
-          </Box>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>Types d'alertes</Typography>
+                  <Grid container spacing={1}>
+                    {[
+                      { key: 'notify_new_grade', label: 'Nouvelle note' },
+                      { key: 'notify_new_exam', label: 'Nouvel examen' },
+                      { key: 'notify_new_document', label: 'Nouveau cours' },
+                      { key: 'notify_new_message', label: 'Messages reçus' },
+                      { key: 'notify_schedule_change', label: 'Emploi du temps' },
+                      { key: 'notify_internship', label: 'Offres de stages' },
+                    ].map(item => (
+                      <Grid item xs={12} sm={6} key={item.key}>
+                        <FormControlLabel
+                          control={<Switch checked={notifPrefs[item.key]}
+                            onChange={(e) => setNotifPrefs(p => ({ ...p, [item.key]: e.target.checked }))} />}
+                          label={item.label} />
+                      </Grid>
+                    ))}
+                  </Grid>
 
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSaveNotifications}
-              disabled={saving}>
-              {saving ? 'Sauvegarde...' : 'Sauvegarder les préférences'}
-            </Button>
-          </Box>
-        </Paper>
-      )}
+                  <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSaveNotifications}
+                      disabled={saving} sx={{ borderRadius: 2, fontWeight: 'bold' }}>
+                      {saving ? 'Sauvegarde...' : 'Sauvegarder les alertes'}
+                    </Button>
+                  </Box>
+                </Box>
+              )}
 
-      {/* === ONGLET 3 : Préférences === */}
-      {tabValue === 3 && (
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" fontWeight="bold" gutterBottom>Préférences d'affichage</Typography>
-          <Divider sx={{ mb: 2 }} />
-
-          <FormControl sx={{ minWidth: 250 }}>
-            <InputLabel>Langue de l'interface</InputLabel>
-            <Select value={language} label="Langue de l'interface"
-              onChange={(e) => setLanguage(e.target.value)}>
-              <MenuItem value="fr">Français</MenuItem>
-              <MenuItem value="en">English</MenuItem>
-            </Select>
-          </FormControl>
-
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSaveNotifications}
-              disabled={saving}>
-              {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-            </Button>
-          </Box>
-        </Paper>
-      )}
+              {/* === ONGLET 3 : Préférences === */}
+              {tabValue === 3 && (
+                <Box>
+                  <Typography variant="h6" fontWeight="bold" sx={{ mb: 3 }}>Préférences d'affichage</Typography>
+                  <FormControl fullWidth sx={{ maxWidth: 400 }}>
+                    <InputLabel>Langue de l'interface</InputLabel>
+                    <Select value={language} label="Langue de l'interface"
+                      onChange={(e) => setLanguage(e.target.value)}>
+                      <MenuItem value="fr">Français (France)</MenuItem>
+                      <MenuItem value="en">English (US)</MenuItem>
+                    </Select>
+                  </FormControl>
+                  
+                  <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSaveNotifications}
+                      disabled={saving} sx={{ borderRadius: 2, fontWeight: 'bold' }}>
+                      Enregistrer
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          </Paper>
+        </Grid>
+      </Grid>
     </Box>
   );
 };

@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Grid, TextField, Button, Card, 
   CardContent, CardActions, Chip, Divider, InputAdornment,
   CircularProgress, Alert, List, ListItem, ListItemText,
-  ListItemIcon, Tab, Tabs, IconButton
+  ListItemIcon, Tab, Tabs, IconButton, alpha, Tooltip
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -11,8 +11,11 @@ import {
   Language as WebIcon,
   Description as FileIcon,
   Star as StarIcon,
+  StarBorder as StarBorderIcon,
   Download as DownloadIcon,
-  CollectionsBookmark as LibraryIcon
+  CollectionsBookmark as LibraryIcon,
+  OpenInNew as OpenInNewIcon,
+  Person as PersonIcon
 } from '@mui/icons-material';
 
 import { supabase } from '@/supabase';
@@ -97,30 +100,73 @@ const LibraryPage = () => {
           </Grid>
         ) : filteredResources.map(res => (
           <Grid item xs={12} sm={6} md={4} key={res.id}>
-            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <CardContent sx={{ flexGrow: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Card sx={{ 
+              height: '100%', 
+              display: 'flex', 
+              flexDirection: 'column',
+              borderRadius: 4,
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-8px)',
+                boxShadow: '0 12px 30px rgba(0,0,0,0.1)'
+              }
+            }}>
+              <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                   <Chip 
-                    label={res.type.toUpperCase()} 
+                    label={res.type === 'book' ? 'OUVRAGE' : 'LIEN EXTERNE'} 
                     size="small" 
                     icon={res.type === 'link' ? <WebIcon /> : <BookIcon />} 
                     color={res.type === 'link' ? 'secondary' : 'primary'}
-                    variant="outlined"
+                    sx={{ fontWeight: 'bold', borderRadius: 1.5 }}
                   />
-                  <IconButton size="small"><StarIcon fontSize="small" /></IconButton>
+                  <Tooltip title="Ajouter aux favoris">
+                    <IconButton size="small" color="primary">
+                      <StarBorderIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </Box>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>{res.title}</Typography>
-                <Typography variant="body2" color="text.secondary">{res.author} • {res.year}</Typography>
+                <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.3 }}>
+                  {res.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <PersonIcon sx={{ fontSize: 16 }} /> {res.author || 'Auteur inconnu'} • {res.year || 'Année N/A'}
+                </Typography>
                 <Box sx={{ mt: 2, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                  {res.tags.map(tag => <Chip key={tag} label={tag} size="small" variant="outlined" />)}
+                  {res.tags?.map(tag => (
+                    <Chip 
+                      key={tag} 
+                      label={tag} 
+                      size="small" 
+                      variant="soft" 
+                      sx={{ backgroundColor: alpha('#003366', 0.05), color: '#003366', fontSize: '0.7rem' }} 
+                    />
+                  ))}
                 </Box>
               </CardContent>
-              <Divider />
-              <CardActions>
+              <Divider sx={{ borderStyle: 'dashed' }} />
+              <CardActions sx={{ p: 2 }}>
                 {res.type === 'link' ? (
-                  <Button fullWidth startIcon={<WebIcon />} onClick={() => window.open(res.url, '_blank')}>Accéder au site</Button>
+                  <Button 
+                    fullWidth 
+                    variant="contained"
+                    color="secondary"
+                    startIcon={<OpenInNewIcon />} 
+                    onClick={() => window.open(res.url, '_blank')}
+                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                  >
+                    Accéder à la base
+                  </Button>
                 ) : (
-                  <Button fullWidth startIcon={<DownloadIcon />}>Télécharger (PDF)</Button>
+                  <Button 
+                    fullWidth 
+                    variant="contained"
+                    color="primary"
+                    startIcon={<DownloadIcon />}
+                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                  >
+                    Télécharger PDF
+                  </Button>
                 )}
               </CardActions>
             </Card>
