@@ -10,15 +10,13 @@ import {
   CardMedia,
   CircularProgress,
   Divider,
-  FormControl,
   Grid,
-  InputLabel,
   List,
   ListItem,
   ListItemText,
-  MenuItem,
-  Select,
-  Typography
+  Typography,
+  Paper,
+  alpha
 } from '@mui/material';
 import {
   CalendarToday as CalendarTodayIcon,
@@ -27,8 +25,10 @@ import {
   School as SchoolIcon,
   Assignment as RequestIcon,
   Warning as WarningIcon,
-  CheckCircle as SuccessIcon,
   Description as DocumentIcon,
+  ArrowForward as ArrowForwardIcon,
+  LocationOn as LocationOnIcon,
+  AccessTime as AccessTimeIcon,
   TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { Stack, Table, TableBody, TableRow, TableCell, Chip } from '@mui/material';
@@ -37,16 +37,8 @@ import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { getStudentDashboardData } from '@/api/studentDashboard';
 
-const getDayOfWeekName = (dayOfWeek) => {
-  const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-  return days[dayOfWeek] || '';
-};
-
 const formatDate = (dateString) => {
-  if (!dateString) {
-    return '-';
-  }
-
+  if (!dateString) return '-';
   try {
     return format(new Date(dateString), 'PPP', { locale: fr });
   } catch {
@@ -55,10 +47,7 @@ const formatDate = (dateString) => {
 };
 
 const formatTime = (dateString) => {
-  if (!dateString) {
-    return '--:--';
-  }
-
+  if (!dateString) return '--:--';
   try {
     return format(new Date(dateString), 'HH:mm');
   } catch {
@@ -66,12 +55,84 @@ const formatTime = (dateString) => {
   }
 };
 
+const NewsHero = ({ news }) => {
+  if (!news || news.length === 0) return null;
+  const hero = news[0];
+
+  return (
+    <Paper
+      sx={{
+        position: 'relative',
+        backgroundColor: 'grey.800',
+        color: '#fff',
+        mb: 4,
+        backgroundSize: 'cover',
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'center',
+        backgroundImage: `url(${hero.image_url || 'https://images.unsplash.com/photo-1523050853063-bd8012fbb20a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80'})`,
+        borderRadius: 4,
+        overflow: 'hidden',
+        minHeight: { xs: 300, md: 400 },
+        display: 'flex',
+        alignItems: 'flex-end',
+        transition: 'transform 0.3s ease-in-out',
+        '&:hover': {
+          transform: 'scale(1.01)'
+        }
+      }}
+    >
+      {/* Overlay */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          right: 0,
+          left: 0,
+          backgroundColor: 'rgba(0,0,0,.45)',
+          background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)'
+        }}
+      />
+      <Grid container>
+        <Grid item md={8}>
+          <Box
+            sx={{
+              position: 'relative',
+              p: { xs: 3, md: 6 },
+              pr: { md: 0 },
+            }}
+          >
+            <Chip 
+              label="À LA UNE" 
+              color="error" 
+              size="small" 
+              sx={{ mb: 2, fontWeight: 'bold', borderRadius: 1 }} 
+            />
+            <Typography component="h1" variant="h3" color="inherit" gutterBottom fontWeight="800" sx={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+              {hero.title}
+            </Typography>
+            <Typography variant="h6" color="inherit" paragraph sx={{ opacity: 0.9, mb: 3 }}>
+              {hero.content?.length > 150 ? hero.content.substring(0, 150) + '...' : hero.content}
+            </Typography>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              endIcon={<ArrowForwardIcon />}
+              sx={{ borderRadius: 2, px: 4, py: 1.5, fontWeight: 'bold' }}
+            >
+              Lire la suite
+            </Button>
+          </Box>
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+};
+
 const DashboardPage = () => {
   const { authState } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [dayOfWeekFilter, setDayOfWeekFilter] = useState('all');
-  const [eventTypeFilter, setEventTypeFilter] = useState('all');
   const [dashboardData, setDashboardData] = useState({
     next_course: null,
     recent_grades: [],
@@ -108,8 +169,14 @@ const DashboardPage = () => {
           throw new Error('Accès non autorisé');
         }
 
+        // Si l'utilisateur est un étudiant mais n'a pas encore son ID numérique, on attend un peu (auto-fix en cours)
         if (!studentId || isNaN(numericStudentId)) {
-          throw new Error('Votre profil étudiant est incomplet. Veuillez contacter l\'administration.');
+          if (authState.isStudent) {
+             // On peut essayer de recharger ou afficher un message d'attente
+             setTimeout(loadDashboard, 2000);
+             return;
+          }
+          throw new Error('Votre profil étudiant est en cours de finalisation. Veuillez patienter ou contacter l\'administration.');
         }
 
         const { data, error: dashboardError } = await getStudentDashboardData({
@@ -117,104 +184,82 @@ const DashboardPage = () => {
           studentId: numericStudentId
         });
 
-        if (dashboardError) {
-          throw dashboardError;
-        }
+        if (dashboardError) throw dashboardError;
 
-        setDashboardData(
-          data || {
-            next_course: null,
-            recent_grades: [],
-            schedule: [],
-            news: [],
-            events: [],
-            requests: [],
-            upcoming_exams: []
-          }
-        );
+        setDashboardData(data || {
+          next_course: null, recent_grades: [], schedule: [],
+          news: [], events: [], requests: [], upcoming_exams: []
+        });
       } catch (loadError) {
         console.error('Erreur lors du chargement du dashboard étudiant:', loadError);
         setError(loadError.message || 'Impossible de charger le tableau de bord.');
-        setDashboardData({
-          next_course: null,
-          recent_grades: [],
-          schedule: [],
-          news: [],
-          events: [],
-          requests: [],
-          upcoming_exams: []
-        });
       } finally {
         setLoading(false);
       }
     };
 
     loadDashboard();
-  }, [authState.isAuthenticated, authState.student?.id, authState.user?.id]);
-
-  const filteredSchedule = useMemo(() => {
-    if (dayOfWeekFilter === 'all') {
-      return dashboardData.schedule;
-    }
-
-    return dashboardData.schedule.filter((item) => {
-      const dayName = format(new Date(item.start_time), 'EEEE', { locale: fr });
-      return dayName.toLowerCase() === dayOfWeekFilter.toLowerCase();
-    });
-  }, [dashboardData.schedule, dayOfWeekFilter]);
-
-  const filteredEvents = useMemo(() => {
-    if (eventTypeFilter === 'all') {
-      return dashboardData.events;
-    }
-
-    return dashboardData.events.filter((event) => event.event_type === eventTypeFilter);
-  }, [dashboardData.events, eventTypeFilter]);
+  }, [authState.isAuthenticated, authState.student?.id, authState.user?.id, authState.isStudent]);
 
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <CircularProgress />
+        <CircularProgress size={60} thickness={4} />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, backgroundColor: '#f8fafc', minHeight: '100vh' }}>
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert severity="error" variant="filled" sx={{ mb: 4, borderRadius: 2, boxShadow: 2 }}>
           {error}
         </Alert>
       )}
 
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1" fontWeight="bold">
-          Bonjour, {authState.profile?.full_name?.split(' ')[0] || 'Étudiant'} 👋
-        </Typography>
-        <Typography variant="subtitle1" color="text.secondary">
-          {format(new Date(), 'PPPP', { locale: fr })}
-        </Typography>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} mb={4} spacing={2}>
+        <Box>
+          <Typography variant="h3" component="h1" fontWeight="800" color="text.primary" gutterBottom>
+            Bonjour, {authState.profile?.full_name?.split(' ')[0] || 'Étudiant'} 👋
+          </Typography>
+          <Typography variant="h6" color="text.secondary" fontWeight="500">
+            Prêt pour vos cours d'aujourd'hui ?
+          </Typography>
+        </Box>
+        <Paper elevation={0} sx={{ p: 2, borderRadius: 3, backgroundColor: 'white', border: '1px solid', borderColor: 'divider' }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <CalendarTodayIcon color="primary" />
+            <Typography variant="subtitle1" fontWeight="bold">
+              {format(new Date(), 'PPPP', { locale: fr })}
+            </Typography>
+          </Stack>
+        </Paper>
       </Stack>
 
-      {/* Barre d'Actions Urgentes */}
+      {/* Hero Banner Actualités */}
+      <NewsHero news={dashboardData.news} />
+
+      {/* Barre d'Actions Prioritaires */}
       {(stats.upcomingExams > 0 || stats.pendingRequests > 0) && (
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" gutterBottom color="error.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <WarningIcon fontSize="small" /> Actions prioritaires
+        <Box sx={{ mb: 5 }}>
+          <Typography variant="h5" gutterBottom fontWeight="bold" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <WarningIcon color="error" /> Actions prioritaires
           </Typography>
           <Grid container spacing={2}>
             {dashboardData.upcoming_exams.map(exam => (
               <Grid item xs={12} md={6} key={exam.id}>
                 <Alert 
                   severity="warning" 
+                  variant="outlined"
+                  sx={{ borderRadius: 3, borderLeft: '6px solid orange', backgroundColor: alpha('#ffa726', 0.05) }}
                   action={
-                    <Button color="inherit" size="small" component={Link} to={`/student/exams`}>
-                      Voir l'examen
+                    <Button variant="contained" color="warning" size="small" component={Link} to={`/student/exams`} sx={{ borderRadius: 2 }}>
+                      Accéder à l'examen
                     </Button>
                   }
                 >
-                  <Typography variant="body2" fontWeight="bold">Examen imminent : {exam.title}</Typography>
-                  <Typography variant="caption">Début à {formatTime(exam.start_time || exam.exam_date || exam.date)}</Typography>
+                  <Typography variant="subtitle1" fontWeight="bold">Examen imminent : {exam.title}</Typography>
+                  <Typography variant="body2">Début à {formatTime(exam.start_time || exam.exam_date || exam.date)}</Typography>
                 </Alert>
               </Grid>
             ))}
@@ -222,14 +267,16 @@ const DashboardPage = () => {
               <Grid item xs={12} md={6} key={req.id}>
                 <Alert 
                   severity="success" 
+                  variant="outlined"
+                  sx={{ borderRadius: 3, borderLeft: '6px solid green', backgroundColor: alpha('#66bb6a', 0.05) }}
                   action={
-                    <Button color="inherit" size="small" component={Link} to="/student/requests">
+                    <Button variant="contained" color="success" size="small" component={Link} to="/student/requests" sx={{ borderRadius: 2 }}>
                       Télécharger
                     </Button>
                   }
                 >
-                  <Typography variant="body2" fontWeight="bold">Document disponible : {req.request_type}</Typography>
-                  <Typography variant="caption">Votre demande a été finalisée.</Typography>
+                  <Typography variant="subtitle1" fontWeight="bold">Document prêt : {req.request_type}</Typography>
+                  <Typography variant="body2">Votre demande a été finalisée avec succès.</Typography>
                 </Alert>
               </Grid>
             ))}
@@ -237,83 +284,116 @@ const DashboardPage = () => {
         </Box>
       )}
 
-      <Grid container spacing={3}>
-        {/* Résumé de situation */}
+      <Grid container spacing={4}>
+        {/* Colonne Principale */}
         <Grid item xs={12} md={8}>
-          <Grid container spacing={3}>
+          <Grid container spacing={4}>
+            {/* Prochain Cours */}
             <Grid item xs={12} md={6}>
-              <Card sx={{ height: '100%', borderLeft: '4px solid #003366' }}>
+              <Card sx={{ 
+                height: '100%', 
+                borderRadius: 4, 
+                boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 30px rgba(0,0,0,0.1)' },
+                borderTop: '6px solid #003366'
+              }}>
                 <CardHeader title="Prochain cours" avatar={<SchoolIcon color="primary" />} />
                 <CardContent>
                   {dashboardData.next_course ? (
                     <>
-                      <Typography variant="h6">{dashboardData.next_course.name}</Typography>
-                      <Typography variant="body1" color="text.secondary">
-                        {formatDate(dashboardData.next_course.time)} à {formatTime(dashboardData.next_course.time)}
-                      </Typography>
+                      <Typography variant="h5" fontWeight="bold" gutterBottom>{dashboardData.next_course.name}</Typography>
+                      <Stack spacing={1} mb={2}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
+                          <AccessTimeIcon fontSize="small" />
+                          <Typography variant="body1">{formatTime(dashboardData.next_course.time)}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
+                          <LocationOnIcon fontSize="small" />
+                          <Typography variant="body1">Salle 204 (Campus ESGIS)</Typography>
+                        </Box>
+                      </Stack>
                       <Button
-                        variant="outlined"
+                        variant="contained"
                         component={Link}
                         to="/student/schedule"
-                        sx={{ mt: 2 }}
+                        fullWidth
+                        sx={{ mt: 1, borderRadius: 2 }}
                         startIcon={<CalendarTodayIcon />}
-                        size="small"
                       >
-                        Mon emploi du temps
+                        Voir mon agenda
                       </Button>
                     </>
                   ) : (
-                    <Typography variant="body1">Aucun cours à venir</Typography>
+                    <Box sx={{ textAlign: 'center', py: 2 }}>
+                      <Typography variant="body1" color="text.secondary">Aucun cours prévu prochainement</Typography>
+                    </Box>
                   )}
                 </CardContent>
               </Card>
             </Grid>
 
+            {/* Dernières Notes */}
             <Grid item xs={12} md={6}>
-              <Card sx={{ height: '100%', borderLeft: '4px solid #CC0000' }}>
+              <Card sx={{ 
+                height: '100%', 
+                borderRadius: 4, 
+                boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 30px rgba(0,0,0,0.1)' },
+                borderTop: '6px solid #CC0000'
+              }}>
                 <CardHeader title="Dernières notes" avatar={<GradeIcon color="error" />} />
-                <CardContent>
+                <CardContent sx={{ pt: 0 }}>
                   {dashboardData.recent_grades.length > 0 ? (
-                    <List dense sx={{ py: 0 }}>
-                      {dashboardData.recent_grades.map((grade) => (
-                        <ListItem key={grade.id} sx={{ px: 0 }}>
-                          <ListItemText
-                            primary={grade.course_name}
-                            secondary={`Note: ${grade.value}/${grade.max_value}`}
-                          />
-                        </ListItem>
+                    <List disablePadding>
+                      {dashboardData.recent_grades.map((grade, idx) => (
+                        <Box key={grade.id}>
+                          <ListItem sx={{ px: 0, py: 1.5 }}>
+                            <ListItemText
+                              primary={<Typography fontWeight="bold">{grade.course_name}</Typography>}
+                              secondary={formatDate(grade.published_at)}
+                            />
+                            <Typography variant="h6" fontWeight="800" color="primary.main">
+                              {grade.value}/{grade.max_value}
+                            </Typography>
+                          </ListItem>
+                          {idx < dashboardData.recent_grades.length - 1 && <Divider />}
+                        </Box>
                       ))}
-                      <Button variant="text" component={Link} to="/student/grades" fullWidth size="small">
-                        Voir tous mes résultats
+                      <Button variant="text" component={Link} to="/student/grades" fullWidth sx={{ mt: 1, fontWeight: 'bold' }}>
+                        Voir tous les résultats
                       </Button>
                     </List>
                   ) : (
-                    <Typography variant="body1">Aucune note publiée récemment</Typography>
+                    <Typography variant="body1" color="text.secondary">Aucune note récente.</Typography>
                   )}
                 </CardContent>
               </Card>
             </Grid>
 
+            {/* Suivi Administratif */}
             <Grid item xs={12}>
-              <Card>
+              <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
                 <CardHeader 
-                  title="Suivi des Demandes" 
+                  title="Mes Démarches Administratives" 
                   avatar={<RequestIcon color="secondary" />} 
-                  action={<Button size="small" component={Link} to="/student/requests">Voir tout</Button>}
+                  action={<Button variant="outlined" size="small" component={Link} to="/student/requests" sx={{ borderRadius: 2 }}>Tout voir</Button>}
                 />
                 <CardContent sx={{ pt: 0 }}>
                   {dashboardData.requests.length > 0 ? (
-                    <Table size="small">
+                    <Table size="medium">
                       <TableBody>
                         {dashboardData.requests.map(req => (
-                          <TableRow key={req.id}>
-                            <TableCell sx={{ pl: 0 }}>{req.request_type}</TableCell>
+                          <TableRow key={req.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                            <TableCell sx={{ pl: 0, fontWeight: '500' }}>{req.request_type}</TableCell>
+                            <TableCell>{formatDate(req.created_at)}</TableCell>
                             <TableCell align="right">
                               <Chip 
-                                label={req.status} 
+                                label={req.status === 'ready' ? 'Disponible' : req.status === 'approved' ? 'Approuvé' : 'En cours'} 
                                 size="small" 
                                 color={req.status === 'ready' ? 'secondary' : req.status === 'approved' ? 'success' : 'default'} 
-                                variant="outlined" 
+                                sx={{ fontWeight: 'bold' }}
                               />
                             </TableCell>
                           </TableRow>
@@ -329,62 +409,124 @@ const DashboardPage = () => {
           </Grid>
         </Grid>
 
-        {/* Colonne latérale événements */}
+        {/* Colonne Latérale */}
         <Grid item xs={12} md={4}>
-          <Card sx={{ height: '100%' }}>
-            <CardHeader title="Agenda" avatar={<EventIcon color="primary" />} />
-            <CardContent>
-              {dashboardData.events.length > 0 ? (
-                <List dense>
-                  {dashboardData.events.map((event) => (
-                    <ListItem key={event.id} alignItems="flex-start" sx={{ px: 0 }}>
-                      <ListItemText
-                        primary={event.title}
-                        secondary={
-                          <>
-                            <Typography component="span" variant="caption" display="block">
-                              {formatDate(event.start_date)} • {event.location}
-                            </Typography>
-                          </>
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              ) : (
-                <Typography variant="body2">Aucun événement à venir</Typography>
-              )}
-            </CardContent>
-          </Card>
+          <Stack spacing={4}>
+            {/* Agenda / Événements */}
+            <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', backgroundColor: 'white' }}>
+              <CardHeader title="Événements à venir" avatar={<EventIcon color="primary" />} />
+              <CardContent sx={{ pt: 0 }}>
+                {dashboardData.events.length > 0 ? (
+                  <List>
+                    {dashboardData.events.map((event, idx) => (
+                      <Box key={event.id}>
+                        <ListItem alignItems="flex-start" sx={{ px: 0 }}>
+                          <ListItemText
+                            primary={<Typography fontWeight="bold">{event.title}</Typography>}
+                            secondary={
+                              <Stack spacing={0.5} mt={0.5}>
+                                <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <CalendarTodayIcon sx={{ fontSize: 12 }} /> {formatDate(event.start_date)}
+                                </Typography>
+                                <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <LocationOnIcon sx={{ fontSize: 12 }} /> {event.location || 'Campus ESGIS'}
+                                </Typography>
+                              </Stack>
+                            }
+                          />
+                        </ListItem>
+                        {idx < dashboardData.events.length - 1 && <Divider component="li" />}
+                      </Box>
+                    ))}
+                  </List>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">Aucun événement prévu.</Typography>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Widget Statistiques */}
+            <Card sx={{ 
+              borderRadius: 4, 
+              background: 'linear-gradient(135deg, #003366 0%, #0052a3 100%)', 
+              color: 'white',
+              boxShadow: '0 8px 30px rgba(0,51,102,0.2)'
+            }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <TrendingUpIcon /> Ma Progression
+                </Typography>
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" sx={{ opacity: 0.8 }}>Cours suivis</Typography>
+                    <Typography variant="h4" fontWeight="800">12</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" sx={{ opacity: 0.8 }}>Moyenne G.</Typography>
+                    <Typography variant="h4" fontWeight="800">14.5</Typography>
+                  </Grid>
+                </Grid>
+                <Button 
+                  fullWidth 
+                  variant="outlined" 
+                  sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.5)', mt: 3, borderRadius: 2, '&:hover': { borderColor: 'white', backgroundColor: 'rgba(255,255,255,0.1)' } }}
+                >
+                  Voir mon bilan
+                </Button>
+              </CardContent>
+            </Card>
+          </Stack>
         </Grid>
 
+        {/* Section News Grid */}
         <Grid item xs={12}>
-          <Typography variant="h5" component="h2" gutterBottom sx={{ mt: 3, fontWeight: 'bold' }}>
-            Actualités ESGIS
+          <Typography variant="h4" component="h2" gutterBottom sx={{ mt: 2, mb: 3, fontWeight: '800' }}>
+            Dernières Actualités
           </Typography>
-          <Grid container spacing={3}>
-            {dashboardData.news.length > 0 ? (
-              dashboardData.news.map((item) => (
-                <Grid item xs={12} md={4} key={item.id || item.title}>
-                  <Card sx={{ height: '100%' }}>
+          <Grid container spacing={4}>
+            {dashboardData.news.slice(1).length > 0 ? (
+              dashboardData.news.slice(1).map((item) => (
+                <Grid item xs={12} sm={6} md={4} key={item.id || item.title}>
+                  <Card sx={{ 
+                    height: '100%', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    borderRadius: 4,
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+                    transition: 'transform 0.3s, box-shadow 0.3s',
+                    '&:hover': { transform: 'scale(1.03)', boxShadow: '0 12px 40px rgba(0,0,0,0.12)' }
+                  }}>
                     {item.image_url && (
-                      <CardMedia component="img" height="140" image={item.image_url} alt={item.title} />
+                      <CardMedia 
+                        component="img" 
+                        height="200" 
+                        image={item.image_url} 
+                        alt={item.title} 
+                        sx={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
+                      />
                     )}
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>{item.title}</Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {formatDate(item.published_at)}
+                    <CardContent sx={{ flexGrow: 1 }}>
+                      <Typography variant="h6" gutterBottom fontWeight="bold" color="primary.main">
+                        {item.title}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
+                        <AccessTimeIcon sx={{ fontSize: 14 }} /> {formatDate(item.published_at)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ lineClamp: 3, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {item.content}
                       </Typography>
                     </CardContent>
+                    <Box sx={{ p: 2, pt: 0 }}>
+                      <Button size="small" endIcon={<ArrowForwardIcon />}>En savoir plus</Button>
+                    </Box>
                   </Card>
                 </Grid>
               ))
             ) : (
               <Grid item xs={12}>
-                <Alert severity="info">Aucune actualité publiée pour le moment.</Alert>
+                <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 4, backgroundColor: alpha('#003366', 0.02), border: '1px dashed #cbd5e1' }}>
+                  <Typography color="text.secondary">Aucune autre actualité pour le moment.</Typography>
+                </Paper>
               </Grid>
             )}
           </Grid>

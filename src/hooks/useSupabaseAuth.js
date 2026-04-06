@@ -8,7 +8,7 @@ import {
   getSession
 } from '../api/auth';
 import { getProfileById, updateProfileSettings } from '../api/profile';
-import { getRoleEntities } from '../api/users';
+import { getRoleEntities, ensureStudentRecord } from '../api/users';
 import { checkEmailAllowed } from '../api/allowedEmails';
 
 /**
@@ -94,7 +94,20 @@ export const useSupabaseAuth = () => {
         };
 
         // Charger l'entité métier associée au profil quand elle existe.
-        const { studentEntity, professorEntity } = await getRoleEntities(session.user.id);
+        let { studentEntity, professorEntity } = await getRoleEntities(session.user.id);
+
+        // FIX DÉFINITIF: Si c'est un étudiant mais qu'il n'a pas d'entité métier, on la crée
+        if (isStudent && !studentEntity) {
+          console.log('Tentative de création automatique de l\'entité étudiant...');
+          await ensureStudentRecord(session.user.id, {
+            full_name: fullName,
+            level: 'L1', // Niveau par défaut
+            entry_year: new Date().getFullYear()
+          });
+          // Recharger les entités après création
+          const updatedEntities = await getRoleEntities(session.user.id);
+          studentEntity = updatedEntities.studentEntity;
+        }
 
         let student = null;
         let professor = null;
