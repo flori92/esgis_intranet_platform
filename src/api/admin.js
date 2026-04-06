@@ -606,7 +606,7 @@ export const getPracticeQuizzes = async (studentId) => {
         difficulty,
         created_at,
         course:courses!course_id(id, name, code, level, semester),
-        professeur:professors!professeur_id(id, full_name)
+        professeur:profiles!professeur_id(id, full_name)
       `)
       .eq('is_active', true)
       .in('course_id', courseIds)

@@ -62,12 +62,9 @@ export const getForums = async (userId, role) => {
             .select(`
               course_id,
               is_principal,
-              professors(
+              profiles!professor_id(
                 id,
-                profile_id,
-                profiles(
-                  full_name
-                )
+                full_name
               )
             `)
             .in('course_id', courseIds)
@@ -82,7 +79,7 @@ export const getForums = async (userId, role) => {
     const professorByCourse = new Map();
     (assignments || []).forEach((assignment) => {
       if (!professorByCourse.has(assignment.course_id)) {
-        professorByCourse.set(assignment.course_id, assignment.professors?.profiles?.full_name || '-');
+        professorByCourse.set(assignment.course_id, assignment.profiles?.full_name || '-');
       }
     });
 

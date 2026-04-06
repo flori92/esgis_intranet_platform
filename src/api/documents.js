@@ -24,8 +24,8 @@ const normalizeUploadedDocument = (document, tagsByDocumentId = {}) => {
 
 const normalizeGeneratedDocument = (document) => {
   const template = getRelation(document.document_templates);
-  const profile = getRelation(document.profiles);
-  const student = getRelation(profile?.students);
+  const student = getRelation(document.student);
+  const profile = getRelation(student?.profiles);
 
   return {
     id: document.id,
@@ -318,17 +318,18 @@ export const getGeneratedDocuments = async ({
         approval_date,
         created_at,
         updated_at,
-        document_templates(id, name, type),
-        student:profiles!student_id(
+        document_templates!template_id(id, name, type),
+        student:students!student_id(
           id,
-          full_name,
-          email,
-          students(id, student_number)
+          student_number,
+          profile_id,
+          profiles!profile_id(id, full_name, email)
         )
       `)
       .order('created_at', { ascending: false });
 
     if (isStudent && studentId) {
+      // studentId here should be the INTEGER students.id
       query = query.eq('student_id', studentId);
     }
 
@@ -619,11 +620,15 @@ export const getAllGeneratedDocuments = async () => {
       .from('generated_documents')
       .select(`
         *,
-        profiles:student_id (
+        students!student_id (
           id,
-          full_name
+          student_number,
+          profiles!profile_id (
+            id,
+            full_name
+          )
         ),
-        document_templates (
+        document_templates!template_id (
           id,
           name
         )

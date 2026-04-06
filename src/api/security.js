@@ -362,7 +362,9 @@ export const exportUserData = async (userId) => {
 
     const promises = [
       supabase.from('profiles').select('*').eq('id', userId).single(),
-      supabase.from('generated_documents').select('*').eq('student_id', userId),
+      studentIntegerId
+        ? supabase.from('generated_documents').select('*').eq('student_id', studentIntegerId)
+        : Promise.resolve({ data: [] }),
       supabase.from('notifications').select('*').or(`recipient_id.eq.${userId},sender_id.eq.${userId}`).limit(100),
       supabase.from('messages').select('*').or(`sender_id.eq.${userId},recipient_id.eq.${userId}`).limit(100),
     ];

@@ -158,7 +158,7 @@ const StudentDetailsPage = () => {
         .order('payment_date', { ascending: false });
       setPaymentsList(paymentsData || []);
 
-      // Fetch documents (UUID profile_id)
+      // Fetch documents (INTEGER students.id)
       const { data: docsData } = await supabase
         .from('generated_documents')
         .select(`
@@ -166,9 +166,9 @@ const StudentDetailsPage = () => {
           file_path,
           status,
           created_at,
-          document_templates(name, type)
+          document_templates!template_id(name, type)
         `)
-        .eq('student_id', studentProfileId)
+        .eq('student_id', studentData.id)
         .order('created_at', { ascending: false });
       setDocumentsList(docsData || []);
       
@@ -183,14 +183,16 @@ const StudentDetailsPage = () => {
           semester,
           enrollment_date,
           status,
-          courses(
-            id, 
-            name, 
-            code, 
+          created_at,
+          courses!course_id(
+            id,
+            name,
+            code,
             credits,
             professor_courses(
               professor_id,
-              professors(id, profiles(full_name))
+              academic_year,
+              profiles!professor_id(full_name)
             )
           )
         `)
@@ -204,14 +206,14 @@ const StudentDetailsPage = () => {
       // Transformer les données des cours
       const transformedCourses = (coursesData || []).map(item => {
         const courseRef = getRelation(item.courses);
-        
+
         // Trouver le professeur pour cette année académique spécifique
         const profCourse = (courseRef?.professor_courses || []).find(
           pc => pc.academic_year === item.academic_year || !pc.academic_year
         ) || (courseRef?.professor_courses?.[0]);
 
-        const profRef = getRelation(profCourse?.professors);
-        const profProfile = getRelation(profRef?.profiles);
+        // professor_courses.professor_id → profiles(id) directement
+        const profProfile = getRelation(profCourse?.profiles);
 
         return {
           id: item.id,
@@ -219,7 +221,7 @@ const StudentDetailsPage = () => {
           course_id: item.course_id,
           academic_year: item.academic_year,
           semester: item.semester,
-          enrollment_date: item.enrollment_date,
+          enrollment_date: item.enrollment_date || item.created_at,
           status: item.status,
           course_name: courseRef?.name || 'Cours inconnu',
           course_code: courseRef?.code || '',
@@ -240,11 +242,11 @@ const StudentDetailsPage = () => {
           course_id,
           grade,
           status,
-          exams(id, date, type),
+          exams(id, exam_date, exam_type),
           courses(id, name, code)
         `)
         .eq('student_id', studentProfileId)
-        .order('exams(date)', { ascending: false });
+        .order('created_at', { ascending: false });
       
       if (examsError) {
         throw examsError;
@@ -261,8 +263,8 @@ const StudentDetailsPage = () => {
           course_id: exam.course_id,
           grade: exam.grade,
           status: exam.status,
-          exam_date: examRef?.date || '',
-          exam_type: examRef?.type || 'Inconnu',
+          exam_date: examRef?.exam_date || '',
+          exam_type: examRef?.exam_type || 'Inconnu',
           course_name: courseRef?.name || 'Cours inconnu',
           course_code: courseRef?.code || ''
         };
@@ -670,7 +672,7 @@ const StudentDetailsPage = () => {
                       <TableCell>{course.credits}</TableCell>
                       <TableCell>{course.professor_name || 'Non assigné'}</TableCell>
                       <TableCell>{course.academic_year}</TableCell>
-                      <TableCell>{course.semester}</TableCell>
+                      <TableCell>{course.semester ? `S${course.semester}` : '-'}</TableCell>
                       <TableCell>
                         <Chip
                           label={course.status}

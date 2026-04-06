@@ -355,13 +355,16 @@ const normalizeExamRecord = (record) => {
   }
 
   const course = getRelation(record.courses);
-  const professor = getRelation(record.professors);
-  const professorProfile = getRelation(professor?.profiles);
+  // exams.professor_id → profiles(id) directement
+  const professorProfile = getRelation(record.profiles);
   const session = getRelation(record.exam_sessions);
   const center = getRelation(record.exam_centers);
 
   return {
     ...record,
+    // Alias rétro-compat : le reste du code lit .date et .type
+    date: record.exam_date || record.date || null,
+    type: record.exam_type || record.type || null,
     course,
     course_name: course?.name || null,
     course_code: course?.code || null,
@@ -413,17 +416,17 @@ export const getStudentExamLaunchData = async ({ examId, studentId }) => {
           professor_id,
           exam_session_id,
           exam_center_id,
-          date,
+          exam_date,
           duration,
-          type,
+          exam_type,
           room,
           total_points,
           passing_grade,
           status,
           courses(id, name, code),
-          professors(id, profile_id, profiles(full_name, email)),
-          exam_sessions(id, name, academic_year, semester, status),
-          exam_centers(id, name, location, status)
+          profiles!professor_id(id, full_name, email),
+          exam_sessions!exam_session_id(id, name, academic_year, semester, status),
+          exam_centers!exam_center_id(id, name, location, status)
         `)
         .eq('id', numericExamId)
         .single(),
@@ -501,15 +504,17 @@ export const getStudentExamsListData = async (studentId) => {
           professor_id,
           exam_session_id,
           exam_center_id,
-          date,
+          exam_date,
           duration,
-          type,
+          exam_type,
           room,
           total_points,
           passing_grade,
           status,
           courses(id, name, code),
-          professors(id, profile_id, profiles(full_name, email))
+          profiles!professor_id(id, full_name, email),
+          exam_sessions!exam_session_id(id, name, academic_year, semester, status),
+          exam_centers!exam_center_id(id, name, location, status)
         )
       `)
       .eq('student_id', studentId)
@@ -734,17 +739,17 @@ export const getProfessorExamMonitoringData = async (examId) => {
           professor_id,
           exam_session_id,
           exam_center_id,
-          date,
+          exam_date,
           duration,
-          type,
+          exam_type,
           room,
           total_points,
           passing_grade,
           status,
           courses(id, name, code),
-          professors(id, profile_id, profiles(full_name, email)),
-          exam_sessions(id, name, academic_year, semester, status),
-          exam_centers(id, name, location, status)
+          profiles!professor_id(id, full_name, email),
+          exam_sessions!exam_session_id(id, name, academic_year, semester, status),
+          exam_centers!exam_center_id(id, name, location, status)
         `)
         .eq('id', numericExamId)
         .single(),
@@ -914,9 +919,9 @@ export const getExamGradingData = async (examId) => {
         course_name: getRelation(examData.courses)?.name || 'Cours inconnu',
         course_code: getRelation(examData.courses)?.code || '',
         professor_id: examData.professor_id,
-        date: examData.date,
+        date: examData.exam_date,
         duration: examData.duration,
-        type: examData.type,
+        type: examData.exam_type,
         room: examData.room,
         total_points: examData.total_points,
         passing_grade: examData.passing_grade,
@@ -954,15 +959,17 @@ export const getStudentExamResultDetails = async ({ examId, studentId, profileId
           professor_id,
           exam_session_id,
           exam_center_id,
-          date,
+          exam_date,
           duration,
-          type,
+          exam_type,
           room,
           total_points,
           passing_grade,
           status,
           courses(id, name, code),
-          professors(id, profile_id, profiles(full_name, email))
+          profiles!professor_id(id, full_name, email),
+          exam_sessions!exam_session_id(id, name, academic_year, semester, status),
+          exam_centers!exam_center_id(id, name, location, status)
         `)
         .eq('id', numericExamId)
         .single(),
@@ -1327,9 +1334,9 @@ export const getExamWithDetails = async (examId) => {
         courses(name, code),
         professor_id,
         professor:profiles!professor_id(full_name),
-        date,
+        exam_date,
         duration,
-        type,
+        exam_type,
         room,
         total_points,
         passing_grade,
@@ -1554,7 +1561,7 @@ export const getProfessorExams = async (professorId) => {
   try {
     const { data, error } = await supabase
       .from('exams')
-      .select('id, title, description, course_id, exam_session_id, exam_center_id, professor_id, date, duration, type, total_points, passing_grade, status, room, created_at, updated_at')
+      .select('id, title, description, course_id, department_id, professor_id, exam_session_id, exam_center_id, exam_date, duration, exam_type, room, total_points, passing_grade, status, created_at, updated_at')
       .eq('professor_id', professorId)
       .order('created_at', { ascending: false });
 

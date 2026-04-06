@@ -36,40 +36,33 @@ const getProfessorMapByCourseIds = async (courseIds) => {
     throw assignmentError;
   }
 
-  const professorIds = [...new Set((assignments || []).map((item) => item.professor_id).filter(Boolean))];
-  const professorMap = new Map();
+  // professor_courses.professor_id is UUID referencing profiles.id
+  const profileIds = [...new Set((assignments || []).map((item) => item.professor_id).filter(Boolean))];
+  const profileMap = new Map();
 
-  if (professorIds.length) {
-    const { data: professors, error: professorError } = await supabase
-      .from('professors')
-      .select(`
-        id,
-        profile_id,
-        profiles(
-          id,
-          full_name,
-          avatar_url
-        )
-      `)
-      .in('id', professorIds);
+  if (profileIds.length) {
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', profileIds);
 
-    if (professorError) {
-      throw professorError;
+    if (profileError) {
+      throw profileError;
     }
 
-    (professors || []).forEach((professor) => {
-      professorMap.set(professor.id, professor);
+    (profiles || []).forEach((profile) => {
+      profileMap.set(profile.id, profile);
     });
   }
 
   const courseProfessorMap = new Map();
   (assignments || []).forEach((assignment) => {
     if (!courseProfessorMap.has(assignment.course_id)) {
-      const professor = professorMap.get(assignment.professor_id);
+      const profile = profileMap.get(assignment.professor_id);
       courseProfessorMap.set(assignment.course_id, {
         id: assignment.professor_id,
-        full_name: professor?.profiles?.full_name || '-',
-        avatar_url: professor?.profiles?.avatar_url || null,
+        full_name: profile?.full_name || '-',
+        avatar_url: profile?.avatar_url || null,
         academic_year: assignment.academic_year || null,
         is_principal: Boolean(assignment.is_principal),
       });
@@ -172,10 +165,11 @@ const ensureProfessorCourseAccess = async (courseId, professorProfileId) => {
     throw new Error('Professeur introuvable');
   }
 
+  // professor_courses.professor_id references profiles.id (UUID)
   const { data, error } = await supabase
     .from('professor_courses')
     .select('course_id')
-    .eq('professor_id', professor.id)
+    .eq('professor_id', professorProfileId)
     .eq('course_id', courseId)
     .maybeSingle();
 
@@ -210,6 +204,7 @@ export const getProfessorManagedCourses = async (professorProfileId) => {
       return { data: [], error: null };
     }
 
+    // professor_courses.professor_id references profiles.id (UUID)
     const { data, error } = await supabase
       .from('professor_courses')
       .select(`
@@ -231,7 +226,7 @@ export const getProfessorManagedCourses = async (professorProfileId) => {
           )
         )
       `)
-      .eq('professor_id', professor.id)
+      .eq('professor_id', professorProfileId)
       .order('academic_year', { ascending: false });
 
     if (error) {

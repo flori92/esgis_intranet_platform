@@ -107,10 +107,9 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
         .limit(3),
       supabase
         .from('student_exams')
-        .select('*, exams(id, title, start_time, duration)')
+        .select('*, exams(id, title, exam_date, duration)')
         .eq('student_id', profileId)
         .eq('attempt_status', 'not_started')
-        .gte('exams.start_time', new Date().toISOString())
         .order('created_at', { ascending: true })
         .limit(2)
     ]);

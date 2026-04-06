@@ -76,7 +76,7 @@ export const getSharedQuestions = async (filters = {}) => {
       .from('question_bank')
       .select(`
         *,
-        professeur:professors!professeur_id(
+        professeur:profiles!professeur_id(
           id,
           full_name
         )
