@@ -22,6 +22,7 @@ const PracticeQuizPage = lazy(() => import('../pages/exams/student/PracticeQuizP
 const TranscriptPage = lazy(() => import('../pages/student/TranscriptPage'));
 const ReportCardPage = lazy(() => import('../pages/student/ReportCardPage'));
 const ProfileSettingsPage = lazy(() => import('../pages/student/ProfileSettingsPage'));
+const WeeklySchedulesPage = lazy(() => import('../pages/student/WeeklySchedulesPage'));
 
 /**
  * Routes pour les étudiants
@@ -49,6 +50,7 @@ const StudentRoutes = () => {
         
         {/* Routes pour l'emploi du temps */}
         <Route path="schedule" element={<StudentSchedulePage />} />
+        <Route path="weekly-schedules" element={<WeeklySchedulesPage />} />
         
         {/* Routes pour les notes */}
         <Route path="grades" element={<StudentGradesPage />} />

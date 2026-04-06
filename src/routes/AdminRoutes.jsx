@@ -42,6 +42,9 @@ const StagesPartnersPage = lazy(() => import('../pages/admin/StagesPartnersPage'
 const AnnouncementsPage = lazy(() => import('../pages/admin/AnnouncementsPage'));
 const SystemConfigPage = lazy(() => import('../pages/admin/superadmin/SystemConfigPage'));
 
+// Weekly Schedules
+const WeeklySchedulesPage = lazy(() => import('../pages/admin/WeeklySchedulesPage'));
+
 // CMS Pages
 const CMSAdminPage = lazy(() => import('../pages/admin/CMSAdminPage'));
 const CMSPermissionsPage = lazy(() => import('../pages/admin/CMSPermissionsPage'));
@@ -88,6 +91,7 @@ const AdminRoutes = () => {
 
         {/* Calendrier & Bulletins */}
         <Route path="calendar" element={<CalendarManagerPage />} />
+        <Route path="weekly-schedules" element={<WeeklySchedulesPage />} />
         <Route path="bulk-bulletins" element={<BulkBulletinPage />} />
 
         {/* Paiements, Partenaires, Annonces */}

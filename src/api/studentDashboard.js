@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { getStudentPublishedGrades } from './grades';
 import { getStudentCourseIds, getScheduleSessions } from './schedule';
+import { getCMSBanners, getCMSNews, getCMSEvents, getCMSAnnouncements } from './cms';
 
 const toIsoString = (value) => {
   if (!value) {
@@ -82,24 +83,19 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
     const [
       { courseIds, error: courseIdsError },
       { data: grades, error: gradesError },
-      { data: news, error: newsError },
-      { data: events, error: eventsError },
+      { data: cmsNews, error: cmsNewsError },
+      { data: cmsEvents, error: cmsEventsError },
+      { data: cmsBanners, error: cmsBannersError },
+      { data: cmsAnnouncements, error: cmsAnnouncementsError },
       { data: requests, error: requestsError },
       { data: exams, error: examsError }
     ] = await Promise.all([
       getStudentCourseIds(profileId),
       getStudentPublishedGrades(numericStudentId),
-      supabase
-        .from('news')
-        .select('id, title, description, date, image_url, created_at')
-        .order('date', { ascending: false })
-        .limit(3),
-      supabase
-        .from('events')
-        .select('id, title, description, start_date, end_date, location, type')
-        .gte('start_date', new Date().toISOString())
-        .order('start_date', { ascending: true })
-        .limit(5),
+      getCMSNews(6),
+      getCMSEvents(6),
+      getCMSBanners(),
+      getCMSAnnouncements(5),
       supabase
         .from('validation_queue')
         .select('id, request_type, status, created_at')
@@ -117,8 +113,8 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
 
     if (courseIdsError) throw courseIdsError;
     if (gradesError) throw gradesError;
-    if (newsError) throw newsError;
-    if (eventsError) throw eventsError;
+    if (cmsNewsError) throw cmsNewsError;
+    if (cmsEventsError) throw cmsEventsError;
     if (requestsError) throw requestsError;
     if (examsError) throw examsError;
 
@@ -146,8 +142,28 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
         next_course: nextCourse,
         recent_grades: recentGrades,
         schedule: upcomingSchedule.slice(0, 8),
-        news: (news || []).map(normalizeNewsItem),
-        events: (events || []).map(normalizeEventItem),
+        banners: cmsBanners || [],
+        news: (cmsNews || []).map((item) => ({
+          id: item.id,
+          title: item.title,
+          content: item.excerpt || item.content || '',
+          excerpt: item.excerpt || '',
+          image_url: item.image_url || null,
+          category: item.category || 'general',
+          is_featured: item.is_featured || false,
+          published_at: item.published_at || item.created_at || null
+        })),
+        events: (cmsEvents || []).map((item) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description || '',
+          start_date: item.start_date,
+          end_date: item.end_date || item.start_date,
+          location: item.location || '',
+          category: item.category || 'general',
+          image_url: item.image_url || null
+        })),
+        announcements: cmsAnnouncements || [],
         requests: (requests || []),
         upcoming_exams: (exams || []).map(e => ({
           id: e.exams?.id,

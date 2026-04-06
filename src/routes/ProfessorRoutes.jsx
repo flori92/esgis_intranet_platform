@@ -17,6 +17,7 @@ const GradesManagementPage = lazy(() => import('../pages/professor/grades/Grades
 const GradeCorrectionPage = lazy(() => import('../pages/professor/grades/GradeCorrectionPage'));
 const QuestionBankPage = lazy(() => import('../pages/professor/questions/QuestionBankPage'));
 const AttendancesPage = lazy(() => import('../pages/professor/AttendancesPage'));
+const WeeklySchedulesPage = lazy(() => import('../pages/admin/WeeklySchedulesPage'));
 
 /**
  * Routes pour les professeurs
@@ -56,6 +57,8 @@ const ProfessorRoutes = () => {
         <Route path="attendances" element={<AttendancesPage />} />
         {/* Banque de questions */}
         <Route path="question-bank" element={<QuestionBankPage />} />
+        {/* Emplois du temps PDF */}
+        <Route path="weekly-schedules" element={<WeeklySchedulesPage />} />
       </Routes>
     </Suspense>
   );

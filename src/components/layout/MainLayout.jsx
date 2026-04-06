@@ -44,6 +44,7 @@ import {
   BarChart as BarChartIcon,
   Email as EmailIcon,
   PhotoCamera as PhotoCameraIcon,
+  EventNote as EventNoteIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 // Suppression de l'import de AuthContextType
@@ -172,6 +173,7 @@ const MainLayout = () => {
         { text: 'Rôles Professeurs', icon: <PersonIcon />, path: '/admin/professor-roles' },
         { text: 'Paiements', icon: <GradingIcon />, path: '/admin/payments' },
         { text: 'Calendrier', icon: <CalendarMonthIcon />, path: '/admin/calendar' },
+        { text: 'EDT Hebdomadaire', icon: <EventNoteIcon />, path: '/admin/weekly-schedules' },
         { text: 'Demandes (Guichet)', icon: <AssignmentIcon />, path: '/admin/validation-queue' },
         { text: 'Générateur Documents', icon: <DescriptionIcon />, path: '/admin/document-generator' },
         { text: 'Modèles Documents', icon: <DescriptionIcon />, path: '/admin/document-templates' },
@@ -189,6 +191,7 @@ const MainLayout = () => {
         { text: 'Mes Cours', icon: <BookIcon />, path: '/professor/courses' },
         { text: 'Mes Promotions', icon: <PeopleIcon />, path: '/professor/students' },
         { text: 'Emploi du temps', icon: <EventIcon />, path: '/schedule' },
+        { text: 'EDT Hebdomadaire', icon: <EventNoteIcon />, path: '/professor/weekly-schedules' },
         { text: 'Présences / Appels', icon: <AssignmentIcon />, path: '/professor/attendances' },
         { text: 'Gestion des Notes', icon: <GradingIcon />, path: '/professor/grades' },
         { text: 'Corrections de Notes', icon: <BarChartIcon />, path: '/professor/grades/corrections' },
@@ -207,6 +210,7 @@ const MainLayout = () => {
         { text: 'Mes examens', icon: <AssignmentIcon />, path: '/student/exams' },
         { text: 'Quiz entraînement', icon: <SchoolIcon />, path: '/student/practice' },
         { text: 'Emploi du temps', icon: <CalendarMonthIcon />, path: '/student/schedule' },
+        { text: 'EDT Hebdomadaire', icon: <EventNoteIcon />, path: '/student/weekly-schedules' },
         { text: 'Notes', icon: <GradingIcon />, path: '/student/grades' },
         { text: 'Bibliothèque', icon: <BookIcon />, path: '/student/library' },
         { text: 'Démarches Admin.', icon: <AssignmentIcon />, path: '/student/requests' },
