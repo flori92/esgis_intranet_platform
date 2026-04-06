@@ -202,6 +202,48 @@ class NotificationService {
   }
 
   /**
+   * Génère un template HTML commun pour les emails
+   */
+  _generateEmailHTML(title, content, actionLabel = null, actionUrl = null) {
+    const primaryColor = '#1a56db';
+    const secondaryColor = '#003366';
+    
+    let actionBtn = '';
+    if (actionLabel && actionUrl) {
+      actionBtn = `
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${actionUrl}" style="background-color: ${primaryColor}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">${actionLabel}</a>
+        </div>
+      `;
+    }
+
+    return `
+      <div style="font-family: 'Montserrat', sans-serif, Arial; max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; color: #1f2937;">
+        <div style="background-color: ${secondaryColor}; padding: 25px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">ESGIS Campus</h1>
+        </div>
+        <div style="padding: 30px; background-color: #ffffff;">
+          <h2 style="color: ${secondaryColor}; margin-top: 0; font-size: 20px;">${title}</h2>
+          <div style="line-height: 1.6; font-size: 16px;">
+            ${content}
+          </div>
+          ${actionBtn}
+          <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
+            Si le bouton ne fonctionne pas, copiez ce lien :<br/>
+            <a href="${actionUrl || window.location.origin}" style="color: ${primaryColor}; word-break: break-all;">${actionUrl || window.location.origin}</a>
+          </p>
+        </div>
+        <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+          <p style="font-size: 12px; color: #9ca3af; margin: 0;">
+            © ${new Date().getFullYear()} ESGIS - École Supérieure de Gestion d'Informatique et des Sciences<br/>
+            Ceci est un message automatique, merci de ne pas y répondre.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
    * Envoie un E-mail via OneSignal/Edge Function
    */
   async sendEmail(email, subject, body) {
@@ -235,20 +277,14 @@ class NotificationService {
     
     // Email
     if (email) {
-      const html = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-          <h1 style="color: #1a56db;">Bienvenue sur ESGIS Campus !</h1>
-          <p>Bonjour <strong>${name || email}</strong>,</p>
-          <p>Nous sommes ravis de vous compter parmi nous sur la nouvelle plateforme intranet de l'ESGIS.</p>
-          <p>Vous pouvez maintenant accéder à vos cours, notes et actualités en temps réel.</p>
-          <div style="margin: 30px 0; text-align: center;">
-            <a href="${window.location.origin}/login" style="background-color: #1a56db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Se connecter à l'intranet</a>
-          </div>
-          <p>Si vous avez des questions, n'hésitez pas à contacter le support administratif.</p>
-          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-          <p style="font-size: 12px; color: #666;">Ceci est un message automatique, merci de ne pas y répondre.</p>
-        </div>
-      `;
+      const html = this._generateEmailHTML(
+        "Félicitations !",
+        `<p>Bonjour <strong>${name || email}</strong>,</p>
+         <p>Nous sommes ravis de vous compter parmi nous sur la nouvelle plateforme intranet de l'ESGIS.</p>
+         <p>Vous pouvez maintenant accéder à vos cours, notes et actualités en temps réel.</p>`,
+        "Accéder à mon espace",
+        `${window.location.origin}/login`
+      );
       await this.sendEmail(email, title, html);
     }
 
@@ -263,17 +299,13 @@ class NotificationService {
    */
   async sendPasswordResetLink(email, resetLink) {
     const title = "Réinitialisation de votre mot de passe";
-    const html = `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2>Réinitialisation de mot de passe</h2>
-        <p>Vous avez demandé la réinitialisation de votre mot de passe sur ESGIS Campus.</p>
-        <p>Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe :</p>
-        <div style="margin: 30px 0; text-align: center;">
-          <a href="${resetLink}" style="background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Réinitialiser mon mot de passe</a>
-        </div>
-        <p>Ce lien expirera dans 24 heures. Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail.</p>
-      </div>
-    `;
+    const html = this._generateEmailHTML(
+      "Demande de nouveau mot de passe",
+      `<p>Vous avez demandé la réinitialisation de votre mot de passe sur ESGIS Campus.</p>
+       <p>Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe :</p>`,
+      "Réinitialiser mon mot de passe",
+      resetLink
+    );
     return await this.sendEmail(email, title, html);
   }
 
@@ -282,15 +314,12 @@ class NotificationService {
    */
   async sendEmailVerification(email, verificationLink) {
     const title = "Validez votre adresse email";
-    const html = `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2>Vérification de votre compte</h2>
-        <p>Merci de vous être inscrit sur ESGIS Campus. Veuillez valider votre adresse email pour activer toutes les fonctionnalités de votre compte.</p>
-        <div style="margin: 30px 0; text-align: center;">
-          <a href="${verificationLink}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Valider mon email</a>
-        </div>
-      </div>
-    `;
+    const html = this._generateEmailHTML(
+      "Validation de votre compte",
+      `<p>Merci de vous être inscrit sur ESGIS Campus. Veuillez valider votre adresse email pour activer toutes les fonctionnalités de votre compte.</p>`,
+      "Valider mon email",
+      verificationLink
+    );
     return await this.sendEmail(email, title, html);
   }
 
@@ -298,48 +327,123 @@ class NotificationService {
    * Notification de publication de note
    */
   async sendGradePublished(userId, email, examTitle, grade, totalPoints) {
-    const title = "Nouvelle note publiée";
+    const title = `Note disponible : ${examTitle}`;
     const content = `Votre note pour l'examen "${examTitle}" est disponible : ${grade}/${totalPoints}.`;
     
-    return await this.sendSmart({
-      userId,
-      email,
-      type: 'NOTE_PUBLIEE',
-      titre: title,
-      contenu: content,
-      lien: '/grades'
-    });
+    // In-App
+    await this.sendInApp({ userId, type: 'NOTE_PUBLIEE', titre: title, contenu: content, lien: '/grades' });
+    
+    // Email
+    if (email) {
+      const html = this._generateEmailHTML(
+        "Une nouvelle note a été publiée",
+        `<p>Votre note pour l'examen <strong>${examTitle}</strong> est désormais consultable sur votre espace étudiant.</p>
+         <p style="font-size: 20px; font-weight: bold; color: #1a56db;">Note obtenue : ${grade} / ${totalPoints}</p>`,
+        "Voir mes notes",
+        `${window.location.origin}/grades`
+      );
+      await this.sendEmail(email, `[ESGIS] Note publiée : ${examTitle}`, html);
+    }
+
+    // Push
+    if (userId) {
+      await this.sendPushToUser(userId, title, content);
+    }
   }
 
   /**
    * Notification de nouvel examen planifié
    */
-  async sendNewExamScheduled(userIds, examTitle, date) {
+  async sendNewExamScheduled(userIds, examTitle, date, profileIds = []) {
     const title = "Nouvel examen planifié";
     const content = `L'examen "${examTitle}" a été planifié pour le ${new Date(date).toLocaleDateString()}.`;
     
-    return await this.sendInAppBulk(userIds, {
+    // In-App Bulk
+    await this.sendInAppBulk(userIds, {
       type: 'NOUVEL_EXAMEN',
       titre: title,
       contenu: content,
       lien: '/student/exams'
     });
+
+    // Pour les emails et pushs individuels, on itère si nécessaire ou on laisse faire l'API OneSignal segmentée
+    // Ici on suppose que profileIds contient les IDs OneSignal
+    for (const pid of profileIds) {
+      await this.sendPushToUser(pid, title, content);
+    }
   }
 
   /**
    * Notification de nouveau message
    */
-  async sendMessageNotification(recipientId, senderName, subject) {
-    const title = "Nouveau message";
+  async sendMessageNotification(recipientId, recipientEmail, senderName, subject) {
+    const title = "Nouveau message reçu";
     const content = `${senderName} vous a envoyé un message : ${subject}`;
     
-    return await this.sendSmart({
-      userId: recipientId,
-      type: 'NOUVEAU_MESSAGE',
-      titre: title,
-      contenu: content,
-      lien: '/messages'
-    });
+    // In-App
+    await this.sendInApp({ userId: recipientId, type: 'NOUVEAU_MESSAGE', titre: title, contenu: content, lien: '/messages' });
+    
+    // Email
+    if (recipientEmail) {
+      const html = this._generateEmailHTML(
+        "Vous avez reçu un nouveau message",
+        `<p><strong>${senderName}</strong> vous a envoyé un message sur la messagerie interne.</p>
+         <p><strong>Sujet :</strong> ${subject}</p>`,
+        "Lire le message",
+        `${window.location.origin}/messages`
+      );
+      await this.sendEmail(recipientEmail, `[ESGIS] Nouveau message : ${subject}`, html);
+    }
+
+    // Push
+    if (recipientId) {
+      await this.sendPushToUser(recipientId, title, content);
+    }
+  }
+
+  /**
+   * Notification de rappel de paiement
+   */
+  async sendPaymentReminder(userId, email, amount, dueDate) {
+    const title = "Rappel de paiement";
+    const content = `Un paiement de ${amount} est attendu avant le ${new Date(dueDate).toLocaleDateString()}.`;
+    
+    await this.sendInApp({ userId, type: 'PAIEMENT', titre: title, contenu: content });
+    
+    if (email) {
+      const html = this._generateEmailHTML(
+        "Rappel d'échéance de paiement",
+        `<p>Ceci est un rappel concernant vos frais de scolarité.</p>
+         <p style="font-size: 18px; color: #ef4444; font-weight: bold;">Montant attendu : ${amount}</p>
+         <p>Date d'échéance : ${new Date(dueDate).toLocaleDateString()}</p>
+         <p>Merci de régulariser votre situation auprès du service comptabilité.</p>`,
+        "Consulter mon compte",
+        `${window.location.origin}/profile`
+      );
+      await this.sendEmail(email, "[ESGIS] Rappel de paiement", html);
+    }
+  }
+
+  /**
+   * Notification de compte suspendu
+   */
+  async sendAccountSuspension(userId, email, reason) {
+    const title = "Votre compte a été suspendu";
+    const content = `Motif : ${reason || 'Inconnu'}. Veuillez contacter l'administration.`;
+    
+    await this.sendInApp({ userId, type: 'COMPTE_SUSPENDU', titre: title, contenu: content });
+    
+    if (email) {
+      const html = this._generateEmailHTML(
+        "Notification de suspension de compte",
+        `<p>Nous vous informons que votre accès à l'intranet ESGIS Campus a été suspendu.</p>
+         <p><strong>Motif de la suspension :</strong> ${reason || 'Non spécifié'}</p>
+         <p>Veuillez contacter le secrétariat administratif de votre campus pour plus d'informations.</p>`,
+        "Contacter le support",
+        "mailto:support@esgis.org"
+      );
+      await this.sendEmail(email, "[ESGIS] Suspension de votre compte", html);
+    }
   }
 
   /**

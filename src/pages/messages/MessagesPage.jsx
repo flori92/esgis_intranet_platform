@@ -252,8 +252,10 @@ const MessagesPage = () => {
 
       // Notifier le destinataire
       try {
+        const recipient = contacts.find(c => c.id === draft.recipient_id);
         await notificationService.sendMessageNotification(
           draft.recipient_id,
+          recipient?.email || null,
           authState.profile?.full_name || 'Un utilisateur',
           draft.subject.trim()
         );
