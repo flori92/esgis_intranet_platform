@@ -108,7 +108,7 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
         .limit(3),
       supabase
         .from('student_exams')
-        .select('*, exams(id, title, date, duration)')
+        .select('*, exams(*)')
         .eq('student_id', numericStudentId)
         .eq('status', 'pending')
         .order('created_at', { ascending: true })
@@ -152,7 +152,7 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
         upcoming_exams: (exams || []).map(e => ({
           id: e.exams?.id,
           title: e.exams?.title,
-          start_time: e.exams?.start_time,
+          start_time: e.exams?.date || e.exams?.exam_date,
           duration: e.exams?.duration
         }))
       },

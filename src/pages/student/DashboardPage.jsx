@@ -100,13 +100,21 @@ const DashboardPage = () => {
       setError(null);
 
       try {
-        if (!authState.isAuthenticated || !authState.student?.id || !authState.user?.id) {
-          throw new Error('Accès non autorisé ou profil incomplet');
+        const studentId = authState.student?.id;
+        const profileId = authState.user?.id;
+        const numericStudentId = Number(studentId);
+
+        if (!authState.isAuthenticated || !profileId) {
+          throw new Error('Accès non autorisé');
+        }
+
+        if (!studentId || isNaN(numericStudentId)) {
+          throw new Error('Votre profil étudiant est incomplet. Veuillez contacter l\'administration.');
         }
 
         const { data, error: dashboardError } = await getStudentDashboardData({
-          profileId: authState.user.id,
-          studentId: authState.student.id
+          profileId: profileId,
+          studentId: numericStudentId
         });
 
         if (dashboardError) {
@@ -206,7 +214,7 @@ const DashboardPage = () => {
                   }
                 >
                   <Typography variant="body2" fontWeight="bold">Examen imminent : {exam.title}</Typography>
-                  <Typography variant="caption">Début à {formatTime(exam.start_time)}</Typography>
+                  <Typography variant="caption">Début à {formatTime(exam.start_time || exam.exam_date || exam.date)}</Typography>
                 </Alert>
               </Grid>
             ))}
