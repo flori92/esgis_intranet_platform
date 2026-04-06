@@ -16,8 +16,26 @@ import {
   ListItemText,
   Typography,
   Paper,
-  alpha
+  alpha,
+  keyframes
 } from '@mui/material';
+
+// Animations
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const pulse = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(204, 0, 0, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(204, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(204, 0, 0, 0); }
+`;
+
+const shimmer = keyframes`
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+`;
 import {
   CalendarToday as CalendarTodayIcon,
   Event as EventIcon,
@@ -61,23 +79,26 @@ const NewsHero = ({ news }) => {
 
   return (
     <Paper
+      elevation={4}
       sx={{
         position: 'relative',
         backgroundColor: 'grey.800',
         color: '#fff',
-        mb: 4,
+        mb: 6,
         backgroundSize: 'cover',
         backgroundRepeat: 'no-repeat',
         backgroundPosition: 'center',
         backgroundImage: `url(${hero.image_url || 'https://images.unsplash.com/photo-1523050853063-bd8012fbb20a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80'})`,
-        borderRadius: 4,
+        borderRadius: 6,
         overflow: 'hidden',
-        minHeight: { xs: 300, md: 400 },
+        minHeight: { xs: 350, md: 450 },
         display: 'flex',
         alignItems: 'flex-end',
-        transition: 'transform 0.3s ease-in-out',
+        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
         '&:hover': {
-          transform: 'scale(1.01)'
+          transform: 'translateY(-8px)',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+          '& .hero-content': { transform: 'translateY(-10px)' }
         }
       }}
     >
@@ -85,42 +106,67 @@ const NewsHero = ({ news }) => {
       <Box
         sx={{
           position: 'absolute',
-          top: 0,
-          bottom: 0,
-          right: 0,
-          left: 0,
-          backgroundColor: 'rgba(0,0,0,.45)',
-          background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)'
+          top: 0, bottom: 0, right: 0, left: 0,
+          background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.1) 100%)'
         }}
       />
       <Grid container>
-        <Grid item md={8}>
+        <Grid item md={9} lg={7}>
           <Box
+            className="hero-content"
             sx={{
               position: 'relative',
-              p: { xs: 3, md: 6 },
-              pr: { md: 0 },
+              p: { xs: 4, md: 8 },
+              transition: 'transform 0.4s ease'
             }}
           >
-            <Chip 
-              label="À LA UNE" 
-              color="error" 
-              size="small" 
-              sx={{ mb: 2, fontWeight: 'bold', borderRadius: 1 }} 
-            />
-            <Typography component="h1" variant="h3" color="inherit" gutterBottom fontWeight="800" sx={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+            <Stack direction="row" spacing={1} mb={2} alignItems="center">
+              <Chip 
+                label="ACTUALITÉ" 
+                color="primary" 
+                size="small" 
+                sx={{ fontWeight: '800', borderRadius: 1.5, px: 1 }} 
+              />
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: '600' }}>
+                Publié le {formatDate(hero.published_at)}
+              </Typography>
+            </Stack>
+            <Typography component="h1" variant="h2" color="inherit" gutterBottom fontWeight="900" sx={{ 
+              lineHeight: 1.1, 
+              mb: 3,
+              fontSize: { xs: '2.5rem', md: '3.5rem' },
+              textShadow: '0 4px 12px rgba(0,0,0,0.3)' 
+            }}>
               {hero.title}
             </Typography>
-            <Typography variant="h6" color="inherit" paragraph sx={{ opacity: 0.9, mb: 3 }}>
-              {hero.content?.length > 150 ? hero.content.substring(0, 150) + '...' : hero.content}
+            <Typography variant="h6" color="inherit" paragraph sx={{ 
+              opacity: 0.9, 
+              mb: 4, 
+              fontWeight: '400',
+              lineHeight: 1.6,
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden'
+            }}>
+              {hero.content}
             </Typography>
             <Button 
               variant="contained" 
               color="primary" 
+              size="large"
               endIcon={<ArrowForwardIcon />}
-              sx={{ borderRadius: 2, px: 4, py: 1.5, fontWeight: 'bold' }}
+              sx={{ 
+                borderRadius: 3, 
+                px: 5, 
+                py: 2, 
+                fontWeight: '800', 
+                fontSize: '1rem',
+                boxShadow: '0 8px 20px rgba(26, 86, 219, 0.4)',
+                '&:hover': { backgroundColor: '#1e429f' }
+              }}
             >
-              Lire la suite
+              Lire l'article
             </Button>
           </Box>
         </Grid>
@@ -210,7 +256,12 @@ const DashboardPage = () => {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+    <Box sx={{ 
+      p: { xs: 2, md: 4 }, 
+      backgroundColor: '#f8fafc', 
+      minHeight: '100vh',
+      animation: `${fadeIn} 0.8s ease-out`
+    }}>
       {error && (
         <Alert severity="error" variant="filled" sx={{ mb: 4, borderRadius: 2, boxShadow: 2 }}>
           {error}
@@ -219,14 +270,14 @@ const DashboardPage = () => {
 
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} mb={4} spacing={2}>
         <Box>
-          <Typography variant="h3" component="h1" fontWeight="800" color="text.primary" gutterBottom>
+          <Typography variant="h3" component="h1" fontWeight="800" color="text.primary" gutterBottom sx={{ letterSpacing: '-0.5px' }}>
             Bonjour, {authState.profile?.full_name?.split(' ')[0] || 'Étudiant'} 👋
           </Typography>
           <Typography variant="h6" color="text.secondary" fontWeight="500">
             Prêt pour vos cours d'aujourd'hui ?
           </Typography>
         </Box>
-        <Paper elevation={0} sx={{ p: 2, borderRadius: 3, backgroundColor: 'white', border: '1px solid', borderColor: 'divider' }}>
+        <Paper elevation={0} sx={{ p: 2, borderRadius: 3, backgroundColor: 'white', border: '1px solid', borderColor: 'divider', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
           <Stack direction="row" spacing={2} alignItems="center">
             <CalendarTodayIcon color="primary" />
             <Typography variant="subtitle1" fontWeight="bold">
@@ -251,9 +302,15 @@ const DashboardPage = () => {
                 <Alert 
                   severity="warning" 
                   variant="outlined"
-                  sx={{ borderRadius: 3, borderLeft: '6px solid orange', backgroundColor: alpha('#ffa726', 0.05) }}
+                  sx={{ 
+                    borderRadius: 3, 
+                    borderLeft: '6px solid #f59e0b', 
+                    backgroundColor: alpha('#f59e0b', 0.05),
+                    animation: `${pulse} 2s infinite`,
+                    '& .MuiAlert-icon': { fontSize: '2rem' }
+                  }}
                   action={
-                    <Button variant="contained" color="warning" size="small" component={Link} to={`/student/exams`} sx={{ borderRadius: 2 }}>
+                    <Button variant="contained" color="warning" size="small" component={Link} to={`/student/exams`} sx={{ borderRadius: 2, fontWeight: 'bold' }}>
                       Accéder à l'examen
                     </Button>
                   }
@@ -480,7 +537,7 @@ const DashboardPage = () => {
 
         {/* Section News Grid */}
         <Grid item xs={12}>
-          <Typography variant="h4" component="h2" gutterBottom sx={{ mt: 2, mb: 3, fontWeight: '800' }}>
+          <Typography variant="h4" component="h2" gutterBottom sx={{ mt: 2, mb: 4, fontWeight: '900', letterSpacing: '-0.5px' }}>
             Dernières Actualités
           </Typography>
           <Grid container spacing={4}>
@@ -491,41 +548,68 @@ const DashboardPage = () => {
                     height: '100%', 
                     display: 'flex', 
                     flexDirection: 'column', 
-                    borderRadius: 4,
+                    borderRadius: 5,
+                    overflow: 'hidden',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                    transition: 'transform 0.3s, box-shadow 0.3s',
-                    '&:hover': { transform: 'scale(1.03)', boxShadow: '0 12px 40px rgba(0,0,0,0.12)' }
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    '&:hover': { 
+                      transform: 'translateY(-10px)', 
+                      boxShadow: '0 20px 40px rgba(0,0,0,0.12)',
+                      '& .MuiCardMedia-root': { transform: 'scale(1.1)' }
+                    }
                   }}>
-                    {item.image_url && (
+                    <Box sx={{ overflow: 'hidden', height: 220 }}>
                       <CardMedia 
                         component="img" 
-                        height="200" 
-                        image={item.image_url} 
+                        height="220" 
+                        image={item.image_url || 'https://images.unsplash.com/photo-1541339907198-e08756cdfb3f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'} 
                         alt={item.title} 
-                        sx={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
+                        sx={{ transition: 'transform 0.5s ease' }}
                       />
-                    )}
-                    <CardContent sx={{ flexGrow: 1 }}>
-                      <Typography variant="h6" gutterBottom fontWeight="bold" color="primary.main">
+                    </Box>
+                    <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                      <Typography variant="caption" color="primary" fontWeight="bold" sx={{ textTransform: 'uppercase', mb: 1, display: 'block' }}>
+                        Campus Life
+                      </Typography>
+                      <Typography variant="h6" gutterBottom fontWeight="bold" sx={{ lineHeight: 1.3, mb: 2 }}>
                         {item.title}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
-                        <AccessTimeIcon sx={{ fontSize: 14 }} /> {formatDate(item.published_at)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ lineClamp: 3, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ 
+                        lineClamp: 3, 
+                        display: '-webkit-box', 
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: 'vertical', 
+                        overflow: 'hidden',
+                        mb: 2,
+                        lineHeight: 1.6
+                      }}>
                         {item.content}
                       </Typography>
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 'auto' }}>
+                        <AccessTimeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                        <Typography variant="caption" color="text.secondary" fontWeight="500">
+                          {formatDate(item.published_at)}
+                        </Typography>
+                      </Stack>
                     </CardContent>
-                    <Box sx={{ p: 2, pt: 0 }}>
-                      <Button size="small" endIcon={<ArrowForwardIcon />}>En savoir plus</Button>
+                    <Box sx={{ p: 3, pt: 0 }}>
+                      <Button 
+                        variant="outlined" 
+                        fullWidth 
+                        endIcon={<ArrowForwardIcon />}
+                        sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                      >
+                        Lire plus
+                      </Button>
                     </Box>
                   </Card>
                 </Grid>
               ))
             ) : (
               <Grid item xs={12}>
-                <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 4, backgroundColor: alpha('#003366', 0.02), border: '1px dashed #cbd5e1' }}>
-                  <Typography color="text.secondary">Aucune autre actualité pour le moment.</Typography>
+                <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 5, backgroundColor: alpha('#003366', 0.02), border: '2px dashed #e2e8f0' }}>
+                  <Typography variant="h6" color="text.secondary">Aucune autre actualité pour le moment.</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Revenez plus tard pour les nouveautés du campus !</Typography>
                 </Paper>
               </Grid>
             )}
