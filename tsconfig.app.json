@@ -29,7 +29,8 @@
 
     /* Types */
     "typeRoots": ["./node_modules/@types", "./src/types"],
-    "types": []
+    "types": [],
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx", "node_modules"]
