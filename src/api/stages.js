@@ -44,7 +44,7 @@ export const getStageOffers = async (filters = {}) => {
       .from('stage_offres')
       .select(`
         *,
-        entreprises:stage_entreprises!entreprise_id(*),
+        entreprises:entreprises!entreprise_id(*),
         professors:professors!professeur_id(id, profiles(full_name))
       `)
       .order('created_at', { ascending: false });

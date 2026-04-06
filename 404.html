@@ -7,16 +7,20 @@
   <script type="text/javascript">
     // Gestion des routes pour une SPA hébergée sur GitHub Pages
     (function() {
-      // Récupération de l'URL actuelle
-      var pathSegments = window.location.pathname.split('/');
-      var repoName = 'intranet-esgis';
-      var hasRepoName = pathSegments.indexOf(repoName) !== -1;
+      // Base path (nom du dépôt)
+      var basePath = '/esgis_intranet_platform/';
       
-      // Redirection vers l'index avec les paramètres de route
-      var redirectUrl = window.location.protocol + '//' + window.location.hostname + 
-        (hasRepoName ? '/' + repoName : '') + '/index.html' + 
-        window.location.search + window.location.hash;
+      // Extraire le chemin relatif au dépôt
+      var path = window.location.pathname;
+      var pathWithoutBase = path.replace(basePath, '/');
       
+      // Construire l'URL de redirection
+      var redirectUrl = window.location.origin + basePath + '?' + 
+                        pathWithoutBase + 
+                        window.location.search + 
+                        window.location.hash;
+      
+      // Rediriger vers index.html avec les informations de route
       window.location.replace(redirectUrl);
     })();
   </script>

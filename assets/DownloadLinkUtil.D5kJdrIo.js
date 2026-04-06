@@ -1,0 +1,1 @@
+function d({url:o,filename:t,cleanupDelay:n=1e3}){if(!o||!t)throw new Error("URL et nom de fichier requis pour le téléchargement");const e=document.createElement("a");e.href=o,e.download=t,e.style.display="none",document.body.appendChild(e),e.click(),setTimeout(()=>{document.body.removeChild(e)},n)}export{d as t};

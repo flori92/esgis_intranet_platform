@@ -127,10 +127,11 @@ export const getCoursesForDocuments = async ({
   isStudent = false,
   isProfessor = false,
   studentId = null,
-  professorId = null
+  professorId = null,
+  profileId = null
 }) => {
   try {
-    if (isStudent && !studentId) {
+    if (isStudent && !studentId && !profileId) {
       return { courses: [], error: null };
     }
 
@@ -151,7 +152,7 @@ export const getCoursesForDocuments = async ({
       const { data, error } = await supabase
         .from('student_courses')
         .select('course_id, status, courses(id, name, code)')
-        .eq('student_id', studentId)
+        .eq('student_id', profileId || studentId)
         .in('status', ['enrolled', 'completed']);
 
       if (error) {

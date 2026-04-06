@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test de déploiement ESGIS</title>
+  <base href="/intranet-esgis/">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 { color: #1976d2; }
+    .card {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .success { color: #4caf50; }
+    .error { color: #f44336; }
+  </style>
+</head>
+<body>
+  <h1>Plateforme Intranet ESGIS</h1>
+  
+  <div class="card">
+    <h2>Test de déploiement GitHub Pages</h2>
+    <p>Si vous voyez cette page, le déploiement de base fonctionne correctement.</p>
+    <p>Statut: <span class="success">✓ Fonctionne</span></p>
+  </div>
+  
+  <div class="card">
+    <h2>Diagnostic</h2>
+    <p>Cette page de test n'utilise pas les scripts React, ce qui permet de vérifier si le problème vient du déploiement GitHub Pages ou de la configuration React.</p>
+    <div id="path-info"></div>
+  </div>
+
+  <div class="card">
+    <h2>Chemins des ressources</h2>
+    <ul>
+      <li>URL base: <code id="base-url"></code></li>
+      <li>Chemin relatif: <code id="relative-path"></code></li>
+    </ul>
+  </div>
+
+  <script>
+    // Afficher des informations sur les chemins
+    document.getElementById('base-url').textContent = window.location.origin + '/intranet-esgis';
+    document.getElementById('relative-path').textContent = window.location.pathname;
+    
+    // Vérifier si les chemins sont corrects
+    const pathInfo = document.getElementById('path-info');
+    if (window.location.pathname.startsWith('/intranet-esgis/')) {
+      pathInfo.innerHTML = '<p class="success">✓ Le chemin de base est correct</p>';
+    } else {
+      pathInfo.innerHTML = '<p class="error">✗ Le chemin de base est incorrect: ' + window.location.pathname + '</p>';
+    }
+  </script>
+</body>
+</html>

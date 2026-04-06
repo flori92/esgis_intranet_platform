@@ -1,0 +1,1 @@
+const e=()=>{if(window.location.hostname.includes("github.io")){const s=window.location.pathname.split("/");if(s.length>1)return`/${s[1]}`}return""},i=t=>{const s=e();if(t.startsWith(s))return t;const n=t.startsWith("/")?t.substring(1):t;return`${s}/${n}`},o=()=>i("images/logo-esgis-brand.png");export{o as L,i as g};

@@ -52,8 +52,8 @@ export const getMessages = async (profileId, direction = 'received') => {
         sender_id,
         recipient_id,
         subject,
-        content,
-        read,
+        content:body,
+        read:is_read,
         created_at,
         sender:profiles!sender_id(id, full_name, email, avatar_url, role),
         recipient:profiles!recipient_id(id, full_name, email, avatar_url, role)
@@ -86,7 +86,7 @@ export const markMessageAsRead = async (messageId) => {
   try {
     const { error } = await supabase
       .from('messages')
-      .update({ read: true })
+      .update({ is_read: true })
       .eq('id', messageId);
 
     return { error: error || null };
@@ -113,8 +113,8 @@ export const sendMessage = async ({ sender_id, recipient_id, subject, content })
         sender_id,
         recipient_id,
         subject,
-        content,
-        read: false
+        body: content,
+        is_read: false
       });
 
     return { error: error || null };

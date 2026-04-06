@@ -264,6 +264,7 @@ const DocumentsPage = () => {
         isStudent: authState.isStudent,
         isProfessor: authState.isProfessor,
         studentId: currentStudentId,
+        profileId: currentProfileId,
         professorId: currentProfessorId,
         canViewOfficialDocuments
       });
