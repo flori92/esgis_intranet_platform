@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Container, Grid, CircularProgress, Alert, Typography } from '@mui/material';
 import styled from 'styled-components';
 
@@ -59,7 +59,7 @@ export const CMSDashboard = () => {
   /**
    * Load all CMS data
    */
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [bannersData, announcementsData, eventsData, newsData] = await Promise.all([
@@ -80,11 +80,11 @@ export const CMSDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dismissedAnnouncements]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleDismissAnnouncement = (id) => {
     const newDismissed = [...dismissedAnnouncements, id];
