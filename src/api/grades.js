@@ -438,6 +438,11 @@ export const getStudentGradesForCourse = async (studentId, courseId) => {
  */
 export const getStudentPublishedGrades = async (studentId) => {
   try {
+    const numericId = Number(studentId);
+    if (isNaN(numericId)) {
+      return { data: [], error: null };
+    }
+
     const { data, error } = await supabase
       .from('grades')
       .select(`
@@ -474,7 +479,7 @@ export const getStudentPublishedGrades = async (studentId) => {
           semester
         )
       `)
-      .eq('student_id', Number(studentId))
+      .eq('student_id', numericId)
       .eq('is_published', true)
       .order('evaluation_date', { ascending: false })
       .order('created_at', { ascending: false });

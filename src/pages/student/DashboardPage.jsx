@@ -83,10 +83,14 @@ const DashboardPage = () => {
   });
 
   const stats = useMemo(() => {
+    const requests = dashboardData?.requests || [];
+    const exams = dashboardData?.upcoming_exams || [];
+    const news = dashboardData?.news || [];
+
     return {
-      pendingRequests: dashboardData.requests.filter(r => r.status !== 'ready' && r.status !== 'rejected').length,
-      upcomingExams: dashboardData.upcoming_exams.length,
-      recentNews: dashboardData.news.length
+      pendingRequests: requests.filter(r => r.status !== 'ready' && r.status !== 'rejected').length,
+      upcomingExams: exams.length,
+      recentNews: news.length
     };
   }, [dashboardData]);
 
@@ -97,7 +101,7 @@ const DashboardPage = () => {
 
       try {
         if (!authState.isAuthenticated || !authState.student?.id || !authState.user?.id) {
-          throw new Error('Accès non autorisé');
+          throw new Error('Accès non autorisé ou profil incomplet');
         }
 
         const { data, error: dashboardError } = await getStudentDashboardData({
@@ -115,7 +119,9 @@ const DashboardPage = () => {
             recent_grades: [],
             schedule: [],
             news: [],
-            events: []
+            events: [],
+            requests: [],
+            upcoming_exams: []
           }
         );
       } catch (loadError) {
@@ -126,7 +132,9 @@ const DashboardPage = () => {
           recent_grades: [],
           schedule: [],
           news: [],
-          events: []
+          events: [],
+          requests: [],
+          upcoming_exams: []
         });
       } finally {
         setLoading(false);

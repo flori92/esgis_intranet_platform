@@ -74,8 +74,9 @@ const normalizeEventItem = (item) => ({
 
 export const getStudentDashboardData = async ({ profileId, studentId }) => {
   try {
-    if (!profileId || !studentId) {
-      return { data: null, error: new Error('Étudiant non identifié') };
+    const numericStudentId = Number(studentId);
+    if (!profileId || isNaN(numericStudentId)) {
+      return { data: null, error: new Error('Étudiant non identifié ou ID invalide') };
     }
 
     const [
@@ -87,7 +88,7 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
       { data: exams, error: examsError }
     ] = await Promise.all([
       getStudentCourseIds(profileId),
-      getStudentPublishedGrades(studentId),
+      getStudentPublishedGrades(numericStudentId),
       supabase
         .from('news')
         .select('id, title, description, date, image_url, created_at')
@@ -107,9 +108,9 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
         .limit(3),
       supabase
         .from('student_exams')
-        .select('*, exams(id, title, exam_date, duration)')
-        .eq('student_id', profileId)
-        .eq('attempt_status', 'not_started')
+        .select('*, exams(id, title, date, duration)')
+        .eq('student_id', numericStudentId)
+        .eq('status', 'pending')
         .order('created_at', { ascending: true })
         .limit(2)
     ]);

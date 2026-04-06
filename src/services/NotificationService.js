@@ -7,7 +7,6 @@
  * - SMS (événements critiques uniquement, via passerelle externe)
  * - Bandeau in-app (pastille rouge sur icône)
  */
-import OneSignal from 'react-onesignal';
 import {
   createNotification,
   createNotificationsBulk,
@@ -54,6 +53,7 @@ class NotificationService {
     if (this.initialized) return;
     
     try {
+      const OneSignal = (await import('react-onesignal')).default;
       await OneSignal.init({
         appId: ONESIGNAL_APP_ID,
         allowLocalhostAsSecureOrigin: true,
@@ -67,6 +67,7 @@ class NotificationService {
         }
       });
       this.initialized = true;
+      this.oneSignalRef = OneSignal;
       console.log('OneSignal initialisé avec succès');
     } catch (error) {
       console.error('Erreur initialisation OneSignal:', error);
@@ -77,17 +78,19 @@ class NotificationService {
    * Associe l'utilisateur courant à OneSignal
    */
   async loginUser(profile) {
-    if (!this.initialized) await this.init();
-    
     try {
-      if (profile?.id) {
+      if (!this.initialized) await this.init();
+      const OneSignal = this.oneSignalRef;
+      
+      if (OneSignal && profile?.id) {
         await OneSignal.login(profile.id);
-      }
-      if (profile?.email && OneSignal.User) {
-        await OneSignal.User.addEmail(profile.email);
-      }
-      if (profile?.role && OneSignal.User) {
-        await OneSignal.User.addTag('role', profile.role);
+        
+        if (profile?.email && OneSignal.User) {
+          await OneSignal.User.addEmail(profile.email);
+        }
+        if (profile?.role && OneSignal.User) {
+          await OneSignal.User.addTag('role', profile.role);
+        }
       }
     } catch (error) {
       console.error('Erreur login OneSignal:', error);
@@ -96,8 +99,8 @@ class NotificationService {
 
   async logoutUser() {
     try {
-      if (this.initialized) {
-        await OneSignal.logout();
+      if (this.initialized && this.oneSignalRef) {
+        await this.oneSignalRef.logout();
       }
     } catch (error) {
       console.error('Erreur logout OneSignal:', error);
