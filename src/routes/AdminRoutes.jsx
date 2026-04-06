@@ -42,6 +42,10 @@ const StagesPartnersPage = lazy(() => import('../pages/admin/StagesPartnersPage'
 const AnnouncementsPage = lazy(() => import('../pages/admin/AnnouncementsPage'));
 const SystemConfigPage = lazy(() => import('../pages/admin/superadmin/SystemConfigPage'));
 
+// CMS Pages
+const CMSAdminPage = lazy(() => import('../pages/admin/CMSAdminPage'));
+const CMSPermissionsPage = lazy(() => import('../pages/admin/CMSPermissionsPage'));
+
 const AdminRoutes = () => {
   const { authState } = useAuth();
 
@@ -95,6 +99,10 @@ const AdminRoutes = () => {
         <Route path="roles" element={<RolesPermissionsPage />} />
         <Route path="audit-log" element={<AuditLogPage />} />
         <Route path="system-config" element={<SystemConfigPage />} />
+
+        {/* CMS Routes */}
+        <Route path="cms" element={<CMSAdminPage />} />
+        <Route path="cms-permissions" element={<CMSPermissionsPage />} />
 
         {/* Default Route */}
         <Route path="*" element={<AdminDashboardPage />} />

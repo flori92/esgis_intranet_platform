@@ -40,15 +40,6 @@ DROP POLICY IF EXISTS generated_documents_select_policy ON generated_documents;
 DROP POLICY IF EXISTS generated_documents_insert_policy ON generated_documents;
 DROP POLICY IF EXISTS generated_documents_update_delete_policy ON generated_documents;
 
--- Trigger pour mettre à jour le champ updated_at
-CREATE TRIGGER update_document_templates_modtime
-BEFORE UPDATE ON document_templates
-FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-CREATE TRIGGER update_generated_documents_modtime
-BEFORE UPDATE ON generated_documents
-FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
 -- Politique pour les modèles de documents: visibles par tous, modifiables par les administrateurs
 CREATE POLICY document_templates_select_policy ON document_templates
 FOR SELECT USING (true);
