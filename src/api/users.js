@@ -146,7 +146,7 @@ const restorePreviousSession = async (session) => {
   });
 };
 
-const ensureStudentRecord = async (profileId, userData = {}) => {
+export const ensureStudentRecord = async (profileId, userData = {}) => {
   try {
     const { data: existing, error: existingError } = await supabase
       .from('students')
@@ -218,7 +218,7 @@ const ensureStudentRecord = async (profileId, userData = {}) => {
   }
 };
 
-const ensureProfessorRecord = async (profileId, userData = {}) => {
+export const ensureProfessorRecord = async (profileId, userData = {}) => {
   try {
     const { data: existing, error: existingError } = await supabase
       .from('professors')
