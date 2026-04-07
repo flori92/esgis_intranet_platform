@@ -1930,6 +1930,22 @@ export const deleteDepartmentAdmin = async (id) => {
   }
 };
 
+/** Recupere la liste des departements */
+export const getDepartmentsList = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('departments')
+      .select('*')
+      .order('name');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (err) {
+    console.error('getDepartmentsList:', err);
+    return { data: [], error: err };
+  }
+};
+
 /**
  * Récupère toutes les promotions
  * @returns {Promise<Object>}
