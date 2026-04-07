@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { getProfessorCourses } from './grades';
 import { getScheduleSessions } from './schedule';
+import { getCMSBanners, getCMSNews, getCMSEvents } from './cms';
 
 const normalizeProfessorEntityId = async ({ profileId, professorId }) => {
   const numericProfessorId = Number(professorId);
@@ -100,17 +101,8 @@ export const getProfessorDashboardData = async ({ profileId, professorId }) => {
     ] = await Promise.all([
       getProfessorCourses(profileId),
       normalizeProfessorEntityId({ profileId, professorId }),
-      supabase
-        .from('news')
-        .select('id, title, description, date, created_at')
-        .order('date', { ascending: false })
-        .limit(5),
-      supabase
-        .from('events')
-        .select('id, title, description, start_date, end_date, location, created_at')
-        .gte('start_date', new Date().toISOString())
-        .order('start_date', { ascending: true })
-        .limit(10)
+      getCMSNews(5),
+      getCMSEvents(10)
     ]);
 
     if (coursesError) throw coursesError;
