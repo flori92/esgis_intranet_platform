@@ -256,61 +256,6 @@ const HeroBanner = ({ banners }) => {
 };
 
 /* ════════════════════════════════════════════════════════════════════
-   Announcements — slim, professional notification bars
-   ════════════════════════════════════════════════════════════════════ */
-const AnnouncementsBanner = ({ announcements }) => {
-  if (!announcements?.length) return null;
-
-  const priorityConfig = {
-    urgent: { color: '#d32f2f', label: 'Urgent', icon: '🔴' },
-    high:   { color: '#e65100', label: 'Important', icon: '🟠' },
-    normal: { color: NAVY, label: 'Info', icon: '🔵' },
-    low:    { color: '#2e7d32', label: 'Info', icon: '🟢' }
-  };
-
-  return (
-    <Stack spacing={1.5} sx={{ mb: 4 }}>
-      {announcements.map((a) => {
-        const cfg = priorityConfig[a.priority] || priorityConfig.normal;
-        return (
-          <Paper
-            key={a.id} elevation={0}
-            sx={{
-              px: 3, py: 2, borderRadius: CARD_RADIUS,
-              borderLeft: `4px solid ${cfg.color}`,
-              bgcolor: alpha(cfg.color, 0.04),
-              display: 'flex', alignItems: 'flex-start', gap: 2,
-              transition: 'all 0.2s ease',
-              '&:hover': { bgcolor: alpha(cfg.color, 0.08), boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }
-            }}
-          >
-            <CampaignIcon sx={{ color: cfg.color, fontSize: 24, mt: 0.3, flexShrink: 0 }} />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.3 }}>
-                <Typography variant="subtitle2" fontWeight="bold" color={cfg.color} noWrap>
-                  {a.title}
-                </Typography>
-                <Chip
-                  label={cfg.label} size="small"
-                  sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: alpha(cfg.color, 0.12), color: cfg.color }}
-                />
-              </Stack>
-              <Typography variant="body2" color="text.secondary" sx={{
-                display: '-webkit-box', WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.5,
-                whiteSpace: 'pre-line'
-              }}>
-                {(a.content || '').replace(/\\n/g, '\n')}
-              </Typography>
-            </Box>
-          </Paper>
-        );
-      })}
-    </Stack>
-  );
-};
-
-/* ════════════════════════════════════════════════════════════════════
    Event Card — compact, date-prominent
    ════════════════════════════════════════════════════════════════════ */
 const EventCard = ({ event, index }) => {
@@ -590,9 +535,6 @@ const DashboardPage = () => {
 
       {/* ─── Hero Carousel ─── */}
       <HeroBanner banners={dashboardData.banners} />
-
-      {/* ─── Announcements ─── */}
-      <AnnouncementsBanner announcements={dashboardData.announcements} />
 
       {/* ─── Quick Stats Row ─── */}
       <Grid container spacing={2.5} sx={{ mb: 4 }}>

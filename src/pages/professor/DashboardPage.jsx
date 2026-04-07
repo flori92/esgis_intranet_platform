@@ -161,7 +161,6 @@ const ProfessorDashboardPage = () => {
   const [cmsBanners, setCmsBanners] = useState([]);
   const [cmsNews, setCmsNews] = useState([]);
   const [cmsEvents, setCmsEvents] = useState([]);
-  const [cmsAnnouncements, setCmsAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -173,9 +172,9 @@ const ProfessorDashboardPage = () => {
       try {
         if (!authState.isProfessor || !authState.profile?.id) throw new Error('Profil professeur non disponible');
 
-        const [dashRes, bannersRes, newsRes, eventsRes, announcementsRes] = await Promise.all([
+        const [dashRes, bannersRes, newsRes, eventsRes] = await Promise.all([
           getProfessorDashboardData({ profileId: authState.profile.id, professorId: authState.professor?.id }),
-          getCMSBanners(), getCMSNews(4), getCMSEvents(5), getCMSAnnouncements(3)
+          getCMSBanners(), getCMSNews(4), getCMSEvents(5)
         ]);
 
         if (dashRes.error) throw dashRes.error;
@@ -184,7 +183,6 @@ const ProfessorDashboardPage = () => {
           setCmsBanners(bannersRes.data || []);
           setCmsNews(newsRes.data || []);
           setCmsEvents(eventsRes.data || []);
-          setCmsAnnouncements(announcementsRes.data || []);
         }
       } catch (e) {
         if (active) { setError(e.message || 'Erreur de chargement'); setDashboardData(EMPTY_DASHBOARD); }
@@ -222,30 +220,6 @@ const ProfessorDashboardPage = () => {
 
       {/* Hero Banner */}
       <HeroBanner banners={cmsBanners} />
-
-      {/* Announcements */}
-      {cmsAnnouncements.length > 0 && (
-        <Stack spacing={1} sx={{ mb: 3 }}>
-          {cmsAnnouncements.map((a) => {
-            const pc = { urgent: '#d32f2f', high: '#ed6c02', normal: '#003366', low: '#2e7d32' };
-            const c = pc[a.priority] || pc.normal;
-            return (
-              <Paper key={a.id} elevation={0} sx={{
-                p: 1.5, borderRadius: 2.5, border: `1px solid ${alpha(c, 0.25)}`, bgcolor: alpha(c, 0.04),
-                display: 'flex', alignItems: 'center', gap: 1.5, transition: 'all 0.2s',
-                '&:hover': { bgcolor: alpha(c, 0.08), transform: 'translateX(4px)' }
-              }}>
-                <CampaignIcon sx={{ color: c }} />
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle2" fontWeight="bold" color={c}>{a.title}</Typography>
-                  <Typography variant="caption" color="text.secondary">{(a.content || '').slice(0, 80)}</Typography>
-                </Box>
-                <Chip label={a.priority === 'urgent' ? 'Urgent' : a.priority === 'high' ? 'Important' : 'Info'} size="small" sx={{ fontWeight: 700, bgcolor: alpha(c, 0.12), color: c }} />
-              </Paper>
-            );
-          })}
-        </Stack>
-      )}
 
       {/* Urgent: Pending Grades */}
       {urgentGrades > 0 && (
