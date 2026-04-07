@@ -45,8 +45,10 @@ import {
   Email as EmailIcon,
   PhotoCamera as PhotoCameraIcon,
   EventNote as EventNoteIcon,
+  Campaign as CampaignIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
+import { announcementsService } from '@/services/cmsService';
 // Suppression de l'import de AuthContextType
 
 // Largeur du drawer
@@ -63,6 +65,7 @@ const MainLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorElUser, setAnchorElUser] = useState(null);
   const [anchorElNotifications, setAnchorElNotifications] = useState(null);
+  const [anchorElAnnouncements, setAnchorElAnnouncements] = useState(null);
   
   const { authState, signOut } = useAuth();
   const { user, profile, isAdmin, isProfessor } = authState;
@@ -70,26 +73,35 @@ const MainLayout = () => {
 
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [announcements, setAnnouncements] = useState([]);
 
   /**
-   * Charger les notifications réelles
+   * Charger les notifications réelles et annonces
    */
   useEffect(() => {
     if (!user?.id) return;
 
-    const loadNotifs = async () => {
+    const loadData = async () => {
       try {
-        const { data } = await notificationService.getUnread(user.id);
-        if (data) {
-          setNotifications(data.slice(0, 5));
-          setUnreadCount(data.length);
+        const [{ data: notifsData }, announcementsData] = await Promise.all([
+          notificationService.getUnread(user.id),
+          announcementsService.getPublished()
+        ]);
+
+        if (notifsData) {
+          setNotifications(notifsData.slice(0, 5));
+          setUnreadCount(notifsData.length);
+        }
+
+        if (announcementsData) {
+          setAnnouncements(announcementsData);
         }
       } catch (err) {
-        console.error('Error loading unread notifications:', err);
+        console.error('Error loading header data:', err);
       }
     };
 
-    loadNotifs();
+    loadData();
 
     // S'abonner aux changements temps réel
     const subscription = notificationService.subscribeRealtime(
@@ -136,6 +148,21 @@ const MainLayout = () => {
    */
   const handleCloseNotificationsMenu = () => {
     setAnchorElNotifications(null);
+  };
+
+  /**
+   * Gestion du menu annonces
+   * @param {React.MouseEvent} event - L'événement de clic
+   */
+  const handleOpenAnnouncementsMenu = (event) => {
+    setAnchorElAnnouncements(event.currentTarget);
+  };
+
+  /**
+   * Fermeture du menu annonces
+   */
+  const handleCloseAnnouncementsMenu = () => {
+    setAnchorElAnnouncements(null);
   };
 
   /**
@@ -397,8 +424,59 @@ const MainLayout = () => {
             {isAdmin ? 'ESGIS Admin' : isProfessor ? 'ESGIS Professeur' : 'ESGIS Intranet'}
           </Typography>
           
-          {/* Menu notifications */}
+          {/* Menu notifications & annonces */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {/* Icône Annonces (Campaign) */}
+            <IconButton 
+              size="large" 
+              color="inherit"
+              onClick={handleOpenAnnouncementsMenu}
+              sx={{ mr: 1 }}
+            >
+              <Badge badgeContent={announcements.length} color="error">
+                <CampaignIcon />
+              </Badge>
+            </IconButton>
+            <Menu
+              anchorEl={anchorElAnnouncements}
+              open={Boolean(anchorElAnnouncements)}
+              onClose={handleCloseAnnouncementsMenu}
+              sx={{ mt: '45px' }}
+              anchorOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+              keepMounted
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+            >
+              <Box sx={{ p: 2, minWidth: 280 }}>
+                <Typography variant="subtitle2" fontWeight="bold" fontFamily="Montserrat" gutterBottom>
+                  Annonces Générales
+                </Typography>
+                <Divider sx={{ mb: 1 }} />
+                {announcements.length > 0 ? (
+                  announcements.map((ann) => (
+                    <Box key={ann.id} sx={{ mb: 1.5, pb: 1, borderBottom: '1px solid #f0f0f0' }}>
+                      <Typography variant="body2" fontWeight="bold" fontFamily="Montserrat" color="primary">
+                        {ann.title}
+                      </Typography>
+                      <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {ann.content}
+                      </Typography>
+                    </Box>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                    Aucune annonce active
+                  </Typography>
+                )}
+              </Box>
+            </Menu>
+
+            {/* Icône Notifications */}
             <IconButton 
               size="large" 
               color="inherit"

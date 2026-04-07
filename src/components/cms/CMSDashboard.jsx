@@ -5,9 +5,8 @@ import styled from 'styled-components';
 import HeroBanner from '@/components/cms/HeroBanner';
 import { EventCardComponent } from '@/components/cms/EventCardComponent';
 import { NewsCardComponent } from '@/components/cms/NewsCardComponent';
-import AnnouncementsSection from '@/components/cms/AnnouncementsSection';
 
-import { eventsService, newsService, announcementsService, bannersService } from '@/services/cmsService';
+import { eventsService, newsService, bannersService } from '@/services/cmsService';
 
 /**
  * Styles
@@ -47,14 +46,8 @@ export const CMSDashboard = () => {
 
   // Data
   const [banners, setBanners] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
   const [events, setEvents] = useState([]);
   const [news, setNews] = useState([]);
-
-  // Dismissed announcements (stored in localStorage for UX)
-  const [dismissedAnnouncements, setDismissedAnnouncements] = useState(
-    JSON.parse(localStorage.getItem('dismissedAnnouncements') || '[]')
-  );
 
   /**
    * Load all CMS data
@@ -62,15 +55,13 @@ export const CMSDashboard = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [bannersData, announcementsData, eventsData, newsData] = await Promise.all([
+      const [bannersData, eventsData, newsData] = await Promise.all([
         bannersService.getActive(),
-        announcementsService.getPublished(),
         eventsService.getPublished(),
         newsService.getPublished()
       ]);
 
       setBanners(bannersData);
-      setAnnouncements(announcementsData.filter((a) => !dismissedAnnouncements.includes(a.id)));
       setEvents(eventsData);
       setNews(newsData);
       setError(null);
@@ -80,18 +71,11 @@ export const CMSDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [dismissedAnnouncements]);
+  }, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleDismissAnnouncement = (id) => {
-    const newDismissed = [...dismissedAnnouncements, id];
-    setDismissedAnnouncements(newDismissed);
-    localStorage.setItem('dismissedAnnouncements', JSON.stringify(newDismissed));
-    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-  };
 
   const handleNewsView = (newsItem) => {
     // Navigate to news detail page
@@ -139,17 +123,6 @@ export const CMSDashboard = () => {
             </Box>
           )}
         </DashboardSection>
-
-        {/* Announcements */}
-        {announcements.length > 0 && (
-          <DashboardSection>
-            <AnnouncementsSection
-              announcements={announcements}
-              onDismiss={handleDismissAnnouncement}
-              dismissible={true}
-            />
-          </DashboardSection>
-        )}
 
         {/* Events Section */}
         {events.length > 0 && (
