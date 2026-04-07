@@ -126,9 +126,15 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
     const requests = requestsResult.data || [];
     const exams = examsResult.data || [];
 
-    const { sessions } = courseIds.length
-      ? await getScheduleSessions({ courseIds }).catch(() => ({ sessions: [] }))
-      : { sessions: [] };
+    let sessions = [];
+    if (courseIds.length) {
+      try {
+        const scheduleResult = await getScheduleSessions({ courseIds });
+        sessions = scheduleResult?.sessions || [];
+      } catch {
+        sessions = [];
+      }
+    }
 
     const upcomingSchedule = (sessions || [])
       .filter((session) => session.date && new Date(session.date).getTime() >= Date.now())

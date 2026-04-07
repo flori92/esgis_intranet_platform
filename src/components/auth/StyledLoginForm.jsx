@@ -8,7 +8,7 @@ import { LOGO_ESGIS_PATH } from '../../utils/assetUtils';
  * Formulaire de connexion stylisé pour l'intranet ESGIS
  * @returns {JSX.Element} Composant React
  */
-const StyledLoginForm = ({ onTestAccountsClick }) => {
+const StyledLoginForm = () => {
   const navigate = useNavigate();
   const { signIn } = useAuth();
   
@@ -108,13 +108,6 @@ const StyledLoginForm = ({ onTestAccountsClick }) => {
           Mot de passe oublié
         </button>
         
-        <button 
-          type="button" 
-          className="button-test-accounts"
-          onClick={onTestAccountsClick}
-        >
-          Comptes de test
-        </button>
       </form>
     </StyledWrapper>
   );
@@ -255,21 +248,6 @@ const StyledWrapper = styled.div`
     text-decoration: underline;
   }
   
-  .button-test-accounts {
-    margin-top: 1em;
-    padding: 0.6em;
-    border-radius: 8px;
-    border: 1px dashed #003366;
-    outline: none;
-    transition: .3s ease-in-out;
-    background-color: rgba(0, 51, 102, 0.05);
-    color: #003366;
-    cursor: pointer;
-  }
-  
-  .button-test-accounts:hover {
-    background-color: rgba(0, 51, 102, 0.1);
-  }
 `;
 
 export default StyledLoginForm;
