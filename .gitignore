@@ -32,3 +32,4 @@ dist-ssr
 
 # Dossiers de build
 /gh-pages-build
+assets/
