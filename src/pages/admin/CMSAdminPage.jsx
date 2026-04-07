@@ -61,7 +61,7 @@ import {
 } from '@/services/securedCmsService';
 import { cmsPermissionsService } from '@/services/cmsPermissionsService';
 import { supabase } from '@/supabase';
-import EventEditDialog from './EventEditDialog';
+import EventEditDialog from '@/components/cms/EventEditDialog';
 
 /**
  * TabPanel Component
