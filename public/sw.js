@@ -1,8 +1,7 @@
-const CACHE_NAME = 'esgis-campus-v2';
+const CACHE_NAME = 'esgis-campus-v3';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_URLS = [
-  '/',
   '/offline.html',
   '/manifest.json',
 ];
@@ -24,8 +23,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Ne pas intercepter les requêtes vers les CDN externes (OneSignal, Google Fonts, etc.)
   if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  // Never cache JS/CSS assets — Vite uses hashed filenames for cache busting
+  if (event.request.url.includes('/assets/')) {
     return;
   }
 
@@ -36,8 +39,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Only cache non-asset resources (manifest, offline page, etc.)
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
 
