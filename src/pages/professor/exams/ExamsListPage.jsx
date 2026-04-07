@@ -154,10 +154,10 @@ const ExamsListPage = () => {
     setError(null);
     
     try {
-      const professorId = authState.professor?.id;
+      const professorId = authState.user?.id;
 
       if (!professorId) {
-        throw new Error('Profil professeur indisponible');
+        throw new Error('Profil utilisateur indisponible');
       }
 
       const [
@@ -219,10 +219,10 @@ const ExamsListPage = () => {
   };
 
   useEffect(() => {
-    if (authState.professor?.id) {
+    if (authState.user?.id) {
       fetchData();
     }
-  }, [authState.professor?.id]);
+  }, [authState.user?.id]);
   
   // Filtrer les examens selon les critères
   useEffect(() => {

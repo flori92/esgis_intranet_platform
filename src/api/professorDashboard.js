@@ -128,7 +128,7 @@ export const getProfessorDashboardData = async ({ profileId, professorId }) => {
         ? supabase
             .from('exams')
             .select('id, title, course_id, date, status, created_at, courses(name, code)')
-            .eq('professor_id', professorEntityId)
+            .eq('professor_id', profileId) // Use profileId (UUID) instead of professorEntityId (INTEGER)
             .order('date', { ascending: true })
         : courseIds.length
           ? supabase

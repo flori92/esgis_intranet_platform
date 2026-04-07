@@ -214,10 +214,10 @@ const ExamFormPage = () => {
   
   // Mettre à jour l'ID du professeur lorsque les informations de l'utilisateur sont chargées
   useEffect(() => {
-    if (authState && authState.professor && authState.professor.id) {
+    if (authState && authState.user && authState.user.id) {
       setExam(prev => ({
         ...prev,
-        professor_id: authState.professor.id
+        professor_id: authState.user.id
       }));
     }
   }, [authState]);

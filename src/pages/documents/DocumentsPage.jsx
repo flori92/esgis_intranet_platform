@@ -68,7 +68,7 @@ const DocumentsPage = () => {
 
   const currentProfileId = authState.profile?.id || authState.user?.id || '';
   const currentStudentId = authState.student?.id || null;
-  const currentProfessorId = authState.professor?.id || null;
+  const currentProfessorId = authState.user?.id || null;
 
   const canUploadDocuments = authState.isProfessor || authState.isAdmin;
   const canViewOfficialDocuments = authState.isStudent || authState.isAdmin;
