@@ -740,43 +740,6 @@ const DashboardPage = () => {
                 </List>
               </Paper>
             )}
-
-            {/* Quick Links */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3, borderRadius: CARD_RADIUS,
-                background: `linear-gradient(135deg, ${NAVY} 0%, #0a4d8c 100%)`,
-                color: 'white'
-              }}
-            >
-              <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TrendingUpIcon fontSize="small" /> Acces rapide
-              </Typography>
-              <Grid container spacing={1.5}>
-                {[
-                  { label: 'EDT Hebdomadaire', icon: <EventNoteIcon />, to: '/student/weekly-schedules' },
-                  { label: 'Mes notes', icon: <GradeIcon />, to: '/student/grades' },
-                  { label: 'Mes examens', icon: <SchoolIcon />, to: '/student/exams' },
-                  { label: 'Mes demarches', icon: <RequestIcon />, to: '/student/requests' }
-                ].map((item) => (
-                  <Grid item xs={6} key={item.to}>
-                    <Button
-                      fullWidth variant="outlined" component={Link} to={item.to}
-                      startIcon={item.icon}
-                      sx={{
-                        color: 'white', borderColor: alpha('#fff', 0.25),
-                        borderRadius: 2, justifyContent: 'flex-start', py: 1.2,
-                        textTransform: 'none', fontWeight: 600, fontSize: '0.8rem',
-                        '&:hover': { borderColor: 'white', bgcolor: alpha('#fff', 0.1) }
-                      }}
-                    >
-                      {item.label}
-                    </Button>
-                  </Grid>
-                ))}
-              </Grid>
-            </Paper>
           </Stack>
         </Grid>
       </Grid>

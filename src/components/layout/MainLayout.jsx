@@ -46,6 +46,7 @@ import {
   PhotoCamera as PhotoCameraIcon,
   EventNote as EventNoteIcon,
   Campaign as CampaignIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { announcementsService } from '@/services/cmsService';
@@ -66,6 +67,7 @@ const MainLayout = () => {
   const [anchorElUser, setAnchorElUser] = useState(null);
   const [anchorElNotifications, setAnchorElNotifications] = useState(null);
   const [anchorElAnnouncements, setAnchorElAnnouncements] = useState(null);
+  const [anchorElQuickAccess, setAnchorElQuickAccess] = useState(null);
   
   const { authState, signOut } = useAuth();
   const { user, profile, isAdmin, isProfessor } = authState;
@@ -163,6 +165,21 @@ const MainLayout = () => {
    */
   const handleCloseAnnouncementsMenu = () => {
     setAnchorElAnnouncements(null);
+  };
+
+  /**
+   * Gestion du menu accès rapide
+   * @param {React.MouseEvent} event - L'événement de clic
+   */
+  const handleOpenQuickAccessMenu = (event) => {
+    setAnchorElQuickAccess(event.currentTarget);
+  };
+
+  /**
+   * Fermeture du menu accès rapide
+   */
+  const handleCloseQuickAccessMenu = () => {
+    setAnchorElQuickAccess(null);
   };
 
   /**
@@ -424,8 +441,71 @@ const MainLayout = () => {
             {isAdmin ? 'ESGIS Admin' : isProfessor ? 'ESGIS Professeur' : 'ESGIS Intranet'}
           </Typography>
           
-          {/* Menu notifications & annonces */}
+          {/* Menu notifications, annonces & accès rapide */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {/* Accès Rapide (TrendingUp) */}
+            {!isAdmin && (
+              <>
+                <IconButton 
+                  size="large" 
+                  color="inherit"
+                  onClick={handleOpenQuickAccessMenu}
+                  sx={{ mr: 1 }}
+                  title="Accès Rapide"
+                >
+                  <TrendingUpIcon />
+                </IconButton>
+                <Menu
+                  anchorEl={anchorElQuickAccess}
+                  open={Boolean(anchorElQuickAccess)}
+                  onClose={handleCloseQuickAccessMenu}
+                  sx={{ mt: '45px' }}
+                  anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                  }}
+                  keepMounted
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                  }}
+                >
+                  <Box sx={{ p: 1, minWidth: 200 }}>
+                    <Typography variant="subtitle2" fontWeight="bold" fontFamily="Montserrat" sx={{ px: 2, py: 1 }}>
+                      Accès Rapide
+                    </Typography>
+                    <Divider sx={{ mb: 1 }} />
+                    {(isProfessor ? [
+                      { label: 'EDT Hebdomadaire', icon: <EventNoteIcon fontSize="small" />, path: '/professor/weekly-schedules' },
+                      { label: 'Gestion des notes', icon: <GradingIcon fontSize="small" />, path: '/professor/grades' },
+                      { label: 'Banque de questions', icon: <SchoolIcon fontSize="small" />, path: '/professor/question-bank' },
+                      { label: 'Mes examens', icon: <AssignmentIcon fontSize="small" />, path: '/professor/exams' }
+                    ] : [
+                      { label: 'EDT Hebdomadaire', icon: <EventNoteIcon fontSize="small" />, path: '/student/weekly-schedules' },
+                      { label: 'Mes notes', icon: <GradeIcon fontSize="small" />, path: '/student/grades' },
+                      { label: 'Mes examens', icon: <SchoolIcon fontSize="small" />, path: '/student/exams' },
+                      { label: 'Mes démarches', icon: <AssignmentIcon fontSize="small" />, path: '/student/requests' }
+                    ]).map((item) => (
+                      <MenuItem 
+                        key={item.path} 
+                        component={RouterLink} 
+                        to={item.path} 
+                        onClick={handleCloseQuickAccessMenu}
+                        sx={{ py: 1 }}
+                      >
+                        <ListItemIcon sx={{ minWidth: '36px !important' }}>
+                          {item.icon}
+                        </ListItemIcon>
+                        <Typography variant="body2" fontFamily="Montserrat">
+                          {item.label}
+                        </Typography>
+                      </MenuItem>
+                    ))}
+                  </Box>
+                </Menu>
+              </>
+            )}
+
             {/* Icône Annonces (Campaign) */}
             <IconButton 
               size="large" 

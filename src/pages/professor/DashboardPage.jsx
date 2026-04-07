@@ -334,27 +334,6 @@ const ProfessorDashboardPage = () => {
               </CardContent>
             </Card>
 
-            {/* Quick Links */}
-            <Card sx={{ borderRadius: 4, background: 'linear-gradient(135deg, #003366 0%, #0052a3 100%)', color: 'white', boxShadow: '0 8px 30px rgba(0,51,102,0.2)' }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <TrendingUpIcon /> Acces rapide
-                </Typography>
-                <Stack spacing={1.5} sx={{ mt: 2 }}>
-                  {[
-                    { label: 'EDT Hebdomadaire', icon: <EventNoteIcon />, to: '/professor/weekly-schedules' },
-                    { label: 'Gestion des notes', icon: <GradingIcon />, to: '/professor/grades' },
-                    { label: 'Banque de questions', icon: <SchoolIcon />, to: '/professor/question-bank' },
-                    { label: 'Mes examens', icon: <AssignmentIcon />, to: '/professor/exams' }
-                  ].map((link) => (
-                    <Button key={link.to} fullWidth variant="outlined" component={Link} to={link.to} startIcon={link.icon}
-                      sx={{ color: 'white', borderColor: alpha('#fff', 0.35), borderRadius: 2, justifyContent: 'flex-start', '&:hover': { borderColor: '#fff', bgcolor: alpha('#fff', 0.1) } }}
-                    >{link.label}</Button>
-                  ))}
-                </Stack>
-              </CardContent>
-            </Card>
-
             {/* News */}
             {cmsNews.length > 0 && (
               <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
