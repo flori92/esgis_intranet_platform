@@ -505,7 +505,7 @@ const ProfessorDashboardPage = () => {
       {/* ─── Urgent: Pending Grades ─── */}
       {urgentGrades > 0 && (
         <Alert severity="warning" variant="outlined" sx={{
-          mb: 3, borderRadius: CARD_RADIUS, borderLeft: '6px solid #f59e0b',
+          mb: 3, borderRadius: CARD_RADIUS, border: '2px solid #f59e0b',
           bgcolor: alpha('#f59e0b', 0.04)
         }}
           action={<Button variant="contained" color="warning" size="small" component={Link} to="/professor/grades" sx={{ borderRadius: 2, fontWeight: 'bold' }}>Noter</Button>}

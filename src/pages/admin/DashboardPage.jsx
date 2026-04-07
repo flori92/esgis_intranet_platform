@@ -226,7 +226,7 @@ const AdminDashboardPage = () => {
 
       {/* Action Rapide: Pending Requests */}
       {(dashboardData.stats?.pendingRequests || 0) > 0 && (
-        <Alert severity="warning" variant="outlined" sx={{ mb: 3, borderRadius: 3, borderLeft: '6px solid #f59e0b', bgcolor: alpha('#f59e0b', 0.04) }}
+        <Alert severity="warning" variant="outlined" sx={{ mb: 3, borderRadius: 3, border: '2px solid #f59e0b', bgcolor: alpha('#f59e0b', 0.04) }}
           action={<Button variant="contained" color="warning" size="small" component={Link} to="/admin/requests" sx={{ borderRadius: 2, fontWeight: 'bold' }}>Valider</Button>}
         >
           <Typography variant="subtitle1" fontWeight="bold">{dashboardData.stats.pendingRequests} demande(s) en attente de validation</Typography>

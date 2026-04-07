@@ -438,7 +438,7 @@ export const getStudentsForBulletins = async (niveauId, semestre, anneeAcademiqu
           id,
           full_name,
           department_id,
-          departments(name)
+          departments!department_id(name)
         )
       `)
       .eq('level', normalizedLevel)
@@ -804,7 +804,7 @@ export const getStudentAccountStatuses = async () => {
           email,
           is_active,
           department_id,
-          departments(name)
+          departments!department_id(name)
         )
       `)
       .order('created_at', { ascending: false });
@@ -1527,7 +1527,7 @@ export const getCoursesWithDepartments = async () => {
   try {
     const { data, error } = await supabase
       .from('courses')
-      .select('*, departments(name)')
+      .select('*, departments!department_id(name)')
       .order('name');
 
     if (error) throw error;
@@ -1594,7 +1594,7 @@ export const getProfessorsWithDepartments = async () => {
   try {
     const { data, error } = await supabase
       .from('professors')
-      .select('*, departments(name)');
+      .select('*, departments!department_id(name)');
 
     if (error) throw error;
     return { data: data || [], error: null };
@@ -1954,7 +1954,7 @@ export const getPromotions = async () => {
   try {
     const { data, error } = await supabase
       .from('promotions')
-      .select('*, filieres(id, name, departments(name))')
+      .select('*, filieres(id, name, departments!department_id(name))')
       .order('academic_year', { ascending: false })
       .order('name');
 

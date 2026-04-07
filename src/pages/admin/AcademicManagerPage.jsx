@@ -4,7 +4,7 @@ import {
   List, ListItem, ListItemText, ListItemIcon, Button, Chip,
   IconButton, Dialog, DialogTitle, DialogContent, TextField,
   MenuItem, Select, FormControl, InputLabel, CircularProgress,
-  Tooltip, Stack, Tab, Tabs, alpha
+  Tooltip, Stack, Tab, Tabs, alpha, CardHeader
 } from '@mui/material';
 import {
   AccountBalance as DeptIcon,
@@ -17,7 +17,8 @@ import {
   ArrowForward as ArrowIcon,
   MoreVert as MoreIcon,
   Assignment as MaquetteIcon,
-  Group as GroupIcon
+  Group as GroupIcon,
+  History as HistoryIcon
 } from '@mui/icons-material';
 import { 
   getDepartmentsList, 

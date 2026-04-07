@@ -62,7 +62,7 @@ const StagesPartnersPage = () => {
           offre:stage_offres!offre_id(
             id,
             titre,
-            entreprises:stage_entreprises!entreprise_id(nom)
+            entreprises:entreprises!entreprise_id(nom)
           )
         `);
       

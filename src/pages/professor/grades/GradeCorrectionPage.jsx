@@ -28,7 +28,8 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  alpha
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -246,26 +247,26 @@ const GradeCorrectionPage = () => {
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={4}>
-          <Card elevation={2} sx={{ borderLeft: '4px solid', borderColor: 'warning.main' }}>
+          <Card elevation={0} sx={{ border: '1px solid', borderColor: 'warning.main', borderRadius: 3, bgcolor: alpha('#ed6c02', 0.02) }}>
             <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-              <Typography variant="caption" color="text.secondary">En attente</Typography>
-              <Typography variant="h4" fontWeight="bold" color="warning.main">{pendingCount}</Typography>
+              <Typography variant="caption" color="text.secondary" fontWeight="bold">En attente</Typography>
+              <Typography variant="h4" fontWeight="900" color="warning.main">{pendingCount}</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={4}>
-          <Card elevation={2} sx={{ borderLeft: '4px solid', borderColor: 'success.main' }}>
+          <Card elevation={0} sx={{ border: '1px solid', borderColor: 'success.main', borderRadius: 3, bgcolor: alpha('#2e7d32', 0.02) }}>
             <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-              <Typography variant="caption" color="text.secondary">Validées</Typography>
-              <Typography variant="h4" fontWeight="bold" color="success.main">{approvedCount}</Typography>
+              <Typography variant="caption" color="text.secondary" fontWeight="bold">Validées</Typography>
+              <Typography variant="h4" fontWeight="900" color="success.main">{approvedCount}</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={4}>
-          <Card elevation={2} sx={{ borderLeft: '4px solid', borderColor: 'error.main' }}>
+          <Card elevation={0} sx={{ border: '1px solid', borderColor: 'error.main', borderRadius: 3, bgcolor: alpha('#d32f2f', 0.02) }}>
             <CardContent sx={{ textAlign: 'center', py: 1.5 }}>
-              <Typography variant="caption" color="text.secondary">Rejetées</Typography>
-              <Typography variant="h4" fontWeight="bold" color="error.main">{rejectedCount}</Typography>
+              <Typography variant="caption" color="text.secondary" fontWeight="bold">Rejetées</Typography>
+              <Typography variant="h4" fontWeight="900" color="error.main">{rejectedCount}</Typography>
             </CardContent>
           </Card>
         </Grid>

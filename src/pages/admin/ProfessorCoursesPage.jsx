@@ -112,7 +112,8 @@ const ProfessorCoursesPage = () => {
 
       // Transformer les données des professeurs pour avoir le nom et le département
       const formattedProfessors = (professorsData || []).map(prof => ({
-        id: prof.id,
+        id: prof.profiles?.id, // Use profile_id (UUID) instead of prof.id (INTEGER)
+        professor_entity_id: prof.id,
         full_name: prof.profiles?.full_name || 'Nom inconnu',
         employee_number: prof.employee_number || '',
         status: prof.status || 'active',
@@ -138,7 +139,7 @@ const ProfessorCoursesPage = () => {
       
       // Transformer les données des assignations pour avoir les noms des professeurs et des cours
       const formattedAssignments = (assignmentsData || []).map(assignment => {
-        const professor = formattedProfessors.find(p => p.id === assignment.professor_id);
+        const professor = formattedProfessors.find(p => String(p.id) === String(assignment.professor_id));
         const course = formattedCourses.find(c => c.id === assignment.course_id);
         return {
           ...assignment,
@@ -360,8 +361,8 @@ const ProfessorCoursesPage = () => {
 
   // Filtrer les assignations
   const filteredAssignments = professorCourses.filter(assignment => {
-    // Filtre par professeur
-    if (filterProfessor && assignment.professor_id !== filterProfessor) {
+    // Filtre par professeur (UUID compare as string)
+    if (filterProfessor && String(assignment.professor_id) !== String(filterProfessor)) {
       return false;
     }
     
@@ -424,7 +425,7 @@ const ProfessorCoursesPage = () => {
           <InputLabel>Professeur</InputLabel>
           <Select
             value={filterProfessor || ''}
-            onChange={(e) => setFilterProfessor(e.target.value === '' ? null : Number(e.target.value))}
+            onChange={(e) => setFilterProfessor(e.target.value === '' ? null : e.target.value)}
             label="Professeur"
           >
             <MenuItem value="">Tous les professeurs</MenuItem>
