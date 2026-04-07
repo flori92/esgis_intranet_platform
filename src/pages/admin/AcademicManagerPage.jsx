@@ -4,7 +4,7 @@ import {
   List, ListItem, ListItemText, ListItemIcon, Button, Chip,
   IconButton, Dialog, DialogTitle, DialogContent, TextField,
   MenuItem, Select, FormControl, InputLabel, CircularProgress,
-  Tooltip, Stack, Tab, Tabs
+  Tooltip, Stack, Tab, Tabs, alpha
 } from '@mui/material';
 import {
   AccountBalance as DeptIcon,
@@ -327,10 +327,6 @@ const AcademicManagerPage = () => {
       </Dialog>
     </Box>
   );
-};
-
-const alpha = (color, opacity) => {
-  return color + Math.round(opacity * 255).toString(16).padStart(2, '0');
 };
 
 export default AcademicManagerPage;

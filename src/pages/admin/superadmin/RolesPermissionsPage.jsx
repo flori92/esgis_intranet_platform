@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Checkbox, Button, TextField, Dialog, DialogTitle,
-  DialogContent, DialogActions, Chip, CircularProgress, Divider, Stack
+  DialogContent, DialogActions, Chip, CircularProgress, Divider, Stack, alpha
 } from '@mui/material';
 import {
   Security as SecurityIcon,
@@ -198,10 +198,6 @@ const RolesPermissionsPage = () => {
       </Dialog>
     </Box>
   );
-};
-
-const alpha = (color, opacity) => {
-  return color + Math.round(opacity * 255).toString(16).padStart(2, '0');
 };
 
 export default RolesPermissionsPage;

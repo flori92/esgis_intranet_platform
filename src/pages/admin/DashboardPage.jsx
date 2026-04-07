@@ -271,7 +271,7 @@ const AdminDashboardPage = () => {
                   </List>
                 ) : (
                   <Box sx={{ textAlign: 'center', py: 3 }}>
-                    <HistoryIcon sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />
+                    <AuditIcon sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />
                     <Typography color="text.secondary">Aucun log récent</Typography>
                   </Box>
                 )}
