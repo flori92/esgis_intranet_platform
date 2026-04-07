@@ -9,9 +9,12 @@ BEGIN;
 ALTER TABLE public.exams 
 ADD COLUMN IF NOT EXISTS share_token UUID DEFAULT gen_random_uuid() NOT NULL;
 
-IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_exams_share_token') THEN
-    CREATE UNIQUE INDEX idx_exams_share_token ON public.exams(share_token);
-END IF;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_exams_share_token') THEN
+        CREATE UNIQUE INDEX idx_exams_share_token ON public.exams(share_token);
+    END IF;
+END $$;
 
 -- 2. Add hierarchical and practice relations to exams
 ALTER TABLE public.exams 
@@ -33,9 +36,9 @@ SELECT
     se.id as registration_id,
     e.id as exam_id,
     e.title,
-    e.date as exam_date,
+    e.exam_date as exam_date,
     e.duration,
-    e.type as exam_type,
+    e.exam_type as exam_type,
     e.category as exam_category,
     e.status as exam_status,
     e.share_token,
@@ -49,11 +52,11 @@ SELECT
     c.code as course_code,
     p.first_name || ' ' || p.last_name as professor_name
 FROM public.student_exams se
-JOIN public.exams e ON se.exam_id = e.id
-JOIN public.courses c ON e.course_id = c.id
-JOIN public.students s ON se.student_id = s.id
-JOIN public.professors prof ON e.professor_id = prof.id
-JOIN public.profiles p ON prof.profile_id = p.id;
+JOIN public.exams e ON se.exam_id::text = e.id::text
+JOIN public.courses c ON e.course_id::text = c.id::text
+JOIN public.students s ON se.student_id::text = s.id::text
+JOIN public.professors prof ON e.professor_id::text = prof.id::text
+JOIN public.profiles p ON prof.profile_id::text = p.id::text;
 
 -- 5. Function to join exam via token
 -- This function handles the logic of registering a student to an exam using a token
@@ -61,9 +64,9 @@ CREATE OR REPLACE FUNCTION public.join_exam_by_token(p_share_token UUID, p_profi
 RETURNS JSONB AS $$
 DECLARE
     v_exam_id INTEGER;
-    v_student_id INTEGER;
+    v_student_id UUID;
     v_exam_record RECORD;
-    v_existing_registration_id INTEGER;
+    v_existing_registration_id UUID;
 BEGIN
     -- Get exam by token
     SELECT * INTO v_exam_record FROM public.exams WHERE share_token = p_share_token;

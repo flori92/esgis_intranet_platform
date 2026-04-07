@@ -70,7 +70,7 @@ export const getStudentStageApplications = async (studentId) => {
         *,
         offre:stage_offres!offre_id(
           *,
-          entreprises:stage_entreprises!entreprise_id(*),
+          entreprises:entreprises!entreprise_id(*),
           professors:professors!professeur_id(id, profiles(full_name))
         )
       `)
