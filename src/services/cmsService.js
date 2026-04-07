@@ -256,6 +256,51 @@ export const announcementsService = {
   },
 
   /**
+   * Récupère les annonces non lues par l'utilisateur
+   */
+  async getUnread(profileId) {
+    if (!profileId) return [];
+    
+    // 1. Récupérer toutes les annonces publiées
+    const { data: announcements, error: annError } = await supabase
+      .from('cms_announcements')
+      .select('*')
+      .eq('is_published', true);
+    
+    if (annError) throw annError;
+
+    // 2. Récupérer les IDs des annonces déjà lues par cet utilisateur
+    const { data: readData, error: readError } = await supabase
+      .from('announcement_reads')
+      .select('announcement_id')
+      .eq('profile_id', profileId);
+    
+    if (readError) throw readError;
+
+    const readIds = new Set(readData.map(r => r.announcement_id));
+
+    // 3. Filtrer pour ne garder que les non lues
+    return (announcements || []).filter(a => !readIds.has(a.id));
+  },
+
+  /**
+   * Marque une annonce comme lue
+   */
+  async markAsRead(announcementId, profileId) {
+    if (!announcementId || !profileId) return;
+
+    const { error } = await supabase
+      .from('announcement_reads')
+      .upsert({
+        announcement_id: announcementId,
+        profile_id: profileId,
+        read_at: new Date().toISOString()
+      }, { onConflict: 'announcement_id,profile_id' });
+    
+    if (error) throw error;
+  },
+
+  /**
    * Récupère toutes les annonces (admin)
    */
   async getAll() {

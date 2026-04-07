@@ -76,28 +76,28 @@ const MainLayout = () => {
 
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [announcements, setAnnouncements] = useState([]);
+  const [unreadAnnouncements, setUnreadAnnouncements] = useState([]);
 
   /**
    * Charger les notifications réelles et annonces
    */
   useEffect(() => {
-    if (!user?.id) return;
+    if (!profile?.id) return;
 
     const loadData = async () => {
       try {
-        const [{ data: notifsData }, announcementsData] = await Promise.all([
-          notificationService.getUnread(user.id),
-          announcementsService.getPublished()
+        const [{ data: notifsData }, unreadAnnData] = await Promise.all([
+          notificationService.getUnread(profile.id),
+          announcementsService.getUnread(profile.id)
         ]);
 
         if (notifsData) {
-          setNotifications(notifsData.slice(0, 5));
+          setNotifications(notifsData);
           setUnreadCount(notifsData.length);
         }
 
-        if (announcementsData) {
-          setAnnouncements(announcementsData);
+        if (unreadAnnData) {
+          setUnreadAnnouncements(unreadAnnData);
         }
       } catch (err) {
         console.error('Error loading header data:', err);
@@ -106,12 +106,12 @@ const MainLayout = () => {
 
     loadData();
 
-    // S'abonner aux changements temps réel
+    // S'abonner aux changements temps réel des notifications
     const subscription = notificationService.subscribeRealtime(
-      user.id, 
+      profile.id, 
       profile?.role, 
       (newNotif) => {
-        setNotifications(prev => [newNotif, ...prev].slice(0, 5));
+        setNotifications(prev => [newNotif, ...prev]);
         setUnreadCount(prev => prev + 1);
       }
     );
@@ -121,7 +121,32 @@ const MainLayout = () => {
         subscription.unsubscribe();
       }
     };
-  }, [user?.id, profile?.role]);
+  }, [profile?.id, profile?.role]);
+
+  /**
+   * Marquer une notification comme lue
+   */
+  const handleNotificationClick = async (notifId) => {
+    try {
+      await notificationService.markAsRead(notifId);
+      setNotifications(prev => prev.filter(n => n.id !== notifId));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+    }
+  };
+
+  /**
+   * Marquer une annonce comme lue
+   */
+  const handleAnnouncementClick = async (annId) => {
+    try {
+      await announcementsService.markAsRead(annId, profile.id);
+      setUnreadAnnouncements(prev => prev.filter(a => a.id !== annId));
+    } catch (err) {
+      console.error('Error marking announcement as read:', err);
+    }
+  };
 
   /**
    * Gestion du menu utilisateur
@@ -514,7 +539,7 @@ const MainLayout = () => {
               onClick={handleOpenAnnouncementsMenu}
               sx={{ mr: 1 }}
             >
-              <Badge badgeContent={announcements.length} color="error">
+              <Badge badgeContent={unreadAnnouncements.length} color="error">
                 <CampaignIcon />
               </Badge>
             </IconButton>
@@ -533,14 +558,24 @@ const MainLayout = () => {
                 horizontal: 'right',
               }}
             >
-              <Box sx={{ p: 2, minWidth: 280 }}>
+              <Box sx={{ p: 2, minWidth: 280, maxWidth: 400 }}>
                 <Typography variant="subtitle2" fontWeight="bold" fontFamily="Montserrat" gutterBottom>
-                  Annonces Générales
+                  Annonces Non Lues
                 </Typography>
                 <Divider sx={{ mb: 1 }} />
-                {announcements.length > 0 ? (
-                  announcements.map((ann) => (
-                    <Box key={ann.id} sx={{ mb: 1.5, pb: 1, borderBottom: '1px solid #f0f0f0' }}>
+                {unreadAnnouncements.length > 0 ? (
+                  unreadAnnouncements.map((ann) => (
+                    <Box 
+                      key={ann.id} 
+                      onClick={() => handleAnnouncementClick(ann.id)}
+                      sx={{ 
+                        mb: 1.5, 
+                        pb: 1, 
+                        borderBottom: '1px solid #f0f0f0', 
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' }
+                      }}
+                    >
                       <Typography variant="body2" fontWeight="bold" fontFamily="Montserrat" color="primary">
                         {ann.title}
                       </Typography>
@@ -551,7 +586,7 @@ const MainLayout = () => {
                   ))
                 ) : (
                   <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-                    Aucune annonce active
+                    Aucune nouvelle annonce
                   </Typography>
                 )}
               </Box>
@@ -582,30 +617,44 @@ const MainLayout = () => {
                 horizontal: 'right',
               }}
             >
-              {notifications.length > 0 ? (
-                notifications.map((notif) => (
-                  <MenuItem 
-                    key={notif.id} 
-                    component={RouterLink} 
-                    to="/notifications" 
-                    onClick={handleCloseNotificationsMenu}
-                  >
-                    <Typography variant="body2" fontFamily="Montserrat">
-                      {notif.title}
+              <Box sx={{ p: 1, minWidth: 250, maxWidth: 350 }}>
+                <Typography variant="subtitle2" fontWeight="bold" fontFamily="Montserrat" sx={{ px: 2, py: 1 }}>
+                  Notifications ({unreadCount})
+                </Typography>
+                <Divider />
+                {notifications.length > 0 ? (
+                  notifications.map((notif) => (
+                    <MenuItem 
+                      key={notif.id} 
+                      onClick={() => {
+                        handleNotificationClick(notif.id);
+                        handleCloseNotificationsMenu();
+                        navigate('/notifications');
+                      }}
+                      sx={{ py: 1.5, borderBottom: '1px solid #f5f5f5', whiteSpace: 'normal' }}
+                    >
+                      <Box>
+                        <Typography variant="body2" fontWeight="bold" fontFamily="Montserrat">
+                          {notif.title}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                          {notif.content?.substring(0, 60)}{notif.content?.length > 60 ? '...' : ''}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem onClick={handleCloseNotificationsMenu}>
+                    <Typography variant="body2" color="text.secondary" fontFamily="Montserrat">
+                      Aucune notification
                     </Typography>
                   </MenuItem>
-                ))
-              ) : (
-                <MenuItem onClick={handleCloseNotificationsMenu}>
-                  <Typography variant="body2" color="text.secondary" fontFamily="Montserrat">
-                    Aucune notification
-                  </Typography>
+                )}
+                <Divider />
+                <MenuItem component={RouterLink} to="/notifications" onClick={handleCloseNotificationsMenu}>
+                  <Typography variant="body2" textAlign="center" fontFamily="Montserrat" color="primary" sx={{ width: '100%' }}>Voir tout l'historique</Typography>
                 </MenuItem>
-              )}
-              <Divider />
-              <MenuItem component={RouterLink} to="/notifications" onClick={handleCloseNotificationsMenu}>
-                <Typography textAlign="center" fontFamily="Montserrat" color="primary">Voir toutes les notifications</Typography>
-              </MenuItem>
+              </Box>
             </Menu>
             
             {/* Menu utilisateur */}
