@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Alert, Box, Button, Card, CardContent, CardHeader, CircularProgress,
-  Divider, Grid, List, ListItem, ListItemText, Typography, Paper,
-  alpha, keyframes, Stack, Chip, IconButton
+  Alert, Box, Button, Card, CardContent, CardMedia,
+  CircularProgress, Divider, Grid, List, ListItem, ListItemText,
+  Typography, Paper, alpha, keyframes, Stack, Chip, IconButton
 } from '@mui/material';
 import {
   School as SchoolIcon,
@@ -18,31 +18,41 @@ import {
   EventNote as EventNoteIcon,
   Campaign as CampaignIcon,
   ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon
+  ChevronRight as ChevronRightIcon,
+  LocationOn as LocationOnIcon,
+  Newspaper as NewspaperIcon,
+  MenuBook as MenuBookIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { getProfessorDashboardData } from '@/api/professorDashboard';
-import { getCMSBanners, getCMSNews, getCMSEvents, getCMSAnnouncements } from '@/api/cms';
+import { getCMSBanners, getCMSNews, getCMSEvents } from '@/api/cms';
 
+/* ─── Animations ─── */
 const fadeIn = keyframes`
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 `;
 
-const slideIn = keyframes`
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
+const slideUp = keyframes`
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
 `;
 
+/* ─── Theme constants ─── */
+const NAVY = '#003366';
+const RED = '#CC0000';
+const CARD_RADIUS = 3;
+
+/* ─── Helpers ─── */
 const EMPTY_DASHBOARD = {
   stats: null, courses: [], exams: [], pendingGrades: [], news: [], events: []
 };
 
 const formatDate = (v) => {
   if (!v) return '-';
-  try { return format(new Date(v), 'dd MMM yyyy', { locale: fr }); }
+  try { return format(new Date(v), 'PPP', { locale: fr }); }
   catch { return v; }
 };
 
@@ -63,47 +73,162 @@ const examStatusMap = {
   cancelled: { label: 'Annule', color: 'error' }
 };
 
-/* ── Hero Banner ── */
+/* ════════════════════════════════════════════════════════════════════
+   Hero Banner Carousel — fullwidth, auto-play, cinematic transitions
+   ════════════════════════════════════════════════════════════════════ */
 const HeroBanner = ({ banners }) => {
   const [current, setCurrent] = useState(0);
+  const timerRef = useRef(null);
   const items = banners?.length ? banners : [];
-  if (!items.length) return null;
-  const b = items[current];
+
+  const resetTimer = useCallback(() => {
+    clearInterval(timerRef.current);
+    if (items.length > 1) {
+      timerRef.current = setInterval(
+        () => setCurrent((p) => (p + 1) % items.length),
+        6000
+      );
+    }
+  }, [items.length]);
+
+  useEffect(() => { resetTimer(); return () => clearInterval(timerRef.current); }, [resetTimer]);
+
+  if (items.length === 0) {
+    return (
+      <Paper
+        elevation={0}
+        sx={{
+          position: 'relative', mb: 4, borderRadius: 4, overflow: 'hidden',
+          minHeight: { xs: 220, md: 320 },
+          background: `linear-gradient(135deg, ${NAVY} 0%, #0a4d8c 50%, #1565c0 100%)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}
+      >
+        <Box sx={{
+          position: 'absolute', inset: 0, opacity: 0.06,
+          backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")'
+        }} />
+        <Box sx={{ textAlign: 'center', position: 'relative', zIndex: 1, px: 4, py: 6 }}>
+          <SchoolIcon sx={{ fontSize: 56, color: alpha('#fff', 0.7), mb: 2 }} />
+          <Typography variant="h3" sx={{ color: 'white', fontWeight: 900, mb: 1, fontSize: { xs: '1.6rem', md: '2.4rem' } }}>
+            Espace Professeur ESGIS
+          </Typography>
+          <Typography variant="h6" sx={{ color: alpha('#fff', 0.8), fontWeight: 400 }}>
+            Gerez vos cours, examens et notes
+          </Typography>
+        </Box>
+      </Paper>
+    );
+  }
+
+  const banner = items[current];
+  const bgColor = banner.background_color || NAVY;
+  const txtColor = banner.text_color || '#FFFFFF';
+
+  const goTo = (i) => { setCurrent(i); resetTimer(); };
+  const next = () => goTo((current + 1) % items.length);
+  const prev = () => goTo((current - 1 + items.length) % items.length);
 
   return (
-    <Paper elevation={6} sx={{
-      position: 'relative', mb: 4, borderRadius: 4, overflow: 'hidden',
-      minHeight: { xs: 220, md: 300 }, display: 'flex', alignItems: 'center',
-      backgroundImage: `url(${b.image_url})`, backgroundSize: 'cover', backgroundPosition: 'center',
-      '&:hover .nav-btn': { opacity: 1 }
-    }}>
-      <Box sx={{ position: 'absolute', inset: 0,
-        background: `linear-gradient(135deg, ${alpha(b.background_color || '#003366', 0.9)} 0%, ${alpha(b.background_color || '#003366', 0.5)} 60%, transparent 100%)`
+    <Paper
+      elevation={0}
+      sx={{
+        position: 'relative', mb: 4, borderRadius: 4, overflow: 'hidden',
+        minHeight: { xs: 240, md: 360 },
+        display: 'flex', alignItems: 'center',
+        '&:hover .hero-nav': { opacity: 1 }
+      }}
+    >
+      {items.map((b, i) => (
+        <Box
+          key={b.id || i}
+          sx={{
+            position: 'absolute', inset: 0,
+            backgroundImage: b.image_url ? `url(${b.image_url})` : 'none',
+            backgroundColor: b.background_color || NAVY,
+            backgroundSize: 'cover', backgroundPosition: 'center',
+            opacity: i === current ? 1 : 0,
+            transition: 'opacity 0.8s ease-in-out',
+            zIndex: 0
+          }}
+        />
+      ))}
+      <Box sx={{
+        position: 'absolute', inset: 0, zIndex: 1,
+        background: `linear-gradient(135deg, ${alpha(bgColor, 0.92)} 0%, ${alpha(bgColor, 0.7)} 45%, ${alpha(bgColor, 0.3)} 100%)`
       }} />
-      <Box sx={{ position: 'relative', zIndex: 1, p: { xs: 3, md: 5 }, maxWidth: 650 }}>
-        {b.subtitle && <Chip label={b.subtitle} size="small" sx={{ mb: 1.5, fontWeight: 700, bgcolor: alpha('#fff', 0.2), color: b.text_color || '#fff' }} />}
-        <Typography variant="h4" sx={{ color: b.text_color || '#fff', fontWeight: 900, mb: 1, fontSize: { xs: '1.5rem', md: '2.2rem' }, lineHeight: 1.15 }}>
-          {b.title}
+      <Box sx={{ position: 'relative', zIndex: 2, p: { xs: 3, md: 6 }, maxWidth: 680 }}>
+        {banner.subtitle && (
+          <Chip label={banner.subtitle} size="small" sx={{
+            mb: 2, fontWeight: 700, letterSpacing: 0.5,
+            bgcolor: alpha(txtColor, 0.18), color: txtColor,
+            borderRadius: 2, px: 1, fontSize: '0.75rem'
+          }} />
+        )}
+        <Typography variant="h3" sx={{
+          color: txtColor, fontWeight: 900, mb: 2,
+          fontSize: { xs: '1.5rem', sm: '2rem', md: '2.6rem' },
+          lineHeight: 1.15, textShadow: '0 2px 12px rgba(0,0,0,0.25)',
+          letterSpacing: '-0.5px'
+        }}>
+          {banner.title}
         </Typography>
-        {b.description && <Typography variant="body1" sx={{ color: alpha(b.text_color || '#fff', 0.85), mb: 2, lineHeight: 1.5 }}>{b.description}</Typography>}
-        {b.cta_text && b.cta_link && (
-          <Button variant="contained" size="medium" endIcon={<ArrowForwardIcon />}
-            component={b.cta_link.startsWith('/') ? Link : 'a'}
-            {...(b.cta_link.startsWith('/') ? { to: b.cta_link } : { href: b.cta_link, target: '_blank' })}
-            sx={{ borderRadius: 3, px: 4, fontWeight: 800, bgcolor: '#CC0000', '&:hover': { bgcolor: '#aa0000' } }}
-          >{b.cta_text}</Button>
+        {banner.description && (
+          <Typography variant="body1" sx={{
+            color: alpha(txtColor, 0.88), mb: 3, fontWeight: 400,
+            lineHeight: 1.7, maxWidth: 540,
+            display: '-webkit-box', WebkitLineClamp: 3,
+            WebkitBoxOrient: 'vertical', overflow: 'hidden'
+          }}>
+            {banner.description}
+          </Typography>
+        )}
+        {banner.cta_text && banner.cta_link && (
+          <Button
+            variant="contained" size="large" endIcon={<ArrowForwardIcon />}
+            component={banner.cta_link.startsWith('/') ? Link : 'a'}
+            {...(banner.cta_link.startsWith('/') ? { to: banner.cta_link } : { href: banner.cta_link, target: '_blank' })}
+            sx={{
+              borderRadius: 3, px: 4, py: 1.3, fontWeight: 700,
+              bgcolor: RED, color: 'white', textTransform: 'none', fontSize: '0.95rem',
+              boxShadow: '0 4px 16px rgba(204,0,0,0.35)',
+              '&:hover': { bgcolor: '#b30000', transform: 'translateY(-2px)', boxShadow: '0 6px 24px rgba(204,0,0,0.45)' },
+              transition: 'all 0.25s ease'
+            }}
+          >
+            {banner.cta_text}
+          </Button>
         )}
       </Box>
       {items.length > 1 && (
         <>
-          <IconButton className="nav-btn" onClick={() => setCurrent((p) => (p - 1 + items.length) % items.length)}
-            sx={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', bgcolor: alpha('#fff', 0.2), color: '#fff', opacity: 0, transition: 'opacity 0.3s', '&:hover': { bgcolor: alpha('#fff', 0.4) } }}
-          ><ChevronLeftIcon /></IconButton>
-          <IconButton className="nav-btn" onClick={() => setCurrent((p) => (p + 1) % items.length)}
-            sx={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', bgcolor: alpha('#fff', 0.2), color: '#fff', opacity: 0, transition: 'opacity 0.3s', '&:hover': { bgcolor: alpha('#fff', 0.4) } }}
-          ><ChevronRightIcon /></IconButton>
-          <Stack direction="row" spacing={0.8} sx={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
-            {items.map((_, i) => <Box key={i} onClick={() => setCurrent(i)} sx={{ width: i === current ? 24 : 8, height: 8, borderRadius: 4, bgcolor: i === current ? '#fff' : alpha('#fff', 0.4), cursor: 'pointer', transition: 'all 0.3s' }} />)}
+          <IconButton className="hero-nav" onClick={prev} sx={{
+            position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
+            bgcolor: alpha('#fff', 0.15), color: 'white', opacity: 0, zIndex: 3,
+            backdropFilter: 'blur(4px)', transition: 'all 0.3s',
+            '&:hover': { bgcolor: alpha('#fff', 0.3) }
+          }}>
+            <ChevronLeftIcon />
+          </IconButton>
+          <IconButton className="hero-nav" onClick={next} sx={{
+            position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
+            bgcolor: alpha('#fff', 0.15), color: 'white', opacity: 0, zIndex: 3,
+            backdropFilter: 'blur(4px)', transition: 'all 0.3s',
+            '&:hover': { bgcolor: alpha('#fff', 0.3) }
+          }}>
+            <ChevronRightIcon />
+          </IconButton>
+          <Stack direction="row" spacing={1} sx={{
+            position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 3
+          }}>
+            {items.map((_, i) => (
+              <Box key={i} onClick={() => goTo(i)} sx={{
+                width: i === current ? 28 : 8, height: 8, borderRadius: 4,
+                bgcolor: i === current ? 'white' : alpha('#fff', 0.35),
+                cursor: 'pointer', transition: 'all 0.35s ease',
+                '&:hover': { bgcolor: alpha('#fff', 0.7) }
+              }} />
+            ))}
           </Stack>
         </>
       )}
@@ -111,23 +236,39 @@ const HeroBanner = ({ banners }) => {
   );
 };
 
-/* ── Stat Card ── */
-const StatCard = ({ icon, value, label, color, delay = 0 }) => (
-  <Card sx={{
-    height: '180px', // Fixed height for uniform size
-    borderRadius: 3, 
-    boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-    border: `2px solid ${alpha(color, 0.5)}`, // Full border with color
-    animation: `${fadeIn} 0.5s ease ${delay}s both`,
-    transition: 'all 0.25s', 
-    display: 'flex',
-    flexDirection: 'column',
-    '&:hover': { 
-      transform: 'translateY(-4px)', 
-      boxShadow: `0 8px 24px ${alpha(color, 0.15)}`,
-      borderColor: color
-    }
-  }}>
+/* ════════════════════════════════════════════════════════════════════
+   Section Header
+   ════════════════════════════════════════════════════════════════════ */
+const SectionHeader = ({ icon, title, action }) => (
+  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+    <Stack direction="row" spacing={1.5} alignItems="center">
+      {icon}
+      <Typography variant="h6" fontWeight="800" letterSpacing="-0.3px">{title}</Typography>
+    </Stack>
+    {action}
+  </Stack>
+);
+
+/* ════════════════════════════════════════════════════════════════════
+   Stat Card
+   ════════════════════════════════════════════════════════════════════ */
+const StatCard = ({ icon, value, label, color, delay = 0, link }) => (
+  <Card
+    elevation={0}
+    component={link ? Link : 'div'}
+    to={link || undefined}
+    sx={{
+      height: '180px', borderRadius: CARD_RADIUS, textDecoration: 'none',
+      border: `2px solid ${alpha(color, 0.5)}`,
+      animation: `${fadeIn} 0.5s ease ${delay}s both`,
+      transition: 'all 0.25s', display: 'flex', flexDirection: 'column',
+      '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: `0 8px 24px ${alpha(color, 0.15)}`,
+        borderColor: color
+      }
+    }}
+  >
     <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 2.5 }}>
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
         <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(color, 0.1), display: 'flex' }}>
@@ -142,30 +283,140 @@ const StatCard = ({ icon, value, label, color, delay = 0 }) => (
   </Card>
 );
 
-/* ── Event Card ── */
+/* ════════════════════════════════════════════════════════════════════
+   Event Card — compact, date-prominent
+   ════════════════════════════════════════════════════════════════════ */
 const EventCard = ({ event, index }) => {
-  const d = formatShortDate(event.start_date);
+  const dateParts = formatShortDate(event.start_date);
+  const colors = {
+    reunion: NAVY, formation: '#6a1b9a', administratif: RED,
+    academic: NAVY, cultural: RED, sports: '#2e7d32',
+    conference: '#6a1b9a', general: '#455a64'
+  };
+  const color = colors[event.type || event.category] || colors.general;
+
   return (
-    <Card sx={{
-      display: 'flex', borderRadius: 3, overflow: 'hidden',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-      animation: `${slideIn} 0.4s ease ${index * 0.08}s both`,
-      transition: 'all 0.25s',
-      '&:hover': { transform: 'translateX(6px)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', borderLeft: '3px solid #003366' }
-    }}>
-      <Box sx={{ width: 70, minHeight: 75, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: alpha('#003366', 0.06), borderRight: '3px solid #003366' }}>
-        <Typography variant="h5" fontWeight="900" color="#003366">{d.day}</Typography>
-        <Typography variant="caption" fontWeight="700" color="#003366">{d.month}</Typography>
+    <Paper
+      elevation={0}
+      sx={{
+        display: 'flex', borderRadius: CARD_RADIUS, overflow: 'hidden',
+        border: '1px solid', borderColor: 'divider',
+        animation: `${slideUp} 0.4s ease ${index * 0.08}s both`,
+        transition: 'all 0.25s ease',
+        '&:hover': {
+          borderColor: color, boxShadow: `0 4px 16px ${alpha(color, 0.12)}`,
+          transform: 'translateY(-2px)'
+        }
+      }}
+    >
+      <Box sx={{
+        width: 72, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        background: `linear-gradient(180deg, ${alpha(color, 0.08)} 0%, ${alpha(color, 0.02)} 100%)`,
+        borderRight: `3px solid ${color}`, py: 1.5
+      }}>
+        <Typography variant="h5" fontWeight="900" color={color} lineHeight={1}>
+          {dateParts.day}
+        </Typography>
+        <Typography variant="caption" fontWeight="700" color={color} sx={{ mt: 0.3 }}>
+          {dateParts.month}
+        </Typography>
       </Box>
-      <CardContent sx={{ flex: 1, py: 1, px: 2 }}>
-        <Typography variant="subtitle2" fontWeight="700">{event.title}</Typography>
-        {event.location && <Typography variant="caption" color="text.secondary">{event.location}</Typography>}
-      </CardContent>
-    </Card>
+      <Box sx={{ flex: 1, py: 1.5, px: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <Typography variant="subtitle2" fontWeight="700" sx={{ mb: 0.3, lineHeight: 1.3 }}>
+          {event.title}
+        </Typography>
+        {event.description && (
+          <Typography variant="caption" color="text.secondary" sx={{
+            display: '-webkit-box', WebkitLineClamp: 1,
+            WebkitBoxOrient: 'vertical', overflow: 'hidden', mb: 0.5
+          }}>
+            {(event.description || '').replace(/\\n/g, '\n')}
+          </Typography>
+        )}
+        {event.location && (
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <LocationOnIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
+            <Typography variant="caption" color="text.secondary" fontSize="0.7rem">{event.location}</Typography>
+          </Stack>
+        )}
+      </Box>
+    </Paper>
   );
 };
 
-/* ── Main ── */
+/* ════════════════════════════════════════════════════════════════════
+   News Card — magazine-style with image
+   ════════════════════════════════════════════════════════════════════ */
+const NewsCard = ({ item, index }) => (
+  <Card
+    elevation={0}
+    sx={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      borderRadius: CARD_RADIUS, overflow: 'hidden',
+      border: '1px solid', borderColor: 'divider',
+      animation: `${slideUp} 0.5s ease ${index * 0.1}s both`,
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      '&:hover': {
+        transform: 'translateY(-6px)',
+        boxShadow: '0 12px 32px rgba(0,0,0,0.1)',
+        borderColor: 'transparent',
+        '& .news-img': { transform: 'scale(1.05)' }
+      }
+    }}
+  >
+    <Box sx={{ overflow: 'hidden', height: 180, position: 'relative' }}>
+      <CardMedia
+        className="news-img"
+        component="img" height="180"
+        image={item.image_url || 'https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=800&q=80'}
+        alt={item.title}
+        sx={{ transition: 'transform 0.5s ease', objectFit: 'cover' }}
+      />
+      <Box sx={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 50%)'
+      }} />
+      {item.is_featured && (
+        <Chip label="A la une" size="small" sx={{
+          position: 'absolute', top: 10, left: 10,
+          bgcolor: RED, color: 'white', fontWeight: 700, fontSize: '0.7rem', height: 24
+        }} />
+      )}
+      <Chip
+        label={item.category || 'general'} size="small"
+        sx={{
+          position: 'absolute', top: 10, right: 10,
+          bgcolor: alpha('#000', 0.55), color: 'white', fontWeight: 600,
+          textTransform: 'uppercase', fontSize: '0.6rem', height: 22,
+          backdropFilter: 'blur(4px)'
+        }}
+      />
+    </Box>
+    <CardContent sx={{ flexGrow: 1, p: 2.5, display: 'flex', flexDirection: 'column' }}>
+      <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, lineHeight: 1.35 }}>
+        {item.title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{
+        display: '-webkit-box', WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        lineHeight: 1.6, mb: 'auto'
+      }}>
+        {(item.content || item.excerpt || '').replace(/\\n/g, '\n')}
+      </Typography>
+      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+        <AccessTimeIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+        <Typography variant="caption" color="text.secondary" fontWeight="500">
+          {formatDate(item.published_at)}
+        </Typography>
+      </Stack>
+    </CardContent>
+  </Card>
+);
+
+/* ════════════════════════════════════════════════════════════════════
+   MAIN PROFESSOR DASHBOARD
+   ════════════════════════════════════════════════════════════════════ */
 const ProfessorDashboardPage = () => {
   const { authState } = useAuth();
   const [dashboardData, setDashboardData] = useState(EMPTY_DASHBOARD);
@@ -206,169 +457,210 @@ const ProfessorDashboardPage = () => {
   const urgentGrades = useMemo(() => dashboardData.pendingGrades?.length || 0, [dashboardData.pendingGrades]);
 
   if (loading) {
-    return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}><CircularProgress size={60} thickness={4} /></Box>;
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '70vh', gap: 2 }}>
+        <CircularProgress size={48} thickness={3} sx={{ color: NAVY }} />
+        <Typography variant="body2" color="text.secondary" fontWeight="500">Chargement de votre espace...</Typography>
+      </Box>
+    );
   }
 
-  return (
-    <Box sx={{ p: { xs: 2, md: 4 }, bgcolor: '#f8fafc', minHeight: '100vh', animation: `${fadeIn} 0.6s ease-out` }}>
-      {error && <Alert severity="error" variant="filled" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+  const firstName = authState.profile?.full_name?.split(' ')[0] || 'Professeur';
 
-      {/* Header */}
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} mb={3} spacing={2}>
+  return (
+    <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, maxWidth: 1280, mx: 'auto', animation: `${fadeIn} 0.5s ease-out` }}>
+      {error && <Alert severity="error" variant="filled" sx={{ mb: 3, borderRadius: CARD_RADIUS }}>{error}</Alert>}
+
+      {/* ─── Header ─── */}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'flex-start', sm: 'center' }}
+        sx={{ mb: 3 }} spacing={2}
+      >
         <Box>
-          <Typography variant="h3" fontWeight="900" color="text.primary" sx={{ letterSpacing: '-0.5px' }}>
-            Bonjour, {authState.profile?.full_name?.split(' ')[0] || 'Professeur'}
+          <Typography variant="h4" fontWeight="900" color="text.primary" sx={{ letterSpacing: '-0.5px' }}>
+            Bonjour, {firstName}
           </Typography>
-          <Typography variant="h6" color="text.secondary" fontWeight="400">Espace Professeur ESGIS</Typography>
+          <Typography variant="body1" color="text.secondary">
+            Bienvenue sur votre espace professeur ESGIS
+          </Typography>
         </Box>
-        <Paper elevation={0} sx={{ p: 2, borderRadius: 3, bgcolor: 'white', border: '1px solid', borderColor: 'divider' }}>
+        <Paper elevation={0} sx={{
+          py: 1, px: 2, borderRadius: 2, bgcolor: alpha(NAVY, 0.04),
+          border: '1px solid', borderColor: 'divider'
+        }}>
           <Stack direction="row" spacing={1} alignItems="center">
-            <CalendarTodayIcon color="primary" />
-            <Typography variant="subtitle1" fontWeight="bold">{format(new Date(), 'PPPP', { locale: fr })}</Typography>
+            <CalendarTodayIcon sx={{ fontSize: 18, color: NAVY }} />
+            <Typography variant="body2" fontWeight="600" color={NAVY}>
+              {format(new Date(), 'EEEE d MMMM yyyy', { locale: fr })}
+            </Typography>
           </Stack>
         </Paper>
       </Stack>
 
-      {/* Hero Banner */}
+      {/* ─── Hero Carousel ─── */}
       <HeroBanner banners={cmsBanners} />
 
-      {/* Urgent: Pending Grades */}
+      {/* ─── Urgent: Pending Grades ─── */}
       {urgentGrades > 0 && (
-        <Alert severity="warning" variant="outlined" sx={{ mb: 3, borderRadius: 3, borderLeft: '6px solid #f59e0b', bgcolor: alpha('#f59e0b', 0.04) }}
+        <Alert severity="warning" variant="outlined" sx={{
+          mb: 3, borderRadius: CARD_RADIUS, borderLeft: '6px solid #f59e0b',
+          bgcolor: alpha('#f59e0b', 0.04)
+        }}
           action={<Button variant="contained" color="warning" size="small" component={Link} to="/professor/grades" sx={{ borderRadius: 2, fontWeight: 'bold' }}>Noter</Button>}
         >
           <Typography variant="subtitle1" fontWeight="bold">{urgentGrades} note(s) en attente de correction</Typography>
         </Alert>
       )}
 
-      {/* Stats */}
+      {/* ─── Stats ─── */}
       {dashboardData.stats && (
         <Grid container spacing={2.5} sx={{ mb: 4 }}>
-          <Grid item xs={6} md={3}><StatCard icon={<PeopleIcon sx={{ fontSize: 28, color: '#003366' }} />} value={dashboardData.stats.totalStudents} label="Etudiants" color="#003366" delay={0} /></Grid>
-          <Grid item xs={6} md={3}><StatCard icon={<SchoolIcon sx={{ fontSize: 28, color: '#2e7d32' }} />} value={dashboardData.stats.totalCourses} label="Cours" color="#2e7d32" delay={0.1} /></Grid>
-          <Grid item xs={6} md={3}><StatCard icon={<AssignmentIcon sx={{ fontSize: 28, color: '#CC0000' }} />} value={dashboardData.stats.totalExams} label="Examens" color="#CC0000" delay={0.2} /></Grid>
-          <Grid item xs={6} md={3}><StatCard icon={<GradingIcon sx={{ fontSize: 28, color: '#ed6c02' }} />} value={dashboardData.stats.pendingGrades} label="Notes en attente" color="#ed6c02" delay={0.3} /></Grid>
+          <Grid item xs={6} md={3}>
+            <StatCard icon={<PeopleIcon sx={{ fontSize: 28, color: NAVY }} />} value={dashboardData.stats.totalStudents} label="Etudiants" color={NAVY} delay={0} link="/professor/students" />
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <StatCard icon={<SchoolIcon sx={{ fontSize: 28, color: '#2e7d32' }} />} value={dashboardData.stats.totalCourses} label="Cours" color="#2e7d32" delay={0.1} link="/professor/courses" />
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <StatCard icon={<AssignmentIcon sx={{ fontSize: 28, color: RED }} />} value={dashboardData.stats.totalExams} label="Examens" color={RED} delay={0.2} link="/professor/exams" />
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <StatCard icon={<GradingIcon sx={{ fontSize: 28, color: '#ed6c02' }} />} value={dashboardData.stats.pendingGrades} label="Notes en attente" color="#ed6c02" delay={0.3} link="/professor/grades" />
+          </Grid>
         </Grid>
       )}
 
+      {/* ─── Main Content Grid ─── */}
       <Grid container spacing={3}>
-        {/* Main */}
-        <Grid item xs={12} md={8}>
+        {/* ── Left: Courses + Exams ── */}
+        <Grid item xs={12} md={7}>
           <Stack spacing={3}>
             {/* Courses */}
-            <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-              <CardHeader title="Mes cours" avatar={<SchoolIcon sx={{ color: '#003366' }} />}
-                titleTypographyProps={{ fontWeight: 'bold' }}
-                action={<Button size="small" variant="outlined" component={Link} to="/professor/courses" endIcon={<ArrowForwardIcon />} sx={{ borderRadius: 2 }}>Tout voir</Button>}
+            <Paper elevation={0} sx={{ p: 3, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider' }}>
+              <SectionHeader
+                icon={<SchoolIcon sx={{ color: NAVY }} />}
+                title="Mes cours"
+                action={<Button size="small" variant="text" component={Link} to="/professor/courses" endIcon={<ArrowForwardIcon />} sx={{ fontWeight: 600, color: NAVY }}>Tout voir</Button>}
               />
-              <CardContent sx={{ pt: 0 }}>
-                {dashboardData.courses.length > 0 ? (
-                  <Grid container spacing={2}>
-                    {dashboardData.courses.slice(0, 4).map((course, idx) => (
-                      <Grid item xs={12} sm={6} key={course.id}>
-                        <Paper elevation={0} sx={{
-                          p: 2, borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                          animation: `${fadeIn} 0.4s ease ${idx * 0.1}s both`,
-                          transition: 'all 0.2s',
-                          '&:hover': { borderColor: '#003366', boxShadow: '0 4px 12px rgba(0,51,102,0.08)', transform: 'translateY(-2px)' }
-                        }}>
-                          <Typography variant="subtitle1" fontWeight="bold" noWrap>{course.title}</Typography>
-                          <Typography variant="caption" color="text.secondary">{course.department} - {course.level}</Typography>
-                          <Stack direction="row" spacing={1} mt={1}>
-                            <Chip icon={<PeopleIcon sx={{ fontSize: 14 }} />} label={`${course.students} etud.`} size="small" variant="outlined" />
-                            <Chip icon={<EventIcon sx={{ fontSize: 14 }} />} label={`${course.sessions} sess.`} size="small" variant="outlined" />
-                          </Stack>
-                        </Paper>
-                      </Grid>
-                    ))}
-                  </Grid>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 3 }}>
-                    <SchoolIcon sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />
-                    <Typography color="text.secondary">Aucun cours assigne</Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
+              {dashboardData.courses.length > 0 ? (
+                <Grid container spacing={2}>
+                  {dashboardData.courses.slice(0, 4).map((course, idx) => (
+                    <Grid item xs={12} sm={6} key={course.id}>
+                      <Paper elevation={0} sx={{
+                        p: 2, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider',
+                        animation: `${fadeIn} 0.4s ease ${idx * 0.1}s both`,
+                        transition: 'all 0.2s',
+                        '&:hover': { borderColor: NAVY, boxShadow: `0 4px 12px ${alpha(NAVY, 0.08)}`, transform: 'translateY(-2px)' }
+                      }}>
+                        <Typography variant="subtitle1" fontWeight="bold" noWrap>{course.title}</Typography>
+                        <Typography variant="caption" color="text.secondary">{course.department} - {course.level}</Typography>
+                        <Stack direction="row" spacing={1} mt={1}>
+                          <Chip icon={<PeopleIcon sx={{ fontSize: 14 }} />} label={`${course.students} etud.`} size="small" variant="outlined" />
+                          <Chip icon={<EventIcon sx={{ fontSize: 14 }} />} label={`${course.sessions} sess.`} size="small" variant="outlined" />
+                        </Stack>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 3 }}>
+                  <SchoolIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                  <Typography color="text.secondary">Aucun cours assigne</Typography>
+                </Box>
+              )}
+            </Paper>
 
             {/* Exams */}
-            <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-              <CardHeader title="Mes examens" avatar={<AssignmentIcon sx={{ color: '#CC0000' }} />}
-                titleTypographyProps={{ fontWeight: 'bold' }}
-                action={<Button size="small" variant="outlined" component={Link} to="/professor/exams" endIcon={<ArrowForwardIcon />} sx={{ borderRadius: 2 }}>Tout voir</Button>}
+            <Paper elevation={0} sx={{ p: 3, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider' }}>
+              <SectionHeader
+                icon={<AssignmentIcon sx={{ color: RED }} />}
+                title="Mes examens"
+                action={<Button size="small" variant="text" component={Link} to="/professor/exams" endIcon={<ArrowForwardIcon />} sx={{ fontWeight: 600, color: NAVY }}>Tout voir</Button>}
               />
-              <CardContent sx={{ pt: 0 }}>
-                {dashboardData.exams.length > 0 ? (
-                  <List disablePadding>
-                    {dashboardData.exams.slice(0, 4).map((exam, idx) => {
-                      const st = examStatusMap[exam.status] || { label: exam.status, color: 'default' };
-                      return (
-                        <Box key={exam.id}>
-                          <ListItem sx={{ px: 0, py: 1.5, animation: `${fadeIn} 0.4s ease ${idx * 0.1}s both` }}>
-                            <ListItemText
-                              primary={<Typography fontWeight="bold">{exam.title}</Typography>}
-                              secondary={<><Typography variant="caption">{exam.course}</Typography> &middot; <Typography variant="caption">{formatDate(exam.date)}</Typography></>}
-                            />
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <Chip label={st.label} size="small" color={st.color} sx={{ fontWeight: 700 }} />
-                              <Button size="small" variant="text" component={Link} to={`/professor/exams/${exam.id}`}>Details</Button>
-                            </Stack>
-                          </ListItem>
-                          {idx < Math.min(dashboardData.exams.length, 4) - 1 && <Divider />}
-                        </Box>
-                      );
-                    })}
-                  </List>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 3 }}>
-                    <AssignmentIcon sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />
-                    <Typography color="text.secondary">Aucun examen programme</Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
+              {dashboardData.exams.length > 0 ? (
+                <List disablePadding>
+                  {dashboardData.exams.slice(0, 4).map((exam, idx) => {
+                    const st = examStatusMap[exam.status] || { label: exam.status, color: 'default' };
+                    return (
+                      <Box key={exam.id}>
+                        <ListItem sx={{ px: 0, py: 1.5, animation: `${fadeIn} 0.4s ease ${idx * 0.1}s both` }}>
+                          <ListItemText
+                            primary={<Typography fontWeight="bold">{exam.title}</Typography>}
+                            secondary={<><Typography variant="caption">{exam.course}</Typography> &middot; <Typography variant="caption">{formatDate(exam.date)}</Typography></>}
+                          />
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Chip label={st.label} size="small" color={st.color} sx={{ fontWeight: 700 }} />
+                            <Button size="small" variant="text" component={Link} to={`/professor/exams/${exam.id}`}>Details</Button>
+                          </Stack>
+                        </ListItem>
+                        {idx < Math.min(dashboardData.exams.length, 4) - 1 && <Divider />}
+                      </Box>
+                    );
+                  })}
+                </List>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 3 }}>
+                  <AssignmentIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                  <Typography color="text.secondary">Aucun examen programme</Typography>
+                </Box>
+              )}
+            </Paper>
           </Stack>
         </Grid>
 
-        {/* Sidebar */}
-        <Grid item xs={12} md={4}>
-          <Stack spacing={3}>
-            {/* Events */}
-            <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-              <CardHeader title="Evenements" avatar={<EventIcon sx={{ color: '#003366' }} />} titleTypographyProps={{ fontWeight: 'bold' }} />
-              <CardContent sx={{ pt: 0 }}>
-                {cmsEvents.length > 0 ? (
-                  <Stack spacing={1.5}>{cmsEvents.slice(0, 4).map((e, i) => <EventCard key={e.id} event={e} index={i} />)}</Stack>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">Aucun evenement a venir</Typography>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* News */}
-            {cmsNews.length > 0 && (
-              <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-                <CardHeader title="Actualites" avatar={<CampaignIcon sx={{ color: '#CC0000' }} />} titleTypographyProps={{ fontWeight: 'bold' }} />
-                <CardContent sx={{ pt: 0 }}>
-                  <List disablePadding>
-                    {cmsNews.slice(0, 3).map((n, idx) => (
-                      <Box key={n.id}>
-                        <ListItem sx={{ px: 0, py: 1 }}>
-                          <ListItemText
-                            primary={<Typography variant="subtitle2" fontWeight="bold">{n.title}</Typography>}
-                            secondary={<Typography variant="caption" color="text.secondary">{(n.excerpt || n.content || '').slice(0, 60)}</Typography>}
-                          />
-                        </ListItem>
-                        {idx < 2 && <Divider />}
-                      </Box>
-                    ))}
-                  </List>
-                </CardContent>
-              </Card>
+        {/* ── Right: Events ── */}
+        <Grid item xs={12} md={5}>
+          <Paper elevation={0} sx={{ p: 3, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider', height: '100%' }}>
+            <SectionHeader
+              icon={<EventIcon sx={{ color: NAVY }} />}
+              title="Evenements a venir"
+            />
+            {cmsEvents.length > 0 ? (
+              <Stack spacing={1.5}>
+                {cmsEvents.slice(0, 5).map((event, idx) => (
+                  <EventCard key={event.id} event={event} index={idx} />
+                ))}
+              </Stack>
+            ) : (
+              <Box sx={{ py: 4, textAlign: 'center' }}>
+                <EventIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+                <Typography variant="body2" color="text.secondary">Aucun evenement a venir</Typography>
+              </Box>
             )}
-          </Stack>
+          </Paper>
         </Grid>
       </Grid>
+
+      {/* ─── News Section ─── */}
+      <Box sx={{ mt: 5 }}>
+        <SectionHeader
+          icon={<NewspaperIcon sx={{ color: NAVY, fontSize: 28 }} />}
+          title="Dernieres Actualites"
+        />
+        <Grid container spacing={3}>
+          {cmsNews.length > 0 ? (
+            cmsNews.map((item, idx) => (
+              <Grid item xs={12} sm={6} md={4} key={item.id}>
+                <NewsCard item={item} index={idx} />
+              </Grid>
+            ))
+          ) : (
+            <Grid item xs={12}>
+              <Paper elevation={0} sx={{
+                p: 5, textAlign: 'center', borderRadius: CARD_RADIUS,
+                border: '1px dashed', borderColor: 'divider', bgcolor: alpha(NAVY, 0.01)
+              }}>
+                <NewspaperIcon sx={{ fontSize: 44, color: 'text.disabled', mb: 1 }} />
+                <Typography variant="body1" color="text.secondary" fontWeight="500">
+                  Aucune actualite pour le moment
+                </Typography>
+              </Paper>
+            </Grid>
+          )}
+        </Grid>
+      </Box>
     </Box>
   );
 };

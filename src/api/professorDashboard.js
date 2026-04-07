@@ -58,7 +58,7 @@ const normalizeExamItem = (exam) => ({
   id: exam.id,
   title: exam.title || 'Examen sans titre',
   course: exam.courses?.name || exam.courses?.code || 'Cours inconnu',
-  date: exam.date || exam.created_at || null,
+  date: exam.exam_date || exam.created_at || null,
   status: exam.status || 'draft'
 });
 
@@ -67,7 +67,7 @@ const normalizePendingGradeItem = (exam, pendingCount = 0) => ({
   examId: exam.id,
   examTitle: exam.title || 'Examen sans titre',
   course: exam.courses?.name || exam.courses?.code || 'Cours inconnu',
-  date: exam.date || exam.created_at || null,
+  date: exam.exam_date || exam.created_at || null,
   pendingCount
 });
 
@@ -127,15 +127,15 @@ export const getProfessorDashboardData = async ({ profileId, professorId }) => {
       professorEntityId
         ? supabase
             .from('exams')
-            .select('id, title, course_id, date, status, created_at, courses(name, code)')
-            .eq('professor_id', profileId) // Use profileId (UUID) instead of professorEntityId (INTEGER)
-            .order('date', { ascending: true })
+            .select('id, title, course_id, exam_date, status, created_at, courses(name, code)')
+            .eq('professor_id', profileId)
+            .order('exam_date', { ascending: true })
         : courseIds.length
           ? supabase
               .from('exams')
-              .select('id, title, course_id, date, status, created_at, courses(name, code)')
+              .select('id, title, course_id, exam_date, status, created_at, courses(name, code)')
               .in('course_id', courseIds)
-              .order('date', { ascending: true })
+              .order('exam_date', { ascending: true })
           : Promise.resolve({ data: [], error: null })
     ]);
 
