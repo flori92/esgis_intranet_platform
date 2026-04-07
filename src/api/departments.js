@@ -225,3 +225,22 @@ export const deleteDepartment = async (departmentId) => {
     return { success: false, error: err };
   }
 };
+
+/**
+ * Récupère toutes les filières
+ * @returns {Promise<Object>}
+ */
+export const getFilieres = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('filieres')
+      .select('*, departments(name)')
+      .order('name');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (err) {
+    console.error('Exception getFilieres:', err);
+    return { data: [], error: err };
+  }
+};

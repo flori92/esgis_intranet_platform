@@ -99,7 +99,9 @@ export const getExamById = async (examId) => {
         courses(id, name, code),
         profiles!professor_id(full_name),
         departments!department_id(name),
-        parent_exam:exams!parent_exam_id(id, title)
+        parent_exam:exams!parent_exam_id(id, title),
+        filieres!filiere_id(name),
+        student_groups!student_group_id(academic_year, group_letter)
       `)
       .eq('id', examId)
       .single();
@@ -1677,5 +1679,24 @@ export const updateActiveStudent = async (profileId, examId, isCompleted = false
 export const removeRealtimeChannel = (channel) => {
   if (channel) {
     supabase.removeChannel(channel);
+  }
+};
+
+/**
+ * Récupère tous les groupes d'étudiants
+ * @returns {Promise<Object>}
+ */
+export const getStudentGroups = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('student_groups')
+      .select('*, courses(name, code)')
+      .order('academic_year', { ascending: false });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (err) {
+    console.error('Exception getStudentGroups:', err);
+    return { data: [], error: err };
   }
 };

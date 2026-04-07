@@ -43,8 +43,10 @@ import {
   insertExamQuestions,
   deleteStudentExams,
   insertStudentExams,
-  getStudentsByIds
+  getStudentsByIds,
+  getStudentGroups
 } from '@/api/exams';
+import { getFilieres } from '@/api/departments';
 import notificationService from '@/services/NotificationService';
 import { normalizeExamQuestion, serializeExamQuestion } from '@/utils/examQuestionUtils';
 import { getAllPracticeQuizzes } from '@/api/quiz';
@@ -128,7 +130,9 @@ const ExamFormPage = () => {
     total_points: 20,
     passing_grade: 10,
     status: 'draft',
-    share_token: null
+    share_token: null,
+    filiere_id: null,
+    student_group_id: null
   });
   
   // Données pour les relations
@@ -137,6 +141,8 @@ const ExamFormPage = () => {
   const [centers, setCenters] = useState([]);
   const [allExams, setAllExams] = useState([]);
   const [practiceQuizzes, setPracticeQuizzes] = useState([]);
+  const [filieres, setFilieres] = useState([]);
+  const [studentGroups, setStudentGroups] = useState([]);
   
   // Questions et étudiants
   const [questions, setQuestions] = useState([]);
@@ -161,13 +167,17 @@ const ExamFormPage = () => {
         { data: sessionsData, error: sessionsError },
         { data: centersData, error: centersError },
         { exams: allExamsData, error: allExamsError },
-        { data: practiceQuizzesData, error: practiceQuizzesError }
+        { data: practiceQuizzesData, error: practiceQuizzesError },
+        { data: filieresData, error: filieresError },
+        { data: studentGroupsData, error: studentGroupsError }
       ] = await Promise.all([
         getCoursesList(),
         getExamSessions(),
         getExamCenters(),
         getExams({ pageSize: 1000 }), // Récupérer tous les examens pour le parent_id
-        getAllPracticeQuizzes()
+        getAllPracticeQuizzes(),
+        getFilieres(),
+        getStudentGroups()
       ]);
 
       if (coursesError) throw coursesError;
@@ -175,12 +185,16 @@ const ExamFormPage = () => {
       if (centersError) throw centersError;
       if (allExamsError) throw allExamsError;
       if (practiceQuizzesError) throw practiceQuizzesError;
+      if (filieresError) throw filieresError;
+      if (studentGroupsError) throw studentGroupsError;
 
       setCourses(coursesData || []);
       setSessions(sessionsData || []);
       setCenters(centersData || []);
       setAllExams(allExamsData || []);
       setPracticeQuizzes(practiceQuizzesData || []);
+      setFilieres(filieresData || []);
+      setStudentGroups(studentGroupsData || []);
       
     } catch (err) {
       console.error('Erreur lors du chargement des données:', err);
@@ -656,9 +670,15 @@ const ExamFormPage = () => {
               setTotalPoints={(value) => handleExamChange('total_points', value)}
               passingGrade={exam.passing_grade}
               setPassingGrade={(value) => handleExamChange('passing_grade', value)}
+              filiereId={exam.filiere_id}
+              setFiliereId={(value) => handleExamChange('filiere_id', value)}
+              studentGroupId={exam.student_group_id}
+              setStudentGroupId={(value) => handleExamChange('student_group_id', value)}
               courses={courses}
               allExams={allExams.filter(e => e.id !== exam.id)}
               practiceQuizzes={practiceQuizzes}
+              filieres={filieres}
+              studentGroups={studentGroups}
               shareToken={exam.share_token}
               errors={validationErrors[0] || {}}
             />

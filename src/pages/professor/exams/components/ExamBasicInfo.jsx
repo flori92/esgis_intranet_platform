@@ -61,8 +61,15 @@ const ExamBasicInfo = ({
   setTotalPoints,
   passingGrade,
   setPassingGrade,
+  filiereId,
+  setFiliereId,
+  studentGroupId,
+  setStudentGroupId,
   courses,
   allExams,
+  practiceQuizzes,
+  filieres,
+  studentGroups,
   shareToken,
   errors
 }) => {
@@ -90,6 +97,18 @@ const ExamBasicInfo = ({
 
   const handlePracticeQuizChange = (event) => {
     setPracticeQuizId(event.target.value || null);
+  };
+
+  const handleFiliereChange = (event) => {
+    const val = event.target.value || null;
+    setFiliereId(val);
+    if (val) setStudentGroupId(null);
+  };
+
+  const handleGroupChange = (event) => {
+    const val = event.target.value || null;
+    setStudentGroupId(val);
+    if (val) setFiliereId(null);
   };
 
   const shareLink = shareToken ? `${window.location.origin}/student/exams/join/${shareToken}` : null;
@@ -273,6 +292,50 @@ const ExamBasicInfo = ({
             required
             inputProps={{ min: 0, max: totalPoints }}
           />
+        </Grid>
+
+        <Grid item xs={12}>
+          <Divider sx={{ my: 1 }}>
+            <Chip label="Affectation automatique (Optionnel)" size="small" />
+          </Divider>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <FormControl fullWidth>
+            <InputLabel>Affecter à une Filière</InputLabel>
+            <Select
+              value={filiereId || ''}
+              onChange={handleFiliereChange}
+              label="Affecter à une Filière"
+            >
+              <MenuItem value=""><em>Aucune (Sélection manuelle)</em></MenuItem>
+              {filieres.map((f) => (
+                <MenuItem key={f.id} value={f.id}>
+                  {f.name}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>Tous les étudiants de cette filière seront inscrits</FormHelperText>
+          </FormControl>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <FormControl fullWidth>
+            <InputLabel>Affecter à une Classe / Groupe</InputLabel>
+            <Select
+              value={studentGroupId || ''}
+              onChange={handleGroupChange}
+              label="Affecter à une Classe / Groupe"
+            >
+              <MenuItem value=""><em>Aucun (Sélection manuelle)</em></MenuItem>
+              {studentGroups.map((g) => (
+                <MenuItem key={g.id} value={g.id}>
+                  {g.academic_year} - {g.courses?.code} - Gr. {g.group_letter}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>Tous les membres de ce groupe seront inscrits</FormHelperText>
+          </FormControl>
         </Grid>
       </Grid>
     </Paper>
