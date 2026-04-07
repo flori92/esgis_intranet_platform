@@ -1,543 +1,410 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  Box,
-  Typography,
-  Grid,
-  Paper,
-  Card,
-  CardContent,
-  CardHeader,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  CircularProgress,
-  Button,
-  Tabs,
-  Tab,
-  Alert,
-  Chip,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem
+  Alert, Box, Button, Card, CardContent, CardHeader, CircularProgress,
+  Divider, Grid, List, ListItem, ListItemText, Typography, Paper,
+  alpha, keyframes, Stack, Chip, IconButton
 } from '@mui/material';
 import {
   School as SchoolIcon,
   Event as EventIcon,
   Assignment as AssignmentIcon,
   People as PeopleIcon,
-  Notifications as NotificationsIcon,
-  CalendarToday as CalendarTodayIcon
+  CalendarToday as CalendarTodayIcon,
+  ArrowForward as ArrowForwardIcon,
+  AccessTime as AccessTimeIcon,
+  TrendingUp as TrendingUpIcon,
+  Grading as GradingIcon,
+  EventNote as EventNoteIcon,
+  Campaign as CampaignIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon
 } from '@mui/icons-material';
-import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { getProfessorDashboardData } from '@/api/professorDashboard';
+import { getCMSBanners, getCMSNews, getCMSEvents, getCMSAnnouncements } from '@/api/cms';
+
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const slideIn = keyframes`
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+`;
 
 const EMPTY_DASHBOARD = {
-  stats: null,
-  courses: [],
-  exams: [],
-  pendingGrades: [],
-  news: [],
-  events: []
+  stats: null, courses: [], exams: [], pendingGrades: [], news: [], events: []
 };
 
-const formatDisplayDate = (value) => {
-  if (!value) {
-    return 'Date non disponible';
-  }
+const formatDate = (v) => {
+  if (!v) return '-';
+  try { return format(new Date(v), 'dd MMM yyyy', { locale: fr }); }
+  catch { return v; }
+};
 
+const formatShortDate = (v) => {
+  if (!v) return { day: '--', month: '---' };
   try {
-    return format(new Date(value), 'dd MMMM yyyy', { locale: fr });
-  } catch (error) {
-    console.error('Erreur de formatage de date:', error);
-    return value;
-  }
+    const d = new Date(v);
+    return { day: format(d, 'dd'), month: format(d, 'MMM', { locale: fr }).toUpperCase() };
+  } catch { return { day: '--', month: '---' }; }
 };
 
-const getExamStatusLabel = (status) => {
-  switch (status) {
-    case 'draft':
-      return 'Brouillon';
-    case 'published':
-      return 'Publie';
-    case 'in_progress':
-      return 'En cours';
-    case 'grading':
-      return 'Correction';
-    case 'completed':
-      return 'Termine';
-    case 'cancelled':
-      return 'Annule';
-    default:
-      return status || 'Inconnu';
-  }
+const examStatusMap = {
+  draft: { label: 'Brouillon', color: 'default' },
+  published: { label: 'Publie', color: 'info' },
+  in_progress: { label: 'En cours', color: 'warning' },
+  grading: { label: 'Correction', color: 'primary' },
+  completed: { label: 'Termine', color: 'success' },
+  cancelled: { label: 'Annule', color: 'error' }
 };
 
-const getExamStatusColor = (status) => {
-  switch (status) {
-    case 'draft':
-      return 'default';
-    case 'published':
-      return 'info';
-    case 'in_progress':
-      return 'warning';
-    case 'grading':
-      return 'primary';
-    case 'completed':
-      return 'success';
-    case 'cancelled':
-      return 'error';
-    default:
-      return 'default';
-  }
+/* ── Hero Banner ── */
+const HeroBanner = ({ banners }) => {
+  const [current, setCurrent] = useState(0);
+  const items = banners?.length ? banners : [];
+  if (!items.length) return null;
+  const b = items[current];
+
+  return (
+    <Paper elevation={6} sx={{
+      position: 'relative', mb: 4, borderRadius: 4, overflow: 'hidden',
+      minHeight: { xs: 220, md: 300 }, display: 'flex', alignItems: 'center',
+      backgroundImage: `url(${b.image_url})`, backgroundSize: 'cover', backgroundPosition: 'center',
+      '&:hover .nav-btn': { opacity: 1 }
+    }}>
+      <Box sx={{ position: 'absolute', inset: 0,
+        background: `linear-gradient(135deg, ${alpha(b.background_color || '#003366', 0.9)} 0%, ${alpha(b.background_color || '#003366', 0.5)} 60%, transparent 100%)`
+      }} />
+      <Box sx={{ position: 'relative', zIndex: 1, p: { xs: 3, md: 5 }, maxWidth: 650 }}>
+        {b.subtitle && <Chip label={b.subtitle} size="small" sx={{ mb: 1.5, fontWeight: 700, bgcolor: alpha('#fff', 0.2), color: b.text_color || '#fff' }} />}
+        <Typography variant="h4" sx={{ color: b.text_color || '#fff', fontWeight: 900, mb: 1, fontSize: { xs: '1.5rem', md: '2.2rem' }, lineHeight: 1.15 }}>
+          {b.title}
+        </Typography>
+        {b.description && <Typography variant="body1" sx={{ color: alpha(b.text_color || '#fff', 0.85), mb: 2, lineHeight: 1.5 }}>{b.description}</Typography>}
+        {b.cta_text && b.cta_link && (
+          <Button variant="contained" size="medium" endIcon={<ArrowForwardIcon />}
+            component={b.cta_link.startsWith('/') ? Link : 'a'}
+            {...(b.cta_link.startsWith('/') ? { to: b.cta_link } : { href: b.cta_link, target: '_blank' })}
+            sx={{ borderRadius: 3, px: 4, fontWeight: 800, bgcolor: '#CC0000', '&:hover': { bgcolor: '#aa0000' } }}
+          >{b.cta_text}</Button>
+        )}
+      </Box>
+      {items.length > 1 && (
+        <>
+          <IconButton className="nav-btn" onClick={() => setCurrent((p) => (p - 1 + items.length) % items.length)}
+            sx={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', bgcolor: alpha('#fff', 0.2), color: '#fff', opacity: 0, transition: 'opacity 0.3s', '&:hover': { bgcolor: alpha('#fff', 0.4) } }}
+          ><ChevronLeftIcon /></IconButton>
+          <IconButton className="nav-btn" onClick={() => setCurrent((p) => (p + 1) % items.length)}
+            sx={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', bgcolor: alpha('#fff', 0.2), color: '#fff', opacity: 0, transition: 'opacity 0.3s', '&:hover': { bgcolor: alpha('#fff', 0.4) } }}
+          ><ChevronRightIcon /></IconButton>
+          <Stack direction="row" spacing={0.8} sx={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+            {items.map((_, i) => <Box key={i} onClick={() => setCurrent(i)} sx={{ width: i === current ? 24 : 8, height: 8, borderRadius: 4, bgcolor: i === current ? '#fff' : alpha('#fff', 0.4), cursor: 'pointer', transition: 'all 0.3s' }} />)}
+          </Stack>
+        </>
+      )}
+    </Paper>
+  );
 };
 
-const getNewsColor = (category) => {
-  switch (category) {
-    case 'important':
-      return 'error';
-    case 'warning':
-      return 'warning';
-    default:
-      return 'info';
-  }
+/* ── Stat Card ── */
+const StatCard = ({ icon, value, label, color, delay = 0 }) => (
+  <Card sx={{
+    borderRadius: 3, boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+    borderTop: `4px solid ${color}`,
+    animation: `${fadeIn} 0.5s ease ${delay}s both`,
+    transition: 'all 0.25s', '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }
+  }}>
+    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(color, 0.1), display: 'flex' }}>
+        {icon}
+      </Box>
+      <Box>
+        <Typography variant="h4" fontWeight="900" color={color}>{value ?? 0}</Typography>
+        <Typography variant="body2" color="text.secondary" fontWeight="500">{label}</Typography>
+      </Box>
+    </CardContent>
+  </Card>
+);
+
+/* ── Event Card ── */
+const EventCard = ({ event, index }) => {
+  const d = formatShortDate(event.start_date);
+  return (
+    <Card sx={{
+      display: 'flex', borderRadius: 3, overflow: 'hidden',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+      animation: `${slideIn} 0.4s ease ${index * 0.08}s both`,
+      transition: 'all 0.25s',
+      '&:hover': { transform: 'translateX(6px)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', borderLeft: '3px solid #003366' }
+    }}>
+      <Box sx={{ width: 70, minHeight: 75, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: alpha('#003366', 0.06), borderRight: '3px solid #003366' }}>
+        <Typography variant="h5" fontWeight="900" color="#003366">{d.day}</Typography>
+        <Typography variant="caption" fontWeight="700" color="#003366">{d.month}</Typography>
+      </Box>
+      <CardContent sx={{ flex: 1, py: 1, px: 2 }}>
+        <Typography variant="subtitle2" fontWeight="700">{event.title}</Typography>
+        {event.location && <Typography variant="caption" color="text.secondary">{event.location}</Typography>}
+      </CardContent>
+    </Card>
+  );
 };
 
-const getEventColor = (type) => {
-  switch (type) {
-    case 'reunion':
-      return 'error';
-    case 'formation':
-      return 'info';
-    case 'administratif':
-      return 'warning';
-    default:
-      return 'primary';
-  }
-};
-
-const getEventTypeLabel = (type) => {
-  switch (type) {
-    case 'reunion':
-      return 'Reunion';
-    case 'formation':
-      return 'Formation';
-    case 'administratif':
-      return 'Administratif';
-    default:
-      return 'Autre';
-  }
-};
-
+/* ── Main ── */
 const ProfessorDashboardPage = () => {
   const { authState } = useAuth();
   const [dashboardData, setDashboardData] = useState(EMPTY_DASHBOARD);
+  const [cmsBanners, setCmsBanners] = useState([]);
+  const [cmsNews, setCmsNews] = useState([]);
+  const [cmsEvents, setCmsEvents] = useState([]);
+  const [cmsAnnouncements, setCmsAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedEventType, setSelectedEventType] = useState('tous');
-  const [tabValue, setTabValue] = useState(0);
 
   useEffect(() => {
     let active = true;
-
-    const fetchDashboardData = async () => {
+    const load = async () => {
       setLoading(true);
       setError(null);
-
       try {
-        if (!authState.isProfessor || !authState.profile?.id) {
-          throw new Error('Informations du professeur non disponibles');
-        }
+        if (!authState.isProfessor || !authState.profile?.id) throw new Error('Profil professeur non disponible');
 
-        const { data, error: dashboardError } = await getProfessorDashboardData({
-          profileId: authState.profile.id,
-          professorId: authState.professor?.id
-        });
+        const [dashRes, bannersRes, newsRes, eventsRes, announcementsRes] = await Promise.all([
+          getProfessorDashboardData({ profileId: authState.profile.id, professorId: authState.professor?.id }),
+          getCMSBanners(), getCMSNews(4), getCMSEvents(5), getCMSAnnouncements(3)
+        ]);
 
-        if (dashboardError) {
-          throw dashboardError;
-        }
-
+        if (dashRes.error) throw dashRes.error;
         if (active) {
-          setDashboardData(data || EMPTY_DASHBOARD);
+          setDashboardData(dashRes.data || EMPTY_DASHBOARD);
+          setCmsBanners(bannersRes.data || []);
+          setCmsNews(newsRes.data || []);
+          setCmsEvents(eventsRes.data || []);
+          setCmsAnnouncements(announcementsRes.data || []);
         }
-      } catch (fetchError) {
-        console.error('Erreur lors du chargement du dashboard professeur:', fetchError);
-        if (active) {
-          setDashboardData(EMPTY_DASHBOARD);
-          setError(fetchError.message || 'Une erreur inconnue est survenue');
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
+      } catch (e) {
+        if (active) { setError(e.message || 'Erreur de chargement'); setDashboardData(EMPTY_DASHBOARD); }
+      } finally { if (active) setLoading(false); }
     };
-
-    if (authState.isProfessor) {
-      fetchDashboardData();
-    } else {
-      setLoading(false);
-    }
-
-    return () => {
-      active = false;
-    };
+    if (authState.isProfessor) load(); else setLoading(false);
+    return () => { active = false; };
   }, [authState.isProfessor, authState.profile?.id, authState.professor?.id]);
 
-  const filteredEvents = useMemo(
-    () =>
-      dashboardData.events.filter((event) => {
-        if (selectedEventType === 'tous') {
-          return true;
-        }
-
-        return event.type === selectedEventType;
-      }),
-    [dashboardData.events, selectedEventType]
-  );
-
-  const handleTabChange = (_event, newValue) => {
-    setTabValue(newValue);
-  };
+  const urgentGrades = useMemo(() => dashboardData.pendingGrades?.length || 0, [dashboardData.pendingGrades]);
 
   if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}><CircularProgress size={60} thickness={4} /></Box>;
   }
 
   return (
-    <Box sx={{ py: 4, px: 2 }}>
-      <Typography variant="h4" gutterBottom>
-        Tableau de bord
-      </Typography>
+    <Box sx={{ p: { xs: 2, md: 4 }, bgcolor: '#f8fafc', minHeight: '100vh', animation: `${fadeIn} 0.6s ease-out` }}>
+      {error && <Alert severity="error" variant="filled" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 4 }}>
-          {error}
+      {/* Header */}
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} mb={3} spacing={2}>
+        <Box>
+          <Typography variant="h3" fontWeight="900" color="text.primary" sx={{ letterSpacing: '-0.5px' }}>
+            Bonjour, {authState.profile?.full_name?.split(' ')[0] || 'Professeur'}
+          </Typography>
+          <Typography variant="h6" color="text.secondary" fontWeight="400">Espace Professeur ESGIS</Typography>
+        </Box>
+        <Paper elevation={0} sx={{ p: 2, borderRadius: 3, bgcolor: 'white', border: '1px solid', borderColor: 'divider' }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <CalendarTodayIcon color="primary" />
+            <Typography variant="subtitle1" fontWeight="bold">{format(new Date(), 'PPPP', { locale: fr })}</Typography>
+          </Stack>
+        </Paper>
+      </Stack>
+
+      {/* Hero Banner */}
+      <HeroBanner banners={cmsBanners} />
+
+      {/* Announcements */}
+      {cmsAnnouncements.length > 0 && (
+        <Stack spacing={1} sx={{ mb: 3 }}>
+          {cmsAnnouncements.map((a) => {
+            const pc = { urgent: '#d32f2f', high: '#ed6c02', normal: '#003366', low: '#2e7d32' };
+            const c = pc[a.priority] || pc.normal;
+            return (
+              <Paper key={a.id} elevation={0} sx={{
+                p: 1.5, borderRadius: 2.5, border: `1px solid ${alpha(c, 0.25)}`, bgcolor: alpha(c, 0.04),
+                display: 'flex', alignItems: 'center', gap: 1.5, transition: 'all 0.2s',
+                '&:hover': { bgcolor: alpha(c, 0.08), transform: 'translateX(4px)' }
+              }}>
+                <CampaignIcon sx={{ color: c }} />
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="subtitle2" fontWeight="bold" color={c}>{a.title}</Typography>
+                  <Typography variant="caption" color="text.secondary">{(a.content || '').slice(0, 80)}</Typography>
+                </Box>
+                <Chip label={a.priority === 'urgent' ? 'Urgent' : a.priority === 'high' ? 'Important' : 'Info'} size="small" sx={{ fontWeight: 700, bgcolor: alpha(c, 0.12), color: c }} />
+              </Paper>
+            );
+          })}
+        </Stack>
+      )}
+
+      {/* Urgent: Pending Grades */}
+      {urgentGrades > 0 && (
+        <Alert severity="warning" variant="outlined" sx={{ mb: 3, borderRadius: 3, borderLeft: '6px solid #f59e0b', bgcolor: alpha('#f59e0b', 0.04) }}
+          action={<Button variant="contained" color="warning" size="small" component={Link} to="/professor/grades" sx={{ borderRadius: 2, fontWeight: 'bold' }}>Noter</Button>}
+        >
+          <Typography variant="subtitle1" fontWeight="bold">{urgentGrades} note(s) en attente de correction</Typography>
         </Alert>
       )}
 
+      {/* Stats */}
       {dashboardData.stats && (
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
-              <SchoolIcon color="primary" sx={{ fontSize: 48, mb: 1 }} />
-              <Typography variant="h6">{dashboardData.stats.totalStudents}</Typography>
-              <Typography variant="body2" color="textSecondary">
-                Etudiants
-              </Typography>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
-              <PeopleIcon color="primary" sx={{ fontSize: 48, mb: 1 }} />
-              <Typography variant="h6">{dashboardData.stats.totalCourses}</Typography>
-              <Typography variant="body2" color="textSecondary">
-                Cours
-              </Typography>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
-              <AssignmentIcon color="primary" sx={{ fontSize: 48, mb: 1 }} />
-              <Typography variant="h6">{dashboardData.stats.totalExams}</Typography>
-              <Typography variant="body2" color="textSecondary">
-                Examens
-              </Typography>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Paper elevation={3} sx={{ p: 2, textAlign: 'center' }}>
-              <EventIcon color="primary" sx={{ fontSize: 48, mb: 1 }} />
-              <Typography variant="h6">{dashboardData.stats.pendingGrades}</Typography>
-              <Typography variant="body2" color="textSecondary">
-                Notes en attente
-              </Typography>
-            </Paper>
-          </Grid>
+        <Grid container spacing={2.5} sx={{ mb: 4 }}>
+          <Grid item xs={6} md={3}><StatCard icon={<PeopleIcon sx={{ fontSize: 28, color: '#003366' }} />} value={dashboardData.stats.totalStudents} label="Etudiants" color="#003366" delay={0} /></Grid>
+          <Grid item xs={6} md={3}><StatCard icon={<SchoolIcon sx={{ fontSize: 28, color: '#2e7d32' }} />} value={dashboardData.stats.totalCourses} label="Cours" color="#2e7d32" delay={0.1} /></Grid>
+          <Grid item xs={6} md={3}><StatCard icon={<AssignmentIcon sx={{ fontSize: 28, color: '#CC0000' }} />} value={dashboardData.stats.totalExams} label="Examens" color="#CC0000" delay={0.2} /></Grid>
+          <Grid item xs={6} md={3}><StatCard icon={<GradingIcon sx={{ fontSize: 28, color: '#ed6c02' }} />} value={dashboardData.stats.pendingGrades} label="Notes en attente" color="#ed6c02" delay={0.3} /></Grid>
         </Grid>
       )}
 
-      <Box sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={tabValue} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
-          <Tab label="Mes cours" />
-          <Tab label="Mes examens" />
-          <Tab label="Notes en attente" />
-          <Tab label="Actualites" />
-          <Tab label="Evenements" />
-        </Tabs>
-      </Box>
+      <Grid container spacing={3}>
+        {/* Main */}
+        <Grid item xs={12} md={8}>
+          <Stack spacing={3}>
+            {/* Courses */}
+            <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <CardHeader title="Mes cours" avatar={<SchoolIcon sx={{ color: '#003366' }} />}
+                titleTypographyProps={{ fontWeight: 'bold' }}
+                action={<Button size="small" variant="outlined" component={Link} to="/professor/courses" endIcon={<ArrowForwardIcon />} sx={{ borderRadius: 2 }}>Tout voir</Button>}
+              />
+              <CardContent sx={{ pt: 0 }}>
+                {dashboardData.courses.length > 0 ? (
+                  <Grid container spacing={2}>
+                    {dashboardData.courses.slice(0, 4).map((course, idx) => (
+                      <Grid item xs={12} sm={6} key={course.id}>
+                        <Paper elevation={0} sx={{
+                          p: 2, borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                          animation: `${fadeIn} 0.4s ease ${idx * 0.1}s both`,
+                          transition: 'all 0.2s',
+                          '&:hover': { borderColor: '#003366', boxShadow: '0 4px 12px rgba(0,51,102,0.08)', transform: 'translateY(-2px)' }
+                        }}>
+                          <Typography variant="subtitle1" fontWeight="bold" noWrap>{course.title}</Typography>
+                          <Typography variant="caption" color="text.secondary">{course.department} - {course.level}</Typography>
+                          <Stack direction="row" spacing={1} mt={1}>
+                            <Chip icon={<PeopleIcon sx={{ fontSize: 14 }} />} label={`${course.students} etud.`} size="small" variant="outlined" />
+                            <Chip icon={<EventIcon sx={{ fontSize: 14 }} />} label={`${course.sessions} sess.`} size="small" variant="outlined" />
+                          </Stack>
+                        </Paper>
+                      </Grid>
+                    ))}
+                  </Grid>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 3 }}>
+                    <SchoolIcon sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />
+                    <Typography color="text.secondary">Aucun cours assigne</Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
 
-      {tabValue === 0 && (
-        <Card elevation={3}>
-          <CardHeader
-            title="Mes cours"
-            titleTypographyProps={{ variant: 'h6' }}
-            action={
-              <Button variant="outlined" component={Link} to="/professor/courses" size="small">
-                Voir tout
-              </Button>
-            }
-          />
-          <Divider />
-          <CardContent sx={{ p: 0 }}>
-            <List>
-              {dashboardData.courses.length > 0 ? (
-                dashboardData.courses.map((course) => (
-                  <ListItem key={course.id} divider>
-                    <ListItemIcon>
-                      <SchoolIcon color="primary" />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={course.title}
-                      secondary={
-                        <>
-                          <Typography variant="body2" component="span">
-                            {course.department} - {course.level}
-                          </Typography>
-                          <br />
-                          <Typography variant="body2" component="span">
-                            Etudiants: {course.students} - Sessions: {course.sessions}
-                          </Typography>
-                        </>
-                      }
-                    />
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      component={Link}
-                      to={`/professor/courses?course=${course.id}`}
-                    >
-                      Gerer
-                    </Button>
-                  </ListItem>
-                ))
-              ) : (
-                <ListItem>
-                  <ListItemText primary="Vous n'avez pas de cours assignes" />
-                </ListItem>
-              )}
-            </List>
-          </CardContent>
-        </Card>
-      )}
+            {/* Exams */}
+            <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <CardHeader title="Mes examens" avatar={<AssignmentIcon sx={{ color: '#CC0000' }} />}
+                titleTypographyProps={{ fontWeight: 'bold' }}
+                action={<Button size="small" variant="outlined" component={Link} to="/professor/exams" endIcon={<ArrowForwardIcon />} sx={{ borderRadius: 2 }}>Tout voir</Button>}
+              />
+              <CardContent sx={{ pt: 0 }}>
+                {dashboardData.exams.length > 0 ? (
+                  <List disablePadding>
+                    {dashboardData.exams.slice(0, 4).map((exam, idx) => {
+                      const st = examStatusMap[exam.status] || { label: exam.status, color: 'default' };
+                      return (
+                        <Box key={exam.id}>
+                          <ListItem sx={{ px: 0, py: 1.5, animation: `${fadeIn} 0.4s ease ${idx * 0.1}s both` }}>
+                            <ListItemText
+                              primary={<Typography fontWeight="bold">{exam.title}</Typography>}
+                              secondary={<><Typography variant="caption">{exam.course}</Typography> &middot; <Typography variant="caption">{formatDate(exam.date)}</Typography></>}
+                            />
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Chip label={st.label} size="small" color={st.color} sx={{ fontWeight: 700 }} />
+                              <Button size="small" variant="text" component={Link} to={`/professor/exams/${exam.id}`}>Details</Button>
+                            </Stack>
+                          </ListItem>
+                          {idx < Math.min(dashboardData.exams.length, 4) - 1 && <Divider />}
+                        </Box>
+                      );
+                    })}
+                  </List>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 3 }}>
+                    <AssignmentIcon sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />
+                    <Typography color="text.secondary">Aucun examen programme</Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Stack>
+        </Grid>
 
-      {tabValue === 1 && (
-        <Card elevation={3}>
-          <CardHeader
-            title="Mes examens"
-            titleTypographyProps={{ variant: 'h6' }}
-            action={
-              <Button variant="outlined" component={Link} to="/professor/exams" size="small">
-                Voir tout
-              </Button>
-            }
-          />
-          <Divider />
-          <CardContent sx={{ p: 0 }}>
-            <List>
-              {dashboardData.exams.length > 0 ? (
-                dashboardData.exams.map((exam) => (
-                  <ListItem key={exam.id} divider>
-                    <ListItemIcon>
-                      <AssignmentIcon color={getExamStatusColor(exam.status)} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={exam.title}
-                      secondary={
-                        <>
-                          <Typography variant="body2" component="span">
-                            {exam.course}
-                          </Typography>
-                          <br />
-                          <Typography variant="body2" component="span">
-                            Date: {formatDisplayDate(exam.date)}
-                          </Typography>
-                          <br />
-                          <Chip
-                            size="small"
-                            label={getExamStatusLabel(exam.status)}
-                            color={getExamStatusColor(exam.status)}
-                            sx={{ mt: 1 }}
+        {/* Sidebar */}
+        <Grid item xs={12} md={4}>
+          <Stack spacing={3}>
+            {/* Events */}
+            <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <CardHeader title="Evenements" avatar={<EventIcon sx={{ color: '#003366' }} />} titleTypographyProps={{ fontWeight: 'bold' }} />
+              <CardContent sx={{ pt: 0 }}>
+                {cmsEvents.length > 0 ? (
+                  <Stack spacing={1.5}>{cmsEvents.slice(0, 4).map((e, i) => <EventCard key={e.id} event={e} index={i} />)}</Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">Aucun evenement a venir</Typography>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Quick Links */}
+            <Card sx={{ borderRadius: 4, background: 'linear-gradient(135deg, #003366 0%, #0052a3 100%)', color: 'white', boxShadow: '0 8px 30px rgba(0,51,102,0.2)' }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <TrendingUpIcon /> Acces rapide
+                </Typography>
+                <Stack spacing={1.5} sx={{ mt: 2 }}>
+                  {[
+                    { label: 'EDT Hebdomadaire', icon: <EventNoteIcon />, to: '/professor/weekly-schedules' },
+                    { label: 'Gestion des notes', icon: <GradingIcon />, to: '/professor/grades' },
+                    { label: 'Banque de questions', icon: <SchoolIcon />, to: '/professor/question-bank' },
+                    { label: 'Mes examens', icon: <AssignmentIcon />, to: '/professor/exams' }
+                  ].map((link) => (
+                    <Button key={link.to} fullWidth variant="outlined" component={Link} to={link.to} startIcon={link.icon}
+                      sx={{ color: 'white', borderColor: alpha('#fff', 0.35), borderRadius: 2, justifyContent: 'flex-start', '&:hover': { borderColor: '#fff', bgcolor: alpha('#fff', 0.1) } }}
+                    >{link.label}</Button>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+
+            {/* News */}
+            {cmsNews.length > 0 && (
+              <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                <CardHeader title="Actualites" avatar={<CampaignIcon sx={{ color: '#CC0000' }} />} titleTypographyProps={{ fontWeight: 'bold' }} />
+                <CardContent sx={{ pt: 0 }}>
+                  <List disablePadding>
+                    {cmsNews.slice(0, 3).map((n, idx) => (
+                      <Box key={n.id}>
+                        <ListItem sx={{ px: 0, py: 1 }}>
+                          <ListItemText
+                            primary={<Typography variant="subtitle2" fontWeight="bold">{n.title}</Typography>}
+                            secondary={<Typography variant="caption" color="text.secondary">{(n.excerpt || n.content || '').slice(0, 60)}</Typography>}
                           />
-                        </>
-                      }
-                    />
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      component={Link}
-                      to={`/professor/exams/${exam.id}`}
-                    >
-                      Details
-                    </Button>
-                  </ListItem>
-                ))
-              ) : (
-                <ListItem>
-                  <ListItemText primary="Aucun examen programme" />
-                </ListItem>
-              )}
-            </List>
-          </CardContent>
-        </Card>
-      )}
-
-      {tabValue === 2 && (
-        <Card elevation={3}>
-          <CardHeader title="Notes en attente" titleTypographyProps={{ variant: 'h6' }} />
-          <Divider />
-          <CardContent sx={{ p: 0 }}>
-            <List>
-              {dashboardData.pendingGrades.length > 0 ? (
-                dashboardData.pendingGrades.map((grade) => (
-                  <ListItem key={grade.id} divider>
-                    <ListItemIcon>
-                      <AssignmentIcon color="warning" />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={grade.examTitle}
-                      secondary={
-                        <>
-                          <Typography variant="body2" component="span">
-                            Cours: {grade.course}
-                          </Typography>
-                          <br />
-                          <Typography variant="body2" component="span">
-                            Date: {formatDisplayDate(grade.date)}
-                          </Typography>
-                          <br />
-                          <Typography variant="body2" component="span">
-                            A noter: {grade.pendingCount} etudiant(s)
-                          </Typography>
-                        </>
-                      }
-                    />
-                    <Button
-                      variant="contained"
-                      size="small"
-                      component={Link}
-                      to={`/professor/exams/${grade.examId}/grade`}
-                      color="primary"
-                    >
-                      Noter
-                    </Button>
-                  </ListItem>
-                ))
-              ) : (
-                <ListItem>
-                  <ListItemText primary="Aucune note en attente" />
-                </ListItem>
-              )}
-            </List>
-          </CardContent>
-        </Card>
-      )}
-
-      {tabValue === 3 && (
-        <Card elevation={3}>
-          <CardHeader title="Actualites" titleTypographyProps={{ variant: 'h6' }} />
-          <Divider />
-          <CardContent sx={{ p: 0 }}>
-            <List>
-              {dashboardData.news.length > 0 ? (
-                dashboardData.news.map((newsItem) => (
-                  <ListItem key={newsItem.id} divider>
-                    <ListItemIcon>
-                      <NotificationsIcon color={getNewsColor(newsItem.category)} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={newsItem.title}
-                      secondary={`${(newsItem.content || '').slice(0, 60)}${
-                        newsItem.content?.length > 60 ? '...' : ''
-                      } - ${formatDisplayDate(newsItem.date)}`}
-                    />
-                  </ListItem>
-                ))
-              ) : (
-                <ListItem>
-                  <ListItemText primary="Aucune actualite recente" />
-                </ListItem>
-              )}
-            </List>
-          </CardContent>
-        </Card>
-      )}
-
-      {tabValue === 4 && (
-        <Card elevation={3}>
-          <CardHeader
-            title="Evenements"
-            titleTypographyProps={{ variant: 'h6' }}
-            action={
-              <FormControl variant="standard" size="small" sx={{ minWidth: 120 }}>
-                <InputLabel id="event-type-filter-label">Type</InputLabel>
-                <Select
-                  labelId="event-type-filter-label"
-                  id="event-type-filter"
-                  value={selectedEventType}
-                  onChange={(event) => setSelectedEventType(event.target.value)}
-                  label="Type"
-                >
-                  <MenuItem value="tous">Tous</MenuItem>
-                  <MenuItem value="reunion">Reunions</MenuItem>
-                  <MenuItem value="formation">Formations</MenuItem>
-                  <MenuItem value="administratif">Administratif</MenuItem>
-                  <MenuItem value="autre">Autres</MenuItem>
-                </Select>
-              </FormControl>
-            }
-          />
-          <Divider />
-          <CardContent sx={{ p: 0 }}>
-            <List>
-              {filteredEvents.length > 0 ? (
-                filteredEvents.map((event) => (
-                  <ListItem key={event.id} divider>
-                    <ListItemIcon>
-                      <CalendarTodayIcon color={getEventColor(event.type)} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={event.title}
-                      secondary={
-                        <>
-                          <Typography variant="body2" component="span">
-                            Date: {formatDisplayDate(event.date)}
-                          </Typography>
-                          <br />
-                          <Typography variant="body2" component="span">
-                            Lieu: {event.location}
-                          </Typography>
-                          <br />
-                          <Typography variant="body2" component="span">
-                            Type: {getEventTypeLabel(event.type)}
-                          </Typography>
-                        </>
-                      }
-                    />
-                  </ListItem>
-                ))
-              ) : (
-                <ListItem>
-                  <ListItemText primary="Aucun evenement programme" />
-                </ListItem>
-              )}
-            </List>
-          </CardContent>
-        </Card>
-      )}
+                        </ListItem>
+                        {idx < 2 && <Divider />}
+                      </Box>
+                    ))}
+                  </List>
+                </CardContent>
+              </Card>
+            )}
+          </Stack>
+        </Grid>
+      </Grid>
     </Box>
   );
 };
