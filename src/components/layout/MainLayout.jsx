@@ -38,6 +38,7 @@ import {
   Person as PersonIcon,
   CalendarMonth as CalendarMonthIcon,
   Grading as GradingIcon,
+  Grade as GradeIcon,
   Folder as FolderIcon,
   Chat as ChatIcon,
   Book as BookIcon,
