@@ -114,18 +114,29 @@ const HeroBanner = ({ banners }) => {
 /* ── Stat Card ── */
 const StatCard = ({ icon, value, label, color, delay = 0 }) => (
   <Card sx={{
-    borderRadius: 3, boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-    borderTop: `4px solid ${color}`,
+    height: '180px', // Fixed height for uniform size
+    borderRadius: 3, 
+    boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+    border: `2px solid ${alpha(color, 0.5)}`, // Full border with color
     animation: `${fadeIn} 0.5s ease ${delay}s both`,
-    transition: 'all 0.25s', '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }
+    transition: 'all 0.25s', 
+    display: 'flex',
+    flexDirection: 'column',
+    '&:hover': { 
+      transform: 'translateY(-4px)', 
+      boxShadow: `0 8px 24px ${alpha(color, 0.15)}`,
+      borderColor: color
+    }
   }}>
-    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-      <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(color, 0.1), display: 'flex' }}>
-        {icon}
-      </Box>
-      <Box>
-        <Typography variant="h4" fontWeight="900" color={color}>{value ?? 0}</Typography>
-        <Typography variant="body2" color="text.secondary" fontWeight="500">{label}</Typography>
+    <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 2.5 }}>
+      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(color, 0.1), display: 'flex' }}>
+          {icon}
+        </Box>
+        <Typography variant="body2" color="text.secondary" fontWeight="700">{label}</Typography>
+      </Stack>
+      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography variant="h3" fontWeight="900" color={color}>{value ?? 0}</Typography>
       </Box>
     </CardContent>
   </Card>

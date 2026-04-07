@@ -28,6 +28,36 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { getAdminDashboardData } from '@/api/admin';
+import { alpha } from '@mui/material/alpha';
+
+const StatCard = ({ icon, value, label, color }) => (
+  <Card sx={{
+    height: '180px',
+    borderRadius: 3,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+    border: `2px solid ${alpha(color, 0.5)}`,
+    transition: 'all 0.25s',
+    display: 'flex',
+    flexDirection: 'column',
+    '&:hover': {
+      transform: 'translateY(-4px)',
+      boxShadow: `0 8px 24px ${alpha(color, 0.15)}`,
+      borderColor: color
+    }
+  }}>
+    <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 2.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(color, 0.1), display: 'flex', mr: 2 }}>
+          {icon}
+        </Box>
+        <Typography variant="body2" color="text.secondary" fontWeight="700">{label}</Typography>
+      </Box>
+      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography variant="h3" fontWeight="900" color={color}>{value ?? 0}</Typography>
+      </Box>
+    </CardContent>
+  </Card>
+);
 
 const AdminDashboardPage = () => {
   const { authState } = useAuth();
@@ -136,56 +166,40 @@ const AdminDashboardPage = () => {
         <>
           <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid item xs={12} sm={6} md={3}>
-              <Card elevation={3}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <PeopleIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
-                    <Typography variant="h5">{stats?.totalStudents}</Typography>
-                  </Box>
-                  <Typography color="textSecondary" variant="body2">
-                    Étudiants inscrits
-                  </Typography>
-                </CardContent>
-              </Card>
+              <StatCard
+                title="Étudiants inscrits"
+                value={stats?.totalStudents}
+                icon={<PeopleIcon />}
+                color="#003366"
+                label="Étudiants inscrits"
+              />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
-              <Card elevation={3}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <SchoolIcon color="secondary" sx={{ fontSize: 40, mr: 2 }} />
-                    <Typography variant="h5">{stats?.totalProfessors}</Typography>
-                  </Box>
-                  <Typography color="textSecondary" variant="body2">
-                    Professeurs
-                  </Typography>
-                </CardContent>
-              </Card>
+              <StatCard
+                title="Professeurs"
+                value={stats?.totalProfessors}
+                icon={<SchoolIcon />}
+                color="#2e7d32"
+                label="Professeurs"
+              />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
-              <Card elevation={3}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <AssignmentIcon color="info" sx={{ fontSize: 40, mr: 2 }} />
-                    <Typography variant="h5">{stats?.totalCourses}</Typography>
-                  </Box>
-                  <Typography color="textSecondary" variant="body2">
-                    Cours
-                  </Typography>
-                </CardContent>
-              </Card>
+              <StatCard
+                title="Cours"
+                value={stats?.totalCourses}
+                icon={<AssignmentIcon />}
+                color="#CC0000"
+                label="Cours"
+              />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
-              <Card elevation={3}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <DescriptionIcon color="warning" sx={{ fontSize: 40, mr: 2 }} />
-                    <Typography variant="h5">{stats?.pendingRequests}</Typography>
-                  </Box>
-                  <Typography color="textSecondary" variant="body2">
-                    Demandes en attente
-                  </Typography>
-                </CardContent>
-              </Card>
+              <StatCard
+                title="Demandes en attente"
+                value={stats?.pendingRequests}
+                icon={<DescriptionIcon />}
+                color="#ed6c02"
+                label="Demandes en attente"
+              />
             </Grid>
           </Grid>
 
