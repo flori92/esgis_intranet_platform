@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { getAdminDashboardData } from '@/api/admin';
-import { alpha } from '@mui/material/alpha';
+import { alpha } from '@mui/material';
 
 const StatCard = ({ icon, value, label, color }) => (
   <Card sx={{
