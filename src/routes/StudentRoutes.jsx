@@ -7,6 +7,7 @@ const StudentDashboard = lazy(() => import('../pages/student/DashboardPage'));
 const StudentExamsList = lazy(() => import('../pages/exams/student/StudentExamsList'));
 const TakeExamPage = lazy(() => import('../pages/exams/student/TakeExamPage'));
 const ExamResultsPage = lazy(() => import('../pages/exams/student/ExamResultsPage'));
+const JoinExamByTokenPage = lazy(() => import('../pages/exams/student/JoinExamByTokenPage'));
 const StudentSchedulePage = lazy(() => import('../pages/student/SchedulePage'));
 const StudentGradesPage = lazy(() => import('../pages/student/GradesPage'));
 const StudentDocumentsPage = lazy(() => import('../pages/student/DocumentsPage'));
@@ -44,6 +45,7 @@ const StudentRoutes = () => {
         {/* Routes pour les examens */}
         <Route path="exams">
           <Route index element={<StudentExamsList />} />
+          <Route path="join/:token" element={<JoinExamByTokenPage />} />
           <Route path=":id/take" element={<TakeExamPage />} />
           <Route path=":id/results" element={<ExamResultsPage />} />
         </Route>

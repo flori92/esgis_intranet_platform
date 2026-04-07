@@ -139,6 +139,13 @@ const Quiz = () => {
   detectCheatingRef.current = () => {
     if (quizStatus !== 'IN_PROGRESS') return;
     if (cheatingDetectedRef.current) return;
+    
+    // Skip cheating detection for training/practice exams
+    if (examData?.category === 'training') {
+      console.log('Cheating detection skipped for training exam');
+      return;
+    }
+
     cheatingDetectedRef.current = true;
     showCustomAlert('🚨 TRICHE DÉTECTÉE 🚨\n\nVous avez quitté l\'onglet ou changé de fenêtre pendant l\'examen.\n\nCet incident a été enregistré et transmis au surveillant. Au bout de 3 tentatives, votre copie sera automatiquement soumise.');
     reportCheatingAttempt();

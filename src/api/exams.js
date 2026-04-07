@@ -41,7 +41,7 @@ export const getExams = async (options = {}) => {
     // Construction de la requête avec les filtres
     let query = supabase
       .from('exams')
-      .select('*, profiles!professor_id(full_name, avatar_url)', { count: 'exact' });
+      .select('*, courses(id, name, code), profiles!professor_id(full_name, avatar_url)', { count: 'exact' });
 
     // Application des filtres
     if (departmentId) {
@@ -96,8 +96,10 @@ export const getExamById = async (examId) => {
       .from('exams')
       .select(`
         *,
+        courses(id, name, code),
         profiles!professor_id(full_name),
-        departments!department_id(name)
+        departments!department_id(name),
+        parent_exam:exams!parent_exam_id(id, title)
       `)
       .eq('id', examId)
       .single();
@@ -112,14 +114,42 @@ export const getExamById = async (examId) => {
     return {
       exam: {
         ...examData,
+        course_name: examData.courses?.name,
+        course_code: examData.courses?.code,
         professor_name: examData.profiles?.full_name,
         department_name: examData.departments?.name,
+        parent_exam_title: examData.parent_exam?.title
       },
       error: null
     };
   } catch (err) {
     console.error(`Exception lors de la récupération de l'examen ${examId}:`, err);
     return { exam: null, error: err };
+  }
+};
+
+/**
+ * Rejoint un examen via son jeton de partage
+ * @param {string} token Jeton UUID de l'examen
+ * @param {string} profileId ID de profil de l'étudiant
+ * @returns {Promise<Object>} Résultat de l'opération
+ */
+export const joinExamByToken = async (token, profileId) => {
+  try {
+    const { data, error } = await supabase.rpc('join_exam_by_token', {
+      p_share_token: token,
+      p_profile_id: profileId
+    });
+
+    if (error) {
+      console.error('Erreur joinExamByToken:', error);
+      return { success: false, error };
+    }
+
+    return data; // Retourne l'objet JSONB construit par la fonction PL/pgSQL
+  } catch (err) {
+    console.error('Exception joinExamByToken:', err);
+    return { success: false, error: err };
   }
 };
 
@@ -359,6 +389,7 @@ const normalizeExamRecord = (record) => {
   const professorProfile = getRelation(record.profiles);
   const session = getRelation(record.exam_sessions);
   const center = getRelation(record.exam_centers);
+  const parentExam = getRelation(record.parent_exam);
 
   return {
     ...record,
@@ -373,7 +404,8 @@ const normalizeExamRecord = (record) => {
     session_name: session?.name || null,
     session_semester: session?.semester || null,
     center_name: center?.name || null,
-    center_location: center?.location || null
+    center_location: center?.location || null,
+    parent_exam_title: parentExam?.title || null
   };
 };
 
@@ -419,10 +451,13 @@ export const getStudentExamLaunchData = async ({ examId, profileId }) => {
           exam_date,
           duration,
           exam_type,
+          category,
+          share_token,
           room,
           total_points,
           passing_grade,
           status,
+          parent_exam:exams!parent_exam_id(id, title),
           courses(id, name, code),
           profiles!professor_id(id, full_name, email),
           exam_sessions!exam_session_id(id, name, academic_year, semester, status),
@@ -507,10 +542,13 @@ export const getStudentExamsListData = async (profileId) => {
           exam_date,
           duration,
           exam_type,
+          category,
+          share_token,
           room,
           total_points,
           passing_grade,
           status,
+          parent_exam:exams!parent_exam_id(id, title),
           courses(id, name, code),
           profiles!professor_id(id, full_name, email),
           exam_sessions!exam_session_id(id, name, academic_year, semester, status),
@@ -742,10 +780,13 @@ export const getProfessorExamMonitoringData = async (examId) => {
           exam_date,
           duration,
           exam_type,
+          category,
+          share_token,
           room,
           total_points,
           passing_grade,
           status,
+          parent_exam:exams!parent_exam_id(id, title),
           courses(id, name, code),
           profiles!professor_id(id, full_name, email),
           exam_sessions!exam_session_id(id, name, academic_year, semester, status),
@@ -962,10 +1003,13 @@ export const getStudentExamResultDetails = async ({ examId, studentId, profileId
           exam_date,
           duration,
           exam_type,
+          category,
+          share_token,
           room,
           total_points,
           passing_grade,
           status,
+          parent_exam:exams!parent_exam_id(id, title),
           courses(id, name, code),
           profiles!professor_id(id, full_name, email),
           exam_sessions!exam_session_id(id, name, academic_year, semester, status),

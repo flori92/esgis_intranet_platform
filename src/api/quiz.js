@@ -402,3 +402,28 @@ export const getStudentQuizResults = async (studentId) => {
     return { data: [], results: [], error: err };
   }
 };
+
+/**
+ * Récupère tous les quiz d'entraînement (pour sélection dans les examens)
+ * @returns {Promise<Object>}
+ */
+export const getAllPracticeQuizzes = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('practice_quizzes')
+      .select(`
+        id,
+        title,
+        course_id,
+        courses(name, code)
+      `)
+      .eq('is_active', true)
+      .order('title');
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (err) {
+    console.error('Exception getAllPracticeQuizzes:', err);
+    return { data: [], error: err };
+  }
+};

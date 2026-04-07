@@ -141,6 +141,7 @@ const StudentExamsList = () => {
     } else if (tabValue === 1) {
       nextExams = nextExams.filter((exam) => new Date(exam.date) < now || exam.attempt_status === 'submitted');
     }
+    // tabValue === 2 (Tous) : no filtering by date
 
     if (normalizedSearch) {
       nextExams = nextExams.filter((exam) => {
@@ -197,14 +198,32 @@ const StudentExamsList = () => {
     const statusColor = isSubmitted ? 'primary' : isPast ? 'error' : 'success';
     const statusText = isSubmitted ? 'Soumis' : isPast ? 'Passé' : 'À venir';
 
+    // Libellé de catégorie
+    const categoryLabels = {
+      evaluation: 'Évaluation',
+      training: 'Entraînement',
+      mock_exam: 'Examen Blanc',
+      challenge: 'Défi'
+    };
+    const categoryLabel = categoryLabels[exam.category] || 'Évaluation';
+    const categoryColor = exam.category === 'training' ? 'info' : 'secondary';
+
     return (
       <Card key={exam.id} sx={{ mb: 2, position: 'relative' }}>
         <CardContent>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={8}>
-              <Typography variant="h6" component="div">
-                {exam?.title || 'Examen sans titre'}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant="h6" component="div">
+                  {exam?.title || 'Examen sans titre'}
+                </Typography>
+                <Chip label={categoryLabel} size="small" color={categoryColor} variant="outlined" />
+              </Box>
+              {exam.parent_exam_title && (
+                <Typography variant="caption" color="primary" sx={{ display: 'block', mb: 1 }}>
+                  Relié à : {exam.parent_exam_title}
+                </Typography>
+              )}
               <Typography color="text.secondary" gutterBottom>
                 <SchoolIcon fontSize="small" sx={{ verticalAlign: 'middle', mr: 1 }} />
                 {exam?.course_name || 'Cours inconnu'} ({exam.course_code})
@@ -275,9 +294,21 @@ const StudentExamsList = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Mes Examens
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          Mes Examens
+        </Typography>
+        <Button 
+          variant="contained" 
+          color="secondary" 
+          onClick={() => {
+            const token = window.prompt('Entrez le code de l\'examen :');
+            if (token) navigate(`/student/exams/join/${token.trim()}`);
+          }}
+        >
+          Rejoindre via code
+        </Button>
+      </Box>
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
