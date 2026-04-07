@@ -65,11 +65,14 @@ const ExamBasicInfo = ({
   setFiliereId,
   studentGroupId,
   setStudentGroupId,
+  promotionId,
+  setPromotionId,
   courses,
   allExams,
   practiceQuizzes,
   filieres,
   studentGroups,
+  promotions,
   shareToken,
   errors
 }) => {
@@ -102,13 +105,28 @@ const ExamBasicInfo = ({
   const handleFiliereChange = (event) => {
     const val = event.target.value || null;
     setFiliereId(val);
-    if (val) setStudentGroupId(null);
+    if (val) {
+      setStudentGroupId(null);
+      setPromotionId(null);
+    }
   };
 
   const handleGroupChange = (event) => {
     const val = event.target.value || null;
     setStudentGroupId(val);
-    if (val) setFiliereId(null);
+    if (val) {
+      setFiliereId(null);
+      setPromotionId(null);
+    }
+  };
+
+  const handlePromotionChange = (event) => {
+    const val = event.target.value || null;
+    setPromotionId(val);
+    if (val) {
+      setFiliereId(null);
+      setStudentGroupId(null);
+    }
   };
 
   const shareLink = shareToken ? `${window.location.origin}/student/exams/join/${shareToken}` : null;
@@ -335,6 +353,25 @@ const ExamBasicInfo = ({
               ))}
             </Select>
             <FormHelperText>Tous les membres de ce groupe seront inscrits</FormHelperText>
+          </FormControl>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <FormControl fullWidth>
+            <InputLabel>Affecter à une Promotion</InputLabel>
+            <Select
+              value={promotionId || ''}
+              onChange={handlePromotionChange}
+              label="Affecter à une Promotion"
+            >
+              <MenuItem value=""><em>Aucune (Sélection manuelle)</em></MenuItem>
+              {promotions.map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.name}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>Tous les étudiants de cette promotion seront inscrits</FormHelperText>
           </FormControl>
         </Grid>
       </Grid>

@@ -46,7 +46,7 @@ import {
   getStudentsByIds,
   getStudentGroups
 } from '@/api/exams';
-import { getFilieres } from '@/api/departments';
+import { getFilieres, getPromotions } from '@/api/admin';
 import notificationService from '@/services/NotificationService';
 import { normalizeExamQuestion, serializeExamQuestion } from '@/utils/examQuestionUtils';
 import { getAllPracticeQuizzes } from '@/api/quiz';
@@ -132,7 +132,8 @@ const ExamFormPage = () => {
     status: 'draft',
     share_token: null,
     filiere_id: null,
-    student_group_id: null
+    student_group_id: null,
+    promotion_id: null
   });
   
   // Données pour les relations
@@ -143,6 +144,7 @@ const ExamFormPage = () => {
   const [practiceQuizzes, setPracticeQuizzes] = useState([]);
   const [filieres, setFilieres] = useState([]);
   const [studentGroups, setStudentGroups] = useState([]);
+  const [promotions, setPromotions] = useState([]);
   
   // Questions et étudiants
   const [questions, setQuestions] = useState([]);
@@ -177,7 +179,8 @@ const ExamFormPage = () => {
         getExams({ pageSize: 1000 }), // Récupérer tous les examens pour le parent_id
         getAllPracticeQuizzes(),
         getFilieres(),
-        getStudentGroups()
+        getStudentGroups(),
+        getPromotions()
       ]);
 
       if (coursesError) throw coursesError;
@@ -187,6 +190,7 @@ const ExamFormPage = () => {
       if (practiceQuizzesError) throw practiceQuizzesError;
       if (filieresError) throw filieresError;
       if (studentGroupsError) throw studentGroupsError;
+      if (promotionsError) throw promotionsError;
 
       setCourses(coursesData || []);
       setSessions(sessionsData || []);
@@ -195,6 +199,7 @@ const ExamFormPage = () => {
       setPracticeQuizzes(practiceQuizzesData || []);
       setFilieres(filieresData || []);
       setStudentGroups(studentGroupsData || []);
+      setPromotions(promotionsData || []);
       
     } catch (err) {
       console.error('Erreur lors du chargement des données:', err);
@@ -674,11 +679,14 @@ const ExamFormPage = () => {
               setFiliereId={(value) => handleExamChange('filiere_id', value)}
               studentGroupId={exam.student_group_id}
               setStudentGroupId={(value) => handleExamChange('student_group_id', value)}
+              promotionId={exam.promotion_id}
+              setPromotionId={(value) => handleExamChange('promotion_id', value)}
               courses={courses}
               allExams={allExams.filter(e => e.id !== exam.id)}
               practiceQuizzes={practiceQuizzes}
               filieres={filieres}
               studentGroups={studentGroups}
+              promotions={promotions}
               shareToken={exam.share_token}
               errors={validationErrors[0] || {}}
             />

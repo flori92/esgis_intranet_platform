@@ -1930,18 +1930,34 @@ export const deleteDepartmentAdmin = async (id) => {
   }
 };
 
-/** Recupere la liste des departements */
-export const getDepartmentsList = async () => {
+/**
+ * Récupère toutes les promotions
+ * @returns {Promise<Object>}
+ */
+export const getPromotions = async () => {
   try {
     const { data, error } = await supabase
-      .from('departments')
-      .select('*')
+      .from('promotions')
+      .select('*, filieres(id, name, departments(name))')
+      .order('academic_year', { ascending: false })
       .order('name');
 
     if (error) throw error;
     return { data: data || [], error: null };
-  } catch (error) {
-    console.error('getDepartmentsList:', error);
-    return { data: [], error };
+  } catch (err) {
+    console.error('Exception getPromotions:', err);
+    return { data: [], error: err };
   }
 };
+
+/** Cree une promotion */
+export const createPromotion = async (promotionData) => {
+  try {
+    const { data, error } = await supabase.from('promotions').insert(promotionData).select();
+    if (error) throw error;
+    return { data: data?.[0], error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
