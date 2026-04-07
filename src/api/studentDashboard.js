@@ -80,49 +80,55 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
       return { data: null, error: new Error('Étudiant non identifié ou ID invalide') };
     }
 
+    const safePromise = (promise) => promise.catch((err) => ({ data: null, error: err }));
+
     const [
-      { courseIds, error: courseIdsError },
-      { data: grades, error: gradesError },
-      { data: cmsNews, error: cmsNewsError },
-      { data: cmsEvents, error: cmsEventsError },
-      { data: cmsBanners, error: cmsBannersError },
-      { data: cmsAnnouncements, error: cmsAnnouncementsError },
-      { data: requests, error: requestsError },
-      { data: exams, error: examsError }
+      courseIdsResult,
+      gradesResult,
+      cmsNewsResult,
+      cmsEventsResult,
+      cmsBannersResult,
+      cmsAnnouncementsResult,
+      requestsResult,
+      examsResult
     ] = await Promise.all([
-      getStudentCourseIds(profileId),
-      getStudentPublishedGrades(numericStudentId),
-      getCMSNews(6),
-      getCMSEvents(6),
-      getCMSBanners(),
-      getCMSAnnouncements(5),
-      supabase
-        .from('validation_queue')
-        .select('id, request_type, status, created_at')
-        .eq('requester_id', profileId)
-        .order('created_at', { ascending: false })
-        .limit(3),
-      supabase
-        .from('student_exams')
-        .select('*, exams(*)')
-        .eq('student_id', profileId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
-        .limit(2)
+      getStudentCourseIds(profileId).catch(() => ({ courseIds: [], error: null })),
+      getStudentPublishedGrades(numericStudentId).catch(() => ({ data: [], error: null })),
+      getCMSNews(6).catch(() => ({ data: [], error: null })),
+      getCMSEvents(6).catch(() => ({ data: [], error: null })),
+      getCMSBanners().catch(() => ({ data: [], error: null })),
+      getCMSAnnouncements(5).catch(() => ({ data: [], error: null })),
+      safePromise(
+        supabase
+          .from('validation_queue')
+          .select('id, request_type, status, created_at')
+          .eq('requester_id', profileId)
+          .order('created_at', { ascending: false })
+          .limit(3)
+      ),
+      safePromise(
+        supabase
+          .from('student_exams')
+          .select('*, exams(*)')
+          .eq('student_id', profileId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: true })
+          .limit(2)
+      )
     ]);
 
-    if (courseIdsError) throw courseIdsError;
-    if (gradesError) throw gradesError;
-    if (cmsNewsError) throw cmsNewsError;
-    if (cmsEventsError) throw cmsEventsError;
-    if (requestsError) throw requestsError;
-    if (examsError) throw examsError;
+    const courseIds = courseIdsResult.courseIds || [];
+    const grades = gradesResult.data || [];
+    const cmsNews = cmsNewsResult.data || [];
+    const cmsEvents = cmsEventsResult.data || [];
+    const cmsBanners = cmsBannersResult.data || [];
+    const cmsAnnouncements = cmsAnnouncementsResult.data || [];
+    const requests = requestsResult.data || [];
+    const exams = examsResult.data || [];
 
-    const { sessions, error: sessionsError } = courseIds?.length
-      ? await getScheduleSessions({ courseIds })
-      : { sessions: [], error: null };
-
-    if (sessionsError) throw sessionsError;
+    const { sessions } = courseIds.length
+      ? await getScheduleSessions({ courseIds }).catch(() => ({ sessions: [] }))
+      : { sessions: [] };
 
     const upcomingSchedule = (sessions || [])
       .filter((session) => session.date && new Date(session.date).getTime() >= Date.now())
