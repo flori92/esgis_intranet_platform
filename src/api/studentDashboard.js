@@ -80,7 +80,9 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
       return { data: null, error: new Error('Étudiant non identifié ou ID invalide') };
     }
 
-    const safePromise = (promise) => promise.catch((err) => ({ data: null, error: err }));
+    const safe = async (fn) => {
+      try { return await fn(); } catch { return { data: null, error: null }; }
+    };
 
     const [
       courseIdsResult,
@@ -92,13 +94,13 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
       requestsResult,
       examsResult
     ] = await Promise.all([
-      getStudentCourseIds(profileId).catch(() => ({ courseIds: [], error: null })),
-      getStudentPublishedGrades(numericStudentId).catch(() => ({ data: [], error: null })),
-      getCMSNews(6).catch(() => ({ data: [], error: null })),
-      getCMSEvents(6).catch(() => ({ data: [], error: null })),
-      getCMSBanners().catch(() => ({ data: [], error: null })),
-      getCMSAnnouncements(5).catch(() => ({ data: [], error: null })),
-      safePromise(
+      safe(() => getStudentCourseIds(profileId)),
+      safe(() => getStudentPublishedGrades(numericStudentId)),
+      safe(() => getCMSNews(6)),
+      safe(() => getCMSEvents(6)),
+      safe(() => getCMSBanners()),
+      safe(() => getCMSAnnouncements(5)),
+      safe(() =>
         supabase
           .from('validation_queue')
           .select('id, request_type, status, created_at')
@@ -106,7 +108,7 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
           .order('created_at', { ascending: false })
           .limit(3)
       ),
-      safePromise(
+      safe(() =>
         supabase
           .from('student_exams')
           .select('*, exams(*)')
@@ -117,14 +119,14 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
       )
     ]);
 
-    const courseIds = courseIdsResult.courseIds || [];
-    const grades = gradesResult.data || [];
-    const cmsNews = cmsNewsResult.data || [];
-    const cmsEvents = cmsEventsResult.data || [];
-    const cmsBanners = cmsBannersResult.data || [];
-    const cmsAnnouncements = cmsAnnouncementsResult.data || [];
-    const requests = requestsResult.data || [];
-    const exams = examsResult.data || [];
+    const courseIds = courseIdsResult?.courseIds || [];
+    const grades = gradesResult?.data || [];
+    const cmsNews = cmsNewsResult?.data || [];
+    const cmsEvents = cmsEventsResult?.data || [];
+    const cmsBanners = cmsBannersResult?.data || [];
+    const cmsAnnouncements = cmsAnnouncementsResult?.data || [];
+    const requests = requestsResult?.data || [];
+    const exams = examsResult?.data || [];
 
     let sessions = [];
     if (courseIds.length) {
