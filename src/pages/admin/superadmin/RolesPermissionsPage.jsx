@@ -11,7 +11,7 @@ import {
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import { getRoles, createRole, updateRole, deleteRole } from '@/api/admin';
-import notificationService from '@/services/NotificationService';
+import { toast } from 'react-hot-toast';
 
 const PERMISSIONS_LIST = [
   { key: 'users', label: 'Utilisateurs', actions: ['read', 'create', 'update', 'delete', 'impersonate'] },
@@ -40,7 +40,7 @@ const RolesPermissionsPage = () => {
       const { data } = await getRoles();
       setRoles(data || []);
     } catch (err) {
-      notificationService.error('Erreur de chargement des rôles');
+      toast.error('Erreur de chargement des rôles');
     } finally {
       setLoading(false);
     }
@@ -69,9 +69,9 @@ const RolesPermissionsPage = () => {
     try {
       await updateRole(roleId, { permissions });
       setRoles(roles.map(r => r.id === roleId ? { ...r, permissions } : r));
-      notificationService.success('Permissions mises à jour');
+      toast.success('Permissions mises à jour');
     } catch (err) {
-      notificationService.error('Erreur lors de la sauvegarde');
+      toast.error('Erreur lors de la sauvegarde');
     }
   };
 
@@ -79,11 +79,11 @@ const RolesPermissionsPage = () => {
     try {
       const { error } = await createRole(newRole);
       if (error) throw error;
-      notificationService.success('Rôle créé avec succès');
+      toast.success('Rôle créé avec succès');
       setDialogOpen(false);
       fetchRoles();
     } catch (err) {
-      notificationService.error('Erreur de création');
+      toast.error('Erreur de création');
     }
   };
 

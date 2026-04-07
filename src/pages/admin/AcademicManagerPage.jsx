@@ -31,7 +31,7 @@ import {
   getProfessorsList,
   assignRoleToUser
 } from '@/api/admin';
-import notificationService from '@/services/NotificationService';
+import { toast } from 'react-hot-toast';
 
 const AcademicManagerPage = () => {
   // Données
@@ -94,11 +94,11 @@ const AcademicManagerPage = () => {
       const { error } = await createCurriculumTemplate(payload);
       if (error) throw error;
       
-      notificationService.success('Cours ajouté à la maquette');
+      toast.success('Cours ajouté à la maquette');
       setUploadDialogOpen(false);
       loadBaseData();
     } catch (err) {
-      notificationService.error('Erreur: ' + err.message);
+      toast.error('Erreur: ' + err.message);
     }
   };
 
@@ -107,8 +107,9 @@ const AcademicManagerPage = () => {
     try {
       await deleteCurriculumTemplate(id);
       loadBaseData();
+      toast.success('Cours retiré de la maquette');
     } catch (err) {
-      notificationService.error('Erreur lors de la suppression');
+      toast.error('Erreur lors de la suppression');
     }
   };
 
