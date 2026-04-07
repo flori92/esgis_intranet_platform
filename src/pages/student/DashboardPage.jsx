@@ -402,34 +402,47 @@ const SectionHeader = ({ icon, title, action }) => (
 /* ════════════════════════════════════════════════════════════════════
    Stat Card — compact key-info block
    ════════════════════════════════════════════════════════════════════ */
-const StatCard = ({ icon, label, value, color, link, borderColor }) => (
-  <Card
-    elevation={0}
-    component={link ? Link : 'div'}
-    to={link || undefined}
-    sx={{
-      height: '100%', borderRadius: CARD_RADIUS, textDecoration: 'none',
-      border: '1px solid', borderColor: 'divider',
-      borderTop: `4px solid ${borderColor || color || NAVY}`,
-      transition: 'all 0.25s ease',
-      '&:hover': link ? { transform: 'translateY(-3px)', boxShadow: CARD_SHADOW, borderColor: 'transparent' } : {}
-    }}
-  >
-    <CardContent sx={{ p: 2.5 }}>
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
-        <Box sx={{
-          width: 40, height: 40, borderRadius: 2, display: 'flex',
-          alignItems: 'center', justifyContent: 'center',
-          bgcolor: alpha(color || NAVY, 0.08)
-        }}>
-          {icon}
+const StatCard = ({ icon, label, value, color, link, borderColor }) => {
+  const finalColor = borderColor || color || NAVY;
+  
+  return (
+    <Card
+      elevation={0}
+      component={link ? Link : 'div'}
+      to={link || undefined}
+      sx={{
+        height: '180px', // Fixed height for uniform size
+        borderRadius: CARD_RADIUS, 
+        textDecoration: 'none',
+        border: `2px solid ${alpha(finalColor, 0.5)}`, // Full border with color
+        transition: 'all 0.25s ease',
+        display: 'flex',
+        flexDirection: 'column',
+        '&:hover': link ? { 
+          transform: 'translateY(-3px)', 
+          boxShadow: `0 8px 24px ${alpha(finalColor, 0.15)}`, 
+          borderColor: finalColor 
+        } : {}
+      }}
+    >
+      <CardContent sx={{ p: 2.5, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+          <Box sx={{
+            width: 40, height: 40, borderRadius: 2, display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            bgcolor: alpha(finalColor, 0.08)
+          }}>
+            {icon}
+          </Box>
+          <Typography variant="body2" color="text.secondary" fontWeight="700">{label}</Typography>
+        </Stack>
+        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          {value}
         </Box>
-        <Typography variant="body2" color="text.secondary" fontWeight="600">{label}</Typography>
-      </Stack>
-      {value}
-    </CardContent>
-  </Card>
-);
+      </CardContent>
+    </Card>
+  );
+};
 
 /* ════════════════════════════════════════════════════════════════════
    MAIN DASHBOARD
