@@ -39,23 +39,28 @@ export const getWeeklySchedules = async (filters = {}) => {
 };
 
 /**
- * Get latest published schedule for a student's department + level.
+ * Get latest published schedule for a student's filiere, or department + level.
  */
-export const getStudentCurrentSchedule = async ({ departmentId, levelCode }) => {
+export const getStudentCurrentSchedule = async ({ departmentId, levelCode, filiereId }) => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('weekly_schedules')
       .select(`
         *,
         departments(id, name),
         profiles!uploaded_by(id, full_name)
       `)
-      .eq('department_id', departmentId)
-      .eq('level_code', levelCode)
       .eq('status', 'published')
-      .order('week_start_date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order('week_start_date', { ascending: false });
+
+    if (filiereId) {
+      // Priorité à la filière spécifique
+      query = query.eq('filiere_id', filiereId);
+    } else {
+      query = query.eq('department_id', departmentId).eq('level_code', levelCode);
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle();
 
     if (error) throw error;
     return { data, error: null };
@@ -67,20 +72,25 @@ export const getStudentCurrentSchedule = async ({ departmentId, levelCode }) => 
 /**
  * Get all published schedules for a student (history).
  */
-export const getStudentScheduleHistory = async ({ departmentId, levelCode }) => {
+export const getStudentScheduleHistory = async ({ departmentId, levelCode, filiereId }) => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('weekly_schedules')
       .select(`
-        id, title, week_start_date, notes, created_at,
+        id, title, week_start_date, notes, file_path, created_at,
         departments(id, name),
         profiles!uploaded_by(id, full_name)
       `)
-      .eq('department_id', departmentId)
-      .eq('level_code', levelCode)
       .eq('status', 'published')
-      .order('week_start_date', { ascending: false })
-      .limit(20);
+      .order('week_start_date', { ascending: false });
+
+    if (filiereId) {
+      query = query.eq('filiere_id', filiereId);
+    } else {
+      query = query.eq('department_id', departmentId).eq('level_code', levelCode);
+    }
+
+    const { data, error } = await query.limit(20);
 
     if (error) throw error;
     return { data: data || [], error: null };

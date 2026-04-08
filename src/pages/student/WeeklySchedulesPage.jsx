@@ -31,6 +31,7 @@ const WeeklySchedulesPage = () => {
 
   const departmentId = authState.student?.department_id || authState.profile?.department_id;
   const levelCode = authState.student?.level || authState.profile?.level;
+  const filiereId = authState.student?.filiere_id || authState.profile?.filiere_id;
 
   const loadSchedule = useCallback(async () => {
     if (!departmentId || !levelCode) return;
@@ -38,8 +39,8 @@ const WeeklySchedulesPage = () => {
     setError(null);
     try {
       const [currentRes, historyRes] = await Promise.all([
-        getStudentCurrentSchedule({ departmentId, levelCode }),
-        getStudentScheduleHistory({ departmentId, levelCode })
+        getStudentCurrentSchedule({ departmentId, levelCode, filiereId }),
+        getStudentScheduleHistory({ departmentId, levelCode, filiereId })
       ]);
 
       if (currentRes.error) throw currentRes.error;
@@ -60,17 +61,16 @@ const WeeklySchedulesPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [departmentId, levelCode]);
+  }, [departmentId, levelCode, filiereId]);
 
   useEffect(() => { loadSchedule(); }, [loadSchedule]);
 
   const handleSelectWeek = async (scheduleId) => {
     const schedule = history.find((s) => s.id === scheduleId);
-    if (!schedule) return;
+    if (!schedule || !schedule.file_path) return;
     setSelectedId(scheduleId);
     try {
-      const filePath = `${departmentId}/${levelCode}/${schedule.week_start_date.split('-')[0]}/${schedule.week_start_date}.pdf`;
-      const { signedUrl, error: urlErr } = await getScheduleSignedUrl(filePath);
+      const { signedUrl, error: urlErr } = await getScheduleSignedUrl(schedule.file_path);
       if (urlErr) throw urlErr;
       setPdfUrl(signedUrl);
     } catch (err) {
