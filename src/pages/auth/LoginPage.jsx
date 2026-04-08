@@ -13,16 +13,17 @@ const LoginPage = () => {
   const { authState } = useAuth();
 
   React.useEffect(() => {
-    if (authState.user && !authState.loading) {
+    // On ne redirige que si l'utilisateur est connecté ET que le chargement complet (profil, entités) est fini
+    if (authState.isAuthenticated && !authState.loading && authState.user) {
       if (authState.isAdmin) {
-        navigate('/admin');
+        navigate('/admin', { replace: true });
       } else if (authState.isProfessor) {
-        navigate('/professor');
-      } else {
-        navigate('/student');
+        navigate('/professor', { replace: true });
+      } else if (authState.isStudent) {
+        navigate('/student', { replace: true });
       }
     }
-  }, [authState, navigate]);
+  }, [authState.isAuthenticated, authState.loading, authState.user, authState.isAdmin, authState.isProfessor, authState.isStudent, navigate]);
 
   return (
     <AuthLayout>
