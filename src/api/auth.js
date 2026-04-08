@@ -3,6 +3,7 @@
  */
 import { supabase } from '../supabase';
 import notificationService from '../services/NotificationService';
+import { syncAuthenticatedProfile } from './profile';
 
 /**
  * Types exportés en TypeScript, remplacés par des commentaires JSDoc
@@ -49,9 +50,11 @@ export const signInWithEmail = async (email, password) => {
  */
 export const signUpWithEmail = async (email, password, userData = {}) => {
   try {
+    const normalizedEmail = `${email || ''}`.trim().toLowerCase();
+
     // 1. Créer l'utilisateur dans Auth
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: {
         data: {
@@ -73,32 +76,27 @@ export const signUpWithEmail = async (email, password, userData = {}) => {
       };
     }
 
-    // 2. Créer le profil dans la table profiles si l'utilisateur est créé
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: data.user.id,
+    // 2. Synchroniser le profil si une session auth est déjà active.
+    // Si la confirmation email retarde la session, la synchro sera rejouée au premier login.
+    const activeSession = data.session || (await supabase.auth.getSession()).data.session;
+
+    if (activeSession?.user?.id === data.user.id) {
+      const { error: syncError } = await syncAuthenticatedProfile({
         full_name: userData.full_name || 'Nouvel utilisateur',
-        email: email,
         role: userData.role || 'student',
-        department_id: userData.department_id || null,
-        is_active: true,
-        avatar_url: userData.avatar_url || null,
+        department_id: userData.department_id || null
       });
 
-    if (profileError) {
-      console.error('Erreur lors de la création du profil:', profileError.message);
-      return {
-        user: data.user,
-        error: new Error(`Utilisateur créé mais erreur profil: ${profileError.message}`),
-      };
+      if (syncError) {
+        console.warn('Utilisateur créé mais synchronisation du profil différée:', syncError.message || syncError);
+      }
     }
 
     // 3. Envoyer un e-mail de bienvenue via le NotificationService
     try {
       await notificationService.sendWelcome(
         data.user.id,
-        email,
+        normalizedEmail,
         userData.full_name
       );
     } catch (notifErr) {

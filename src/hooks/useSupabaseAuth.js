@@ -7,7 +7,7 @@ import {
   onAuthStateChange,
   getSession
 } from '../api/auth';
-import { getProfileById, updateProfileSettings } from '../api/profile';
+import { getProfileById, syncAuthenticatedProfile, updateProfileSettings } from '../api/profile';
 import { getRoleEntities, ensureStudentRecord } from '../api/users';
 import { checkEmailAllowed } from '../api/allowedEmails';
 
@@ -53,6 +53,20 @@ export const useSupabaseAuth = () => {
     };
   }, []);
 
+  const resolveAuthFullName = (authUser) => {
+    const metadata = authUser?.user_metadata || {};
+
+    if (metadata.full_name) {
+      return metadata.full_name;
+    }
+
+    const firstName = metadata.first_name || metadata.prenom || '';
+    const lastName = metadata.last_name || metadata.nom || '';
+    const mergedName = `${firstName} ${lastName}`.trim();
+
+    return mergedName || authUser?.email || '';
+  };
+
   // Gérer les changements d'authentification
   const handleAuthChange = async (session) => {
     if (session) {
@@ -60,7 +74,7 @@ export const useSupabaseAuth = () => {
         setAuthState(prev => ({ ...prev, loading: true }));
 
         // Récupérer le profil utilisateur
-        const userProfile = await fetchUserProfile(session.user.id);
+        const userProfile = await fetchUserProfile(session.user);
 
         // Déterminer le nom complet (full_name)
         let fullName = '';
@@ -224,9 +238,13 @@ export const useSupabaseAuth = () => {
    * @param {string} userId - ID de l'utilisateur
    * @returns {Promise<Object>} Profil de l'utilisateur
    */
-  const fetchUserProfile = async (userId) => {
+  const fetchUserProfile = async (authUser) => {
     try {
-      const { profile, error } = await getProfileById(userId);
+      if (!authUser?.id) {
+        throw new Error('Identifiant utilisateur manquant.');
+      }
+
+      const { profile, error } = await getProfileById(authUser.id);
 
       if (error) {
         if (error.message && error.message.includes('infinite recursion')) {
@@ -236,11 +254,35 @@ export const useSupabaseAuth = () => {
         throw error;
       }
 
-      if (!profile) {
+      if (profile) {
+        return profile;
+      }
+
+      const { profile: syncedProfile, error: syncError } = await syncAuthenticatedProfile({
+        full_name: resolveAuthFullName(authUser),
+        role: authUser.user_metadata?.role || 'student',
+        department_id: null
+      });
+
+      if (syncError) {
+        throw syncError;
+      }
+
+      if (syncedProfile) {
+        return syncedProfile;
+      }
+
+      const { profile: retriedProfile, error: retryError } = await getProfileById(authUser.id);
+
+      if (retryError) {
+        throw retryError;
+      }
+
+      if (!retriedProfile) {
         throw new Error('Profil utilisateur introuvable. Contactez l’administration.');
       }
 
-      return profile;
+      return retriedProfile;
     } catch (error) {
       console.error('Erreur lors de la récupération du profil:', error);
       throw error;

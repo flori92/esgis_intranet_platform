@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../../context/AuthContext';
 import { LOGO_ESGIS_PATH } from '../../utils/assetUtils';
-import { supabase } from '../../supabase';
 import { toast } from 'react-hot-toast';
 
 /**
@@ -11,7 +10,7 @@ import { toast } from 'react-hot-toast';
  */
 const StyledLoginForm = () => {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signIn, signUp } = useAuth();
   
   // Onglet actif : 'login' ou 'signup'
   const [mode, setMode] = useState('login');
@@ -71,37 +70,24 @@ const StyledLoginForm = () => {
     setError(null);
 
     try {
-      // 1. Vérifier si l'email est autorisé (pré-enregistré par l'admin)
-      const { data: isAllowed, error: rpcError } = await supabase.rpc('is_email_allowed', { p_email: email });
-      
-      if (rpcError) throw rpcError;
-
-      if (!isAllowed) {
-        setError('Cet email n\'est pas autorisé à s\'inscrire. Veuillez contacter l\'administration.');
-        setLoading(false);
-        return;
-      }
-
-      // 2. Procéder à l'inscription réelle dans Supabase Auth
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: window.location.origin
-        }
-      });
+      const { error: signUpError } = await signUp(email, password);
 
       if (signUpError) throw signUpError;
 
-      if (data?.user?.identities?.length === 0) {
-        setError('Ce compte est déjà activé. Essayez de vous connecter.');
-      } else {
-        toast.success('Compte activé ! Vérifiez vos emails pour confirmer votre adresse.');
-        setMode('login');
-      }
+      toast.success('Compte activé. Vous pouvez maintenant vous connecter.');
+      setPassword('');
+      setConfirmPassword('');
+      setMode('login');
     } catch (err) {
       console.error('Erreur inscription:', err);
-      setError(err.message || 'Une erreur est survenue lors de l\'activation.');
+
+      const message = err?.message || '';
+
+      if (message.includes('already registered') || message.includes('already been registered')) {
+        setError('Ce compte est déjà activé. Essayez de vous connecter ou utilisez la réinitialisation du mot de passe.');
+      } else {
+        setError(message || 'Une erreur est survenue lors de l\'activation.');
+      }
     } finally {
       setLoading(false);
     }

@@ -51,6 +51,25 @@ export const getProfileById = async (profileId) => {
   }
 };
 
+export const syncAuthenticatedProfile = async (defaults = {}) => {
+  try {
+    const { data, error } = await supabase.rpc('sync_auth_profile', {
+      p_full_name: sanitizeString(defaults.full_name),
+      p_role: sanitizeString(defaults.role),
+      p_department_id: defaults.department_id ?? null
+    });
+
+    if (error) {
+      return { profile: null, error };
+    }
+
+    const profile = Array.isArray(data) ? data[0] || null : data || null;
+    return { profile, error: null };
+  } catch (error) {
+    return { profile: null, error };
+  }
+};
+
 export const getProfileSettings = async (profileId) => {
   try {
     if (!profileId) {
