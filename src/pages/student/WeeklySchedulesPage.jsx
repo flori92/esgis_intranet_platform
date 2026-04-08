@@ -16,6 +16,50 @@ import {
   getStudentScheduleHistory,
   getScheduleSignedUrl
 } from '@/api/weeklySchedules';
+import { addDays, format, parseISO } from 'date-fns';
+import { fr } from 'date-fns/locale';
+
+const parseDateValue = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return parseISO(value);
+  } catch (_error) {
+    return null;
+  }
+};
+
+const formatWeekRange = (weekStartDate) => {
+  const start = parseDateValue(weekStartDate);
+
+  if (!start) {
+    return 'Semaine non precisee';
+  }
+
+  const end = addDays(start, 6);
+  const sameMonth = format(start, 'MMMM yyyy', { locale: fr }) === format(end, 'MMMM yyyy', { locale: fr });
+  const sameYear = format(start, 'yyyy', { locale: fr }) === format(end, 'yyyy', { locale: fr });
+
+  if (sameMonth) {
+    return `Semaine du ${format(start, 'd', { locale: fr })} au ${format(end, 'd MMMM yyyy', { locale: fr })}`;
+  }
+
+  if (sameYear) {
+    return `Semaine du ${format(start, 'd MMMM', { locale: fr })} au ${format(end, 'd MMMM yyyy', { locale: fr })}`;
+  }
+
+  return `Semaine du ${format(start, 'd MMM yyyy', { locale: fr })} au ${format(end, 'd MMM yyyy', { locale: fr })}`;
+};
+
+const buildTrackLabel = (levelCode, departmentName) => {
+  if (levelCode && departmentName) {
+    return `${levelCode} • ${departmentName}`;
+  }
+
+  return levelCode || departmentName || 'Filiere non precisee';
+};
 
 const WeeklySchedulesPage = () => {
   const { authState } = useAuth();
@@ -32,6 +76,12 @@ const WeeklySchedulesPage = () => {
   const departmentId = authState.student?.department_id || authState.profile?.department_id;
   const levelCode = authState.student?.level || authState.profile?.level;
   const filiereId = authState.student?.filiere_id || authState.profile?.filiere_id;
+  const selectedSchedule = history.find((schedule) => schedule.id === selectedId) || current;
+  const currentWeekLabel = formatWeekRange(selectedSchedule?.week_start_date || current?.week_start_date);
+  const trackLabel = buildTrackLabel(
+    levelCode,
+    selectedSchedule?.departments?.name || current?.departments?.name || ''
+  );
 
   const loadSchedule = useCallback(async () => {
     if (!departmentId || !levelCode) return;
@@ -100,7 +150,7 @@ const WeeklySchedulesPage = () => {
             EDT Hebdomadaire
           </Typography>
           <Typography variant="body2" color="text.secondary" fontFamily="Montserrat">
-            Emploi du temps de votre filière — {levelCode}
+            Emploi du temps de votre filiere — {trackLabel} • {currentWeekLabel}
           </Typography>
         </Box>
         {pdfUrl && (
@@ -140,15 +190,15 @@ const WeeklySchedulesPage = () => {
             >
               {history.map((s) => (
                 <MenuItem key={s.id} value={s.id}>
-                  Semaine du {s.week_start_date}
+                  {formatWeekRange(s.week_start_date)}
                   {s.id === current?.id ? ' (actuelle)' : ''}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
-          {current?.notes && (
+          {selectedSchedule?.notes && (
             <Chip
-              label={current.notes}
+              label={selectedSchedule.notes}
               size="small"
               variant="outlined"
               color="warning"
@@ -205,7 +255,7 @@ const WeeklySchedulesPage = () => {
       {/* Fullscreen preview dialog */}
       <Dialog open={fullscreenOpen} onClose={() => setFullscreenOpen(false)} fullScreen>
         <DialogTitle sx={{ fontFamily: 'Montserrat', fontWeight: 'bold', color: '#003366', bgcolor: '#f5f5f5' }}>
-          {current?.title || 'Emploi du temps'}
+          {selectedSchedule?.title || current?.title || 'Emploi du temps'} • {currentWeekLabel}
         </DialogTitle>
         <DialogContent sx={{ p: 0, height: '100%' }}>
           {pdfUrl && (

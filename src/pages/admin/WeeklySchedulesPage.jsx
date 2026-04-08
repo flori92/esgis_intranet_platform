@@ -24,8 +24,51 @@ import {
   getDepartments,
   notifyStudentsOfNewSchedule
 } from '@/api/weeklySchedules';
+import { addDays, format, parseISO } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 const LEVEL_OPTIONS = ['L1', 'L2', 'L3', 'M1', 'M2'];
+
+const parseDateValue = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return parseISO(value);
+  } catch (_error) {
+    return null;
+  }
+};
+
+const formatWeekRange = (weekStartDate) => {
+  const start = parseDateValue(weekStartDate);
+
+  if (!start) {
+    return 'Semaine non precisee';
+  }
+
+  const end = addDays(start, 6);
+  const sameMonth = format(start, 'MMMM yyyy', { locale: fr }) === format(end, 'MMMM yyyy', { locale: fr });
+  const sameYear = format(start, 'yyyy', { locale: fr }) === format(end, 'yyyy', { locale: fr });
+
+  if (sameMonth) {
+    return `Semaine du ${format(start, 'd', { locale: fr })} au ${format(end, 'd MMMM yyyy', { locale: fr })}`;
+  }
+
+  if (sameYear) {
+    return `Semaine du ${format(start, 'd MMMM', { locale: fr })} au ${format(end, 'd MMMM yyyy', { locale: fr })}`;
+  }
+
+  return `Semaine du ${format(start, 'd MMM yyyy', { locale: fr })} au ${format(end, 'd MMM yyyy', { locale: fr })}`;
+};
+
+const buildScheduleTitle = ({ levelCode, departmentName, weekStartDate }) => {
+  const weekLabel = formatWeekRange(weekStartDate);
+  const scope = [levelCode, departmentName].filter(Boolean).join(' ');
+
+  return `EDT Hebdomadaire ${scope} - ${weekLabel}`.trim();
+};
 
 const getCurrentAcademicYear = () => {
   const now = new Date();
@@ -96,8 +139,11 @@ const WeeklySchedulesPage = () => {
       const updated = { ...prev, [field]: value };
       if (field === 'departmentId' || field === 'levelCode' || field === 'weekStartDate') {
         const dept = departments.find((d) => d.id === Number(updated.departmentId));
-        const deptName = dept?.name || '';
-        updated.title = `EDT ${updated.levelCode} ${deptName} - Semaine du ${updated.weekStartDate}`;
+        updated.title = buildScheduleTitle({
+          levelCode: updated.levelCode,
+          departmentName: dept?.name || '',
+          weekStartDate: updated.weekStartDate
+        });
       }
       return updated;
     });
@@ -257,7 +303,7 @@ const WeeklySchedulesPage = () => {
                   <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.title}</TableCell>
                   <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.departments?.name || '-'}</TableCell>
                   <TableCell><Chip label={s.level_code} size="small" color="primary" /></TableCell>
-                  <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.week_start_date}</TableCell>
+                  <TableCell sx={{ fontFamily: 'Montserrat' }}>{formatWeekRange(s.week_start_date)}</TableCell>
                   <TableCell><Chip label={s.status} size="small" color={statusColor(s.status)} /></TableCell>
                   <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.profiles?.full_name || '-'}</TableCell>
                   <TableCell>

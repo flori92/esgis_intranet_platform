@@ -759,6 +759,91 @@ export const finalizeStudentExamSubmission = async ({
   }
 };
 
+const MONITORING_ACTIVE_THRESHOLD_MS = 90 * 1000;
+
+const parseSerializedAnswers = (value) => {
+  if (!value) {
+    return {};
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  return {};
+};
+
+const hasMeaningfulAnswer = (value) => {
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => hasMeaningfulAnswer(item));
+  }
+
+  if (typeof value === 'object') {
+    return Object.values(value).some((item) => hasMeaningfulAnswer(item));
+  }
+
+  return false;
+};
+
+const countAnsweredQuestions = (answers) => {
+  const normalizedAnswers = parseSerializedAnswers(answers);
+
+  return Object.values(normalizedAnswers).reduce(
+    (count, answer) => count + (hasMeaningfulAnswer(answer) ? 1 : 0),
+    0
+  );
+};
+
+const getMonitoringRiskMeta = ({ incidentCount = 0, isStale = false, attemptStatus = 'not_started' }) => {
+  let riskScore = Number(incidentCount || 0) * 35;
+
+  if (isStale && attemptStatus === 'in_progress') {
+    riskScore += 20;
+  }
+
+  if (attemptStatus === 'submitted') {
+    riskScore = Math.max(riskScore - 10, 0);
+  }
+
+  riskScore = Math.min(riskScore, 100);
+
+  if (incidentCount >= 3 || riskScore >= 70) {
+    return { riskScore, riskLevel: 'critical' };
+  }
+
+  if (incidentCount >= 2 || riskScore >= 40) {
+    return { riskScore, riskLevel: 'high' };
+  }
+
+  if (incidentCount >= 1 || isStale || riskScore >= 15) {
+    return { riskScore, riskLevel: 'medium' };
+  }
+
+  return { riskScore, riskLevel: 'low' };
+};
+
+const getIncidentDateValue = (incident) => incident?.timestamp || incident?.detected_at || null;
+
 export const getProfessorExamMonitoringData = async (examId) => {
   try {
     const numericExamId = Number(examId);
@@ -767,7 +852,8 @@ export const getProfessorExamMonitoringData = async (examId) => {
       { data: examData, error: examError },
       { data: studentExams, error: studentExamsError },
       { data: activeStudents, error: activeStudentsError },
-      { data: cheatingAttempts, error: cheatingAttemptsError }
+      { data: cheatingAttempts, error: cheatingAttemptsError },
+      { count: questionCount, error: questionCountError }
     ] = await Promise.all([
       supabase
         .from('exams')
@@ -851,7 +937,11 @@ export const getProfessorExamMonitoringData = async (examId) => {
         `)
         .eq('exam_id', numericExamId)
         .order('timestamp', { ascending: false })
-        .limit(50)
+        .limit(50),
+      supabase
+        .from('exam_questions')
+        .select('*', { count: 'exact', head: true })
+        .eq('exam_id', numericExamId)
     ]);
 
     if (examError) {
@@ -870,50 +960,153 @@ export const getProfessorExamMonitoringData = async (examId) => {
       return { exam: null, participants: [], activeStudents: [], incidents: [], summary: null, error: cheatingAttemptsError };
     }
 
-    const activeByProfileId = new Map(
-      (activeStudents || []).map((row) => [row.student_id, row])
-    );
+    if (questionCountError) {
+      console.error('Erreur comptage des questions pour le monitoring:', questionCountError);
+    }
 
     const incidentsByStudentExamId = new Map();
-    (cheatingAttempts || []).forEach((incident) => {
-      const key = incident.student_exam_id || incident.student_id;
-      incidentsByStudentExamId.set(key, (incidentsByStudentExamId.get(key) || 0) + 1);
+    const incidentsByProfileId = new Map();
+    const latestIncidentByStudentExamId = new Map();
+    const latestIncidentByProfileId = new Map();
+
+    const normalizedIncidents = (cheatingAttempts || []).map((incident) => {
+      const profile = getRelation(incident.student);
+      const occurredAt = getIncidentDateValue(incident);
+
+      if (incident.student_exam_id) {
+        incidentsByStudentExamId.set(
+          incident.student_exam_id,
+          (incidentsByStudentExamId.get(incident.student_exam_id) || 0) + 1
+        );
+
+        const currentLatest = latestIncidentByStudentExamId.get(incident.student_exam_id);
+        if (!currentLatest || new Date(occurredAt || 0).getTime() >= new Date(currentLatest.occurred_at || 0).getTime()) {
+          latestIncidentByStudentExamId.set(incident.student_exam_id, {
+            occurred_at: occurredAt,
+            details: incident.details || null
+          });
+        }
+      }
+
+      if (incident.student_id) {
+        incidentsByProfileId.set(
+          incident.student_id,
+          (incidentsByProfileId.get(incident.student_id) || 0) + 1
+        );
+
+        const currentLatest = latestIncidentByProfileId.get(incident.student_id);
+        if (!currentLatest || new Date(occurredAt || 0).getTime() >= new Date(currentLatest.occurred_at || 0).getTime()) {
+          latestIncidentByProfileId.set(incident.student_id, {
+            occurred_at: occurredAt,
+            details: incident.details || null
+          });
+        }
+      }
+
+      return {
+        ...incident,
+        student_name: profile?.full_name || 'Etudiant',
+        student_email: profile?.email || '',
+        occurred_at: occurredAt
+      };
     });
 
+    const normalizedActiveStudents = (activeStudents || []).map((row) => {
+      const profile = getRelation(row.student);
+      const lastPingAgeMs = row.last_ping ? Date.now() - new Date(row.last_ping).getTime() : Number.POSITIVE_INFINITY;
+      const isOnline = Boolean(!row.is_completed && lastPingAgeMs <= MONITORING_ACTIVE_THRESHOLD_MS);
+
+      return {
+        ...row,
+        student_name: profile?.full_name || 'Etudiant',
+        student_email: profile?.email || '',
+        student_avatar: profile?.avatar_url || null,
+        is_online: isOnline,
+        is_stale: Boolean(!row.is_completed && !isOnline)
+      };
+    });
+
+    const activeByProfileId = new Map(
+      normalizedActiveStudents.map((row) => [row.student_id, row])
+    );
+
+    const totalQuestionCount = Number(questionCount || 0);
     const participants = (studentExams || []).map((row) => {
       const student = getRelation(row.students);
       const profile = getRelation(student?.profiles);
       const activeEntry = activeByProfileId.get(student?.profile_id);
+      const incidentCount = incidentsByStudentExamId.get(row.id) || incidentsByProfileId.get(student?.profile_id) || 0;
+      const latestIncident =
+        latestIncidentByStudentExamId.get(row.id) ||
+        latestIncidentByProfileId.get(student?.profile_id) ||
+        null;
+      const answeredCount = countAnsweredQuestions(row.answers);
+      const normalizedAnsweredCount = row.attempt_status === 'submitted'
+        ? totalQuestionCount || answeredCount
+        : answeredCount;
+      const progressPercentage = totalQuestionCount > 0
+        ? Math.min(100, Math.round((normalizedAnsweredCount / totalQuestionCount) * 100))
+        : row.attempt_status === 'submitted'
+          ? 100
+          : 0;
+      const { riskScore, riskLevel } = getMonitoringRiskMeta({
+        incidentCount,
+        isStale: activeEntry?.is_stale,
+        attemptStatus: row.attempt_status
+      });
 
       return {
         ...row,
-        student_name: profile?.full_name || 'Étudiant inconnu',
+        student_name: profile?.full_name || 'Etudiant inconnu',
         student_email: profile?.email || '',
         student_avatar: profile?.avatar_url || null,
         student_profile_id: student?.profile_id || null,
         student_number: student?.student_number || '',
         level: student?.level || '',
         is_active: Boolean(activeEntry && !activeEntry.is_completed),
+        is_online: Boolean(activeEntry?.is_online),
+        is_stale: Boolean(activeEntry?.is_stale),
         active_last_ping: activeEntry?.last_ping || null,
         active_start_time: activeEntry?.start_time || null,
-        detected_incidents: incidentsByStudentExamId.get(row.id) || 0
+        detected_incidents: incidentCount,
+        answered_count: normalizedAnsweredCount,
+        question_count: totalQuestionCount,
+        progress_percentage: progressPercentage,
+        latest_incident_at: latestIncident?.occurred_at || null,
+        latest_incident_details: latestIncident?.details || null,
+        submitted_at: row.departure_time || null,
+        risk_score: riskScore,
+        risk_level: riskLevel
       };
     });
 
-    const normalizedExam = normalizeExamRecord(examData);
+    const normalizedExam = {
+      ...normalizeExamRecord(examData),
+      question_count: totalQuestionCount
+    };
+    const gradedParticipants = participants.filter((participant) => participant.grade !== null && participant.grade !== undefined);
     const summary = {
       assignedCount: participants.length,
-      activeCount: participants.filter((participant) => participant.is_active).length,
+      activeCount: participants.filter((participant) => participant.is_online).length,
+      composingCount: participants.filter((participant) => participant.attempt_status === 'in_progress').length,
       submittedCount: participants.filter((participant) => participant.attempt_status === 'submitted').length,
+      notStartedCount: participants.filter((participant) => (participant.attempt_status || 'not_started') === 'not_started').length,
       gradedCount: participants.filter((participant) => participant.grade !== null && participant.grade !== undefined).length,
-      incidentsCount: (cheatingAttempts || []).length
+      staleCount: participants.filter((participant) => participant.is_stale).length,
+      absentCount: participants.filter((participant) => participant.attendance === 'absent' || participant.status === 'absent').length,
+      suspiciousCount: participants.filter((participant) => ['high', 'critical'].includes(participant.risk_level)).length,
+      incidentsCount: normalizedIncidents.length,
+      averageGrade: gradedParticipants.length
+        ? Number((gradedParticipants.reduce((total, participant) => total + Number(participant.grade || 0), 0) / gradedParticipants.length).toFixed(2))
+        : null,
+      questionCount: totalQuestionCount
     };
 
     return {
       exam: normalizedExam,
       participants,
-      activeStudents: activeStudents || [],
-      incidents: cheatingAttempts || [],
+      activeStudents: normalizedActiveStudents,
+      incidents: normalizedIncidents,
       summary,
       error: null
     };
