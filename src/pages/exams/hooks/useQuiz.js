@@ -293,6 +293,7 @@ export const useQuiz = () => {
     authState.isStudent,
     authState.profile?.id,
     authState.student?.id,
+    authState.user?.id,
     clearRuntimeIntervals,
     examId,
     navigate,
@@ -399,24 +400,32 @@ export const useQuiz = () => {
     });
   }, [examId]);
 
-  const reportCheatingAttemptHandler = useCallback(async () => {
+  const reportCheatingAttemptHandler = useCallback(async (incident = {}) => {
     if (quizStatus !== 'IN_PROGRESS' || !authState.profile?.id) {
       return;
     }
 
-    cheatingAttemptsRef.current += 1;
-    setCheatingAttempts(cheatingAttemptsRef.current);
+    const shouldIncrementCounter = incident.incrementCounter !== false;
+    const nextAttemptCount = shouldIncrementCounter
+      ? cheatingAttemptsRef.current + 1
+      : cheatingAttemptsRef.current;
+    const storedAttemptCount = nextAttemptCount || Number(incident.attemptCount || 0) || 1;
+
+    if (shouldIncrementCounter) {
+      cheatingAttemptsRef.current = nextAttemptCount;
+      setCheatingAttempts(nextAttemptCount);
+    }
 
     await recordCheatingAttempt({
       student_id: authState.profile.id,
       exam_id: examId,
       student_exam_id: studentExamId,
-      details: "Sortie d'onglet ou perte de focus detectee",
-      attempt_count: cheatingAttemptsRef.current,
-      detected_at: new Date().toISOString()
+      details: incident.details || "Sortie d'onglet ou perte de focus detectee",
+      attempt_count: storedAttemptCount,
+      detected_at: incident.detected_at || new Date().toISOString()
     });
 
-    if (cheatingAttemptsRef.current >= 3) {
+    if (shouldIncrementCounter && cheatingAttemptsRef.current >= 3) {
       toast.error("Trop de tentatives de triche detectees. Soumission automatique.");
       submitQuiz();
     }

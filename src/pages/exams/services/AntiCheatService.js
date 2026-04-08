@@ -52,6 +52,7 @@ class AntiCheatService {
     this.startTime = null;
     this.isActive = false;
     this.isFullscreen = false;
+    this.lastFullscreenDeniedAt = 0;
 
     // Handlers stockés pour le cleanup
     this._handlers = {};
@@ -209,8 +210,6 @@ class AntiCheatService {
 
     // 6. Mode plein écran
     if (this.requireFullscreen) {
-      this._requestFullscreen();
-      
       this._handlers.fullscreenChange = () => {
         if (!document.fullscreenElement && this.isActive) {
           this.isFullscreen = false;
@@ -218,9 +217,22 @@ class AntiCheatService {
           this.onFullscreenExit();
         } else {
           this.isFullscreen = true;
+          this._detachFullscreenPromptListeners();
         }
       };
       document.addEventListener('fullscreenchange', this._handlers.fullscreenChange);
+
+      this._handlers.fullscreenPrompt = () => {
+        if (!this.isActive || document.fullscreenElement) {
+          return;
+        }
+        this._requestFullscreen();
+      };
+
+      // Le plein écran doit être demandé à la suite d'une interaction utilisateur.
+      document.addEventListener('pointerdown', this._handlers.fullscreenPrompt, true);
+      document.addEventListener('keydown', this._handlers.fullscreenPrompt, true);
+      document.addEventListener('touchstart', this._handlers.fullscreenPrompt, true);
     }
 
     // 7. Détection de redimensionnement suspect
@@ -252,9 +264,23 @@ class AntiCheatService {
     if (elem.requestFullscreen) {
       elem.requestFullscreen().then(() => {
         this.isFullscreen = true;
+        this._detachFullscreenPromptListeners();
       }).catch(() => {
-        this._recordIncident('fullscreen_denied', 'Mode plein écran refusé par le navigateur');
+        const now = Date.now();
+        if (now - this.lastFullscreenDeniedAt > 4000) {
+          this.lastFullscreenDeniedAt = now;
+          this._recordIncident('fullscreen_denied', 'Mode plein écran refusé par le navigateur');
+        }
       });
+    }
+  }
+
+  _detachFullscreenPromptListeners() {
+    if (this._handlers.fullscreenPrompt) {
+      document.removeEventListener('pointerdown', this._handlers.fullscreenPrompt, true);
+      document.removeEventListener('keydown', this._handlers.fullscreenPrompt, true);
+      document.removeEventListener('touchstart', this._handlers.fullscreenPrompt, true);
+      delete this._handlers.fullscreenPrompt;
     }
   }
 
@@ -315,6 +341,7 @@ class AntiCheatService {
     if (this._handlers.fullscreenChange) {
       document.removeEventListener('fullscreenchange', this._handlers.fullscreenChange);
     }
+    this._detachFullscreenPromptListeners();
     if (this._handlers.resize) {
       window.removeEventListener('resize', this._handlers.resize);
     }

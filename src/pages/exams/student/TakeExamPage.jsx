@@ -59,12 +59,13 @@ const TakeExamPage = () => {
         // Vérifier si l'examen est disponible
         const examDate = new Date(examData.date);
         const now = new Date();
+        const isImmediateAccessExam = ['training', 'mock_exam'].includes(examData.category);
 
         if (!['published', 'in_progress'].includes(examData.status)) {
           throw new Error('Cet examen n\'est pas encore disponible');
         }
         
-        if (examDate > now) {
+        if (!isImmediateAccessExam && examDate > now) {
           throw new Error('Cet examen n\'est pas encore disponible');
         }
         

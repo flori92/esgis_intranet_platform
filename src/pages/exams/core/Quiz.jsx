@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
 import QuestionCard from "./QuestionCard";
 import QuizNavigation from "./QuizNavigation";
 import QuizResults from "./QuizResults";
 import { Toaster } from 'react-hot-toast';
+import AntiCheatService from '../services/AntiCheatService';
 import {
   Box,
   Typography,
@@ -54,20 +55,21 @@ const Quiz = () => {
   
   // Référence pour le div d'alerte personnalisé
   const alertRef = useRef(null);
-  // Référence pour suivre si une triche a été détectée
-  const cheatingDetectedRef = useRef(false);
 
   // Référence stable pour le son d'alerte
   const alertSoundRef = React.useRef(null);
   if (!alertSoundRef.current) {
     alertSoundRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
   }
+  const antiCheatServiceRef = useRef(null);
+  const trackedQuestionIndexRef = useRef(0);
+  const lastMajorIncidentRef = useRef({ family: null, at: 0 });
 
   /**
    * Affiche une alerte personnalisée en rouge
    * @param {string} message - Message à afficher dans l'alerte
    */
-  const showCustomAlert = (message) => {
+  const showCustomAlert = useCallback((message) => {
     if (alertRef.current && document.body.contains(alertRef.current)) {
       document.body.removeChild(alertRef.current);
       alertRef.current = null;
@@ -132,73 +134,136 @@ const Quiz = () => {
     if (alertSoundRef.current) {
       alertSoundRef.current.play().catch((err) => console.error('Erreur lors de la lecture du son:', err));
     }
-  };
+  }, []);
 
-  // Référence stable mise à jour à chaque rendu
-  const detectCheatingRef = useRef(() => {});
-  detectCheatingRef.current = () => {
-    if (quizStatus !== 'IN_PROGRESS') return;
-    if (cheatingDetectedRef.current) return;
-    
-    // Skip cheating detection for training/practice exams
-    if (examData?.category === 'training') {
-      console.log('Cheating detection skipped for training exam');
+  const isDesktopSecureMode = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const supportsPointerQuery = typeof window.matchMedia === 'function';
+    return window.innerWidth >= 1024 && (!supportsPointerQuery || window.matchMedia('(pointer:fine)').matches);
+  }, []);
+
+  const isMajorIncident = useCallback((incidentType) => (
+    ['tab_switch', 'window_blur', 'fullscreen_exit', 'fullscreen_denied', 'devtools_attempt', 'view_source_attempt', 'alt_tab'].includes(incidentType)
+  ), []);
+
+  const getIncidentFamily = useCallback((incidentType) => {
+    if (['tab_switch', 'window_blur', 'fullscreen_exit'].includes(incidentType)) {
+      return 'focus_loss';
+    }
+
+    if (['devtools_attempt', 'view_source_attempt'].includes(incidentType)) {
+      return 'devtools';
+    }
+
+    return incidentType;
+  }, []);
+
+  const shouldIgnoreIncident = useCallback((incidentType) => {
+    const family = getIncidentFamily(incidentType);
+    const now = Date.now();
+    const previous = lastMajorIncidentRef.current;
+
+    if (previous.family === family && now - previous.at < 1500) {
+      return true;
+    }
+
+    lastMajorIncidentRef.current = { family, at: now };
+    return false;
+  }, [getIncidentFamily]);
+
+  const buildIncidentAlert = useCallback((incidentType) => {
+    switch (incidentType) {
+      case 'fullscreen_exit':
+      case 'fullscreen_denied':
+        return '🚨 TRICHE DÉTECTÉE 🚨\n\nLe mode plein écran sécurisé a été quitté ou refusé.\n\nRevenez immédiatement à l’épreuve. Cet incident a été enregistré.';
+      case 'devtools_attempt':
+      case 'view_source_attempt':
+        return '🚨 TRICHE DÉTECTÉE 🚨\n\nUne tentative d’inspection technique de l’épreuve a été détectée.\n\nCet incident a été enregistré et transmis au surveillant.';
+      case 'alt_tab':
+      case 'tab_switch':
+      case 'window_blur':
+      default:
+        return '🚨 TRICHE DÉTECTÉE 🚨\n\nVous avez quitté l\'onglet ou changé de fenêtre pendant l\'examen.\n\nCet incident a été enregistré et transmis au surveillant. Au bout de 3 alertes majeures, votre copie sera automatiquement soumise.';
+    }
+  }, []);
+
+  useEffect(() => {
+    const shouldProtectExam = quizStatus === 'IN_PROGRESS' && examData && examData.category !== 'training';
+
+    if (!shouldProtectExam) {
+      antiCheatServiceRef.current?.stop();
+      antiCheatServiceRef.current = null;
+      trackedQuestionIndexRef.current = 0;
+      lastMajorIncidentRef.current = { family: null, at: 0 };
+      return undefined;
+    }
+
+    const service = new AntiCheatService({
+      maxTabSwitches: 3,
+      autoSubmitOnMaxSwitches: true,
+      disableCopyPaste: true,
+      disableRightClick: true,
+      requireFullscreen: isDesktopSecureMode(),
+      onIncident: (incident) => {
+        const incrementCounter = isMajorIncident(incident.type) && !shouldIgnoreIncident(incident.type);
+
+        if (incrementCounter) {
+          showCustomAlert(buildIncidentAlert(incident.type));
+        }
+
+        reportCheatingAttempt({
+          details: `[${incident.type}] ${incident.details}`,
+          detected_at: incident.timestamp,
+          incrementCounter,
+        });
+      },
+      onAutoSubmit: () => {
+        showCustomAlert('🚨 SESSION INTERROMPUE 🚨\n\nLe nombre maximum d’alertes majeures a été atteint.\n\nVotre copie va être soumise automatiquement.');
+        setTimeout(() => submitQuiz(), 0);
+      },
+      onFullscreenExit: () => {}
+    });
+
+    antiCheatServiceRef.current = service;
+    trackedQuestionIndexRef.current = 0;
+    service.start();
+
+    return () => {
+      service.stop();
+      if (antiCheatServiceRef.current === service) {
+        antiCheatServiceRef.current = null;
+      }
+    };
+  }, [buildIncidentAlert, examData, isDesktopSecureMode, isMajorIncident, quizStatus, reportCheatingAttempt, shouldIgnoreIncident, showCustomAlert]);
+
+  useEffect(() => {
+    if (!antiCheatServiceRef.current) {
       return;
     }
 
-    cheatingDetectedRef.current = true;
-    showCustomAlert('🚨 TRICHE DÉTECTÉE 🚨\n\nVous avez quitté l\'onglet ou changé de fenêtre pendant l\'examen.\n\nCet incident a été enregistré et transmis au surveillant. Au bout de 3 tentatives, votre copie sera automatiquement soumise.');
-    reportCheatingAttempt();
-    setTimeout(() => {
-      cheatingDetectedRef.current = false;
-    }, 5000);
-  };
-  
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden" && quizStatus === 'IN_PROGRESS') {
-        detectCheatingRef.current();
-      }
-    };
-    
-    const handleBlur = () => {
-      if (quizStatus === 'IN_PROGRESS') {
-        detectCheatingRef.current();
-      }
-    };
+    if (trackedQuestionIndexRef.current === currentQuestionIndex) {
+      return;
+    }
 
-    const preventAction = (e) => {
-      if (quizStatus === 'IN_PROGRESS') {
-        e.preventDefault();
-      }
-    };
-    
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("blur", handleBlur);
-    document.addEventListener('contextmenu', preventAction);
-    document.addEventListener('copy', preventAction);
-    document.addEventListener('cut', preventAction);
-    document.addEventListener('paste', preventAction);
-    
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleBlur);
-      document.removeEventListener('contextmenu', preventAction);
-      document.removeEventListener('copy', preventAction);
-      document.removeEventListener('cut', preventAction);
-      document.removeEventListener('paste', preventAction);
-      if (alertRef.current && document.body.contains(alertRef.current)) {
-        document.body.removeChild(alertRef.current);
-        alertRef.current = null;
-      }
-    };
-  }, [quizStatus, reportCheatingAttempt]);
+    antiCheatServiceRef.current.setCurrentQuestion(currentQuestionIndex);
+    trackedQuestionIndexRef.current = currentQuestionIndex;
+  }, [currentQuestionIndex]);
 
   useEffect(() => {
     if (quizStatus === 'NOT_STARTED') {
       startQuiz();
     }
   }, [quizStatus, startQuiz]);
+
+  useEffect(() => {
+    return () => {
+      antiCheatServiceRef.current?.stop();
+      antiCheatServiceRef.current = null;
+    };
+  }, []);
 
   if (quizStatus === 'COMPLETED') {
     return (

@@ -192,11 +192,13 @@ const StudentExamsList = () => {
 
   // Rendu d'un examen
   const renderExam = (exam) => {
+    const isImmediateAccessExam = ['training', 'mock_exam'].includes(exam.category);
     const isPast = new Date(exam?.date || new Date().toISOString()) < new Date();
     const isSubmitted = exam.attempt_status === 'submitted' || ['passed', 'failed'].includes(exam.result_status) || exam.grade !== null;
     const canStart = ['published', 'in_progress'].includes(exam.status) && !isSubmitted;
-    const statusColor = isSubmitted ? 'primary' : isPast ? 'error' : 'success';
-    const statusText = isSubmitted ? 'Soumis' : isPast ? 'Passé' : 'À venir';
+    const canLaunchNow = canStart && (isImmediateAccessExam || !isPast);
+    const statusColor = isSubmitted ? 'primary' : isImmediateAccessExam ? 'success' : isPast ? 'error' : 'success';
+    const statusText = isSubmitted ? 'Soumis' : isImmediateAccessExam ? 'Disponible' : isPast ? 'Passé' : 'À venir';
 
     // Libellé de catégorie
     const categoryLabels = {
@@ -275,13 +277,13 @@ const StudentExamsList = () => {
           >
             Détails
           </Button>
-              {!isPast && (
+          {canStart && (
             <Button
               size="small"
               variant="contained"
               color="primary"
               startIcon={<PlayArrowIcon />}
-              disabled={!canStart}
+              disabled={!canLaunchNow}
               onClick={() => handleViewExam(exam)}
             >
               {exam.attempt_status === 'in_progress' ? 'Reprendre' : 'Commencer'}
