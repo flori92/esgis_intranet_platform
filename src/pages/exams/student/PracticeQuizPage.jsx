@@ -1,47 +1,122 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Box, Typography, Paper, Grid, CircularProgress, Alert, Button,
-  Card, CardContent, Divider, Chip, Snackbar, Dialog, DialogTitle,
-  DialogContent, DialogActions, LinearProgress
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Divider,
+  Grid,
+  LinearProgress,
+  Paper,
+  Snackbar,
+  Typography,
 } from '@mui/material';
 import {
-  Quiz as QuizIcon,
+  EmojiEvents as TrophyIcon,
   PlayArrow as PlayIcon,
+  Quiz as QuizIcon,
   Replay as ReplayIcon,
-  CheckCircle as CheckIcon,
-  School as SchoolIcon,
   Timer as TimerIcon,
-  EmojiEvents as TrophyIcon
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
+import { getPracticeQuizQuestions, getPracticeQuizzes, savePracticeQuizAttempt } from '@/api/admin';
 import QuestionRenderer from '../components/QuestionRenderer';
-import { getPracticeQuizzes, getPracticeQuizQuestions, savePracticeQuizAttempt } from '@/api/admin';
-
-const MOCK_QUIZZES = [
-  { id: 'quiz1', title: 'Quiz — HTML/CSS Bases', matiere: 'Développement Web', professor: 'Prof. MENSAH', questions_count: 10, attempts: 2, best_score: 80, duration: 15, difficulty: 'Facile' },
-  { id: 'quiz2', title: 'Auto-évaluation — JavaScript ES6', matiere: 'Développement Web', professor: 'Prof. MENSAH', questions_count: 15, attempts: 0, best_score: null, duration: 20, difficulty: 'Moyen' },
-  { id: 'quiz3', title: 'Quiz — Complexité algorithmique', matiere: 'Algorithmique', professor: 'Prof. DOSSEH', questions_count: 8, attempts: 1, best_score: 62, duration: 10, difficulty: 'Difficile' },
-];
+import {
+  computeExamQuestionScore,
+  isExamQuestionAutoGradable,
+  normalizeExamQuestion,
+} from '@/utils/examQuestionUtils';
 
 const MOCK_QUESTIONS = [
-  { id: 'pq1', type: 'qcm_single', text: 'Quelle balise HTML est utilisée pour un paragraphe ?', options: ['<p>', '<para>', '<text>', '<pg>'], correct_answer: '0', points: 1, explanation: 'La balise <p> est la balise standard HTML pour un paragraphe.' },
-  { id: 'pq2', type: 'true_false', text: 'CSS signifie "Cascading Style Sheets".', correct_answer: 'true', points: 1, explanation: 'CSS = Cascading Style Sheets (feuilles de style en cascade).' },
-  { id: 'pq3', type: 'qcm_multiple', text: 'Lesquels sont des sélecteurs CSS valides ?', options: ['#id', '.class', '@element', '*'], correct_answer: ['0', '1', '3'], points: 2, explanation: '# pour les ID, . pour les classes, * pour le sélecteur universel. @ n\'est pas un sélecteur.' },
-  { id: 'pq4', type: 'short_answer', text: 'Quelle propriété CSS change la couleur du texte ?', correct_answer: 'color', points: 1, explanation: 'La propriété "color" définit la couleur du texte.' },
-  { id: 'pq5', type: 'numeric', text: 'Combien de balises de titre HTML existent (h1 à h?) ?', correct_answer: '6', tolerance: 0, points: 1, explanation: 'HTML a 6 niveaux de titre : h1 à h6.' },
+  {
+    id: 'mock-pq1',
+    type: 'qcm_single',
+    text: 'Quelle balise HTML est utilisée pour un paragraphe ?',
+    options: ['<p>', '<para>', '<text>', '<pg>'],
+    correct_answer: '0',
+    points: 1,
+    explanation: 'La balise <p> est la balise standard HTML pour un paragraphe.',
+  },
+  {
+    id: 'mock-pq2',
+    type: 'true_false',
+    text: 'CSS signifie "Cascading Style Sheets".',
+    correct_answer: 'true',
+    points: 1,
+    explanation: 'CSS signifie Cascading Style Sheets.',
+  },
+  {
+    id: 'mock-pq3',
+    type: 'qcm_multiple',
+    text: 'Lesquels sont des sélecteurs CSS valides ?',
+    options: ['#id', '.class', '@element', '*'],
+    correct_answer: ['0', '1', '3'],
+    points: 2,
+    explanation: '# pour les ID, . pour les classes et * pour le sélecteur universel.',
+  },
+  {
+    id: 'mock-pq4',
+    type: 'short_answer',
+    text: 'Quelle propriété CSS change la couleur du texte ?',
+    correct_answer: 'color',
+    points: 1,
+    explanation: 'La propriété color définit la couleur du texte.',
+  },
 ];
 
-/**
- * Page Mode Quiz d'Entraînement — ESGIS Campus §6.5
- * Distinct des examens officiels: pas d'anti-triche, plusieurs tentatives,
- * score affiché immédiatement avec corrections et explications.
- */
+const MOCK_QUIZZES = [
+  {
+    id: 'mock-quiz',
+    title: 'Quiz de démonstration',
+    description: 'Quiz local de secours utilisé uniquement si la base n’est pas encore alimentée.',
+    matiere: 'Développement Web',
+    professor: 'Équipe ESGIS',
+    questions_count: MOCK_QUESTIONS.length,
+    attempts: 0,
+    best_score: null,
+    duration: 10,
+    difficulty: 'Facile',
+    embeddedQuestions: MOCK_QUESTIONS,
+    isMock: true,
+  },
+];
+
+const mapDifficultyLabel = (difficulty) => {
+  if (difficulty === 'easy') return 'Facile';
+  if (difficulty === 'hard') return 'Difficile';
+  return 'Moyen';
+};
+
+const getQuestionKey = (question, index) => String(question?.id || `question-${index + 1}`);
+
+const getInitialAnswerValue = (question) => {
+  switch (question?.question_type || question?.type) {
+    case 'qcm_multiple':
+      return [];
+    case 'matching':
+    case 'fill_blank':
+      return {};
+    case 'ordering':
+      return Array.isArray(question.items)
+        ? question.items.map((item, index) => ({ id: index, text: item }))
+        : [];
+    default:
+      return '';
+  }
+};
+
 const PracticeQuizPage = () => {
   const { authState } = useAuth();
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [pageError, setPageError] = useState(null);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
-  const [quizState, setQuizState] = useState('list'); // list | taking | results
+  const [selectedQuestions, setSelectedQuestions] = useState([]);
+  const [quizState, setQuizState] = useState('list');
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [flagged, setFlagged] = useState(new Set());
@@ -51,118 +126,201 @@ const PracticeQuizPage = () => {
   useEffect(() => {
     const loadQuizzes = async () => {
       setLoading(true);
+      setPageError(null);
+
       try {
         const { data, error } = await getPracticeQuizzes(authState.user?.id);
-        if (!error && data && data.length > 0) {
-          setQuizzes(data.map(q => ({
-            id: q.id,
-            title: q.title,
-            matiere: q.cours?.name || '-',
-            professor: q.professeur?.full_name || '-',
-            questions_count: q.questions_count || 0,
-            attempts: q.attempts || 0,
-            best_score: q.best_score,
-            duration: q.duration_minutes || 30,
-            difficulty: q.difficulty === 'easy' ? 'Facile' : q.difficulty === 'hard' ? 'Difficile' : 'Moyen',
-          })));
-        } else {
-          setQuizzes(MOCK_QUIZZES);
+        if (error) throw error;
+
+        if (data?.length) {
+          setQuizzes(
+            data.map((quiz) => ({
+              id: quiz.id,
+              title: quiz.title,
+              description: quiz.description || '',
+              matiere: quiz.cours?.name || '-',
+              professor: quiz.professeur?.full_name || '-',
+              questions_count: quiz.questions_count || 0,
+              attempts: quiz.attempts || 0,
+              best_score: quiz.best_score,
+              duration: quiz.duration_minutes || 30,
+              difficulty: mapDifficultyLabel(quiz.difficulty),
+              isMock: false,
+            }))
+          );
+          return;
         }
-      } catch {
+
+        setQuizzes(MOCK_QUIZZES);
+      } catch (error) {
+        console.error('Erreur de chargement des quiz d’entraînement:', error);
+        setPageError('Les quiz d’entraînement réels ne sont pas encore disponibles. Affichage du mode de secours.');
         setQuizzes(MOCK_QUIZZES);
       } finally {
         setLoading(false);
       }
     };
+
     loadQuizzes();
   }, [authState.user?.id]);
 
-  const startQuiz = (quiz) => {
-    setSelectedQuiz(quiz);
-    setCurrentQuestionIdx(0);
-    setAnswers({});
-    setFlagged(new Set());
-    setScore(null);
-    setQuizState('taking');
+  const startQuiz = async (quiz) => {
+    setActionLoading(true);
+    setPageError(null);
+
+    try {
+      const questionsSource = quiz.embeddedQuestions
+        ? quiz.embeddedQuestions
+        : (await getPracticeQuizQuestions(quiz.id)).data;
+
+      if (!Array.isArray(questionsSource) || questionsSource.length === 0) {
+        throw new Error('Aucune question disponible pour ce quiz.');
+      }
+
+      const normalizedQuestions = questionsSource.map((question, index) => normalizeExamQuestion({
+        ...question,
+        id: question.id || `${quiz.id}-question-${index + 1}`,
+        question_number: question.question_number || index + 1,
+        question_text: question.question_text || question.text || '',
+      }));
+
+      const initialAnswers = normalizedQuestions.reduce((accumulator, question) => {
+        accumulator[getQuestionKey(question, 0)] = getInitialAnswerValue(question);
+        return accumulator;
+      }, {});
+
+      setSelectedQuiz(quiz);
+      setSelectedQuestions(normalizedQuestions);
+      setCurrentQuestionIdx(0);
+      setAnswers(initialAnswers);
+      setFlagged(new Set());
+      setScore(null);
+      setQuizState('taking');
+    } catch (error) {
+      console.error('Erreur au démarrage du quiz:', error);
+      setPageError(error.message || 'Impossible de charger ce quiz pour le moment.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleAnswer = (value) => {
-    setAnswers(prev => ({ ...prev, [currentQuestionIdx]: value }));
+    const currentQuestion = selectedQuestions[currentQuestionIdx];
+    if (!currentQuestion) return;
+
+    setAnswers((previous) => ({
+      ...previous,
+      [getQuestionKey(currentQuestion, currentQuestionIdx)]: value,
+    }));
   };
 
   const toggleFlag = () => {
-    setFlagged(prev => {
-      const next = new Set(prev);
+    setFlagged((previous) => {
+      const next = new Set(previous);
       if (next.has(currentQuestionIdx)) next.delete(currentQuestionIdx);
       else next.add(currentQuestionIdx);
       return next;
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     let correct = 0;
     let totalPts = 0;
     let earnedPts = 0;
 
-    MOCK_QUESTIONS.forEach((q, idx) => {
-      totalPts += q.points;
-      const userAnswer = answers[idx];
+    selectedQuestions.forEach((question, index) => {
+      const questionKey = getQuestionKey(question, index);
+      const questionPoints = Number(question.points || 0);
+      const rawAnswer = answers[questionKey];
+      const questionScore = Number(computeExamQuestionScore(question, rawAnswer) || 0);
 
-      if (q.type === 'qcm_single' && userAnswer === q.correct_answer) {
-        correct++; earnedPts += q.points;
-      } else if (q.type === 'true_false' && userAnswer === q.correct_answer) {
-        correct++; earnedPts += q.points;
-      } else if (q.type === 'qcm_multiple') {
-        const ca = Array.isArray(q.correct_answer) ? q.correct_answer : [];
-        const ua = Array.isArray(userAnswer) ? userAnswer : [];
-        if (ca.length === ua.length && ca.every(a => ua.includes(a))) {
-          correct++; earnedPts += q.points;
-        }
-      } else if (q.type === 'short_answer' && userAnswer?.toLowerCase().trim() === q.correct_answer?.toLowerCase().trim()) {
-        correct++; earnedPts += q.points;
-      } else if (q.type === 'numeric') {
-        const tol = q.tolerance || 0;
-        const num = parseFloat(userAnswer);
-        const expected = parseFloat(q.correct_answer);
-        if (!isNaN(num) && Math.abs(num - expected) <= tol) {
-          correct++; earnedPts += q.points;
-        }
+      totalPts += questionPoints;
+      earnedPts += questionScore;
+
+      if (isExamQuestionAutoGradable(question) && questionScore >= questionPoints) {
+        correct += 1;
       }
     });
 
-    const pct = totalPts > 0 ? Math.round((earnedPts / totalPts) * 100) : 0;
-    setScore({ correct, total: MOCK_QUESTIONS.length, earnedPts, totalPts, percentage: pct });
+    const percentage = totalPts > 0 ? Math.round((earnedPts / totalPts) * 100) : 0;
+
+    setScore({
+      correct,
+      total: selectedQuestions.length,
+      earnedPts,
+      totalPts,
+      percentage,
+    });
     setQuizState('results');
 
-    // Mettre à jour les stats locales
-    setQuizzes(prev => prev.map(q => q.id === selectedQuiz.id ? {
-      ...q,
-      attempts: q.attempts + 1,
-      best_score: q.best_score !== null ? Math.max(q.best_score, pct) : pct
-    } : q));
+    setQuizzes((previous) => previous.map((quiz) => {
+      if (quiz.id !== selectedQuiz.id) {
+        return quiz;
+      }
+
+      return {
+        ...quiz,
+        attempts: Number(quiz.attempts || 0) + 1,
+        best_score: quiz.best_score !== null ? Math.max(quiz.best_score, percentage) : percentage,
+      };
+    }));
+
+    if (selectedQuiz?.isMock || !authState.user?.id) {
+      return;
+    }
+
+    try {
+      await savePracticeQuizAttempt({
+        quiz_id: selectedQuiz.id,
+        student_id: authState.user.id,
+        answers,
+        score: Math.round(earnedPts),
+        max_score: Math.round(totalPts),
+        percentage,
+      });
+      setSuccessMessage('Tentative enregistrée dans votre historique.');
+    } catch (error) {
+      console.error('Erreur lors de l’enregistrement de la tentative:', error);
+      setPageError('Le score a été calculé, mais la tentative n’a pas pu être enregistrée.');
+    }
   };
 
   const handleBackToList = () => {
     setQuizState('list');
     setSelectedQuiz(null);
+    setSelectedQuestions([]);
+    setCurrentQuestionIdx(0);
   };
 
-  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
-  // === LISTE DES QUIZ ===
   if (quizState === 'list') {
     return (
       <Box sx={{ p: { xs: 1, md: 2 } }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <QuizIcon sx={{ mr: 1, color: 'primary.main', fontSize: 32 }} />
-          <Typography variant="h5" fontWeight="bold">Quiz d'Entraînement</Typography>
+          <Typography variant="h5" fontWeight="bold">Quiz d&apos;Entraînement</Typography>
         </Box>
+
         <Alert severity="info" sx={{ mb: 3 }}>
-          Les quiz d'entraînement sont libres : pas de contrainte de temps strict, plusieurs tentatives autorisées,
-          score et corrections affichés immédiatement. Ils ne sont <strong>pas comptés</strong> dans la moyenne officielle.
+          Les quiz d&apos;entraînement sont libres : plusieurs tentatives sont autorisées, le score est affiché
+          immédiatement et ils ne sont pas comptés dans la moyenne officielle.
         </Alert>
+
+        {pageError && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            {pageError}
+          </Alert>
+        )}
+
         <Grid container spacing={2}>
-          {quizzes.map(quiz => (
+          {quizzes.map((quiz) => (
             <Grid item xs={12} md={6} lg={4} key={quiz.id}>
               <Card elevation={2} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <CardContent sx={{ flex: 1 }}>
@@ -170,31 +328,51 @@ const PracticeQuizPage = () => {
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     {quiz.matiere} — {quiz.professor}
                   </Typography>
+                  {quiz.description && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                      {quiz.description}
+                    </Typography>
+                  )}
                   <Divider sx={{ my: 1 }} />
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
                     <Chip label={`${quiz.questions_count} questions`} size="small" variant="outlined" />
                     <Chip label={`~${quiz.duration} min`} size="small" variant="outlined" icon={<TimerIcon />} />
-                    <Chip label={quiz.difficulty} size="small"
-                      color={quiz.difficulty === 'Facile' ? 'success' : quiz.difficulty === 'Moyen' ? 'warning' : 'error'} />
+                    <Chip
+                      label={quiz.difficulty}
+                      size="small"
+                      color={quiz.difficulty === 'Facile' ? 'success' : quiz.difficulty === 'Moyen' ? 'warning' : 'error'}
+                    />
                   </Box>
-                  {quiz.attempts > 0 && (
+                  {Number(quiz.attempts || 0) > 0 && (
                     <Box sx={{ mt: 1 }}>
                       <Typography variant="caption" color="text.secondary">
                         {quiz.attempts} tentative{quiz.attempts > 1 ? 's' : ''} — Meilleur score :
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <LinearProgress variant="determinate" value={quiz.best_score}
+                        <LinearProgress
+                          variant="determinate"
+                          value={quiz.best_score || 0}
                           sx={{ flex: 1, height: 8, borderRadius: 4 }}
-                          color={quiz.best_score >= 70 ? 'success' : quiz.best_score >= 50 ? 'warning' : 'error'} />
-                        <Typography variant="body2" fontWeight="bold">{quiz.best_score}%</Typography>
+                          color={quiz.best_score >= 70 ? 'success' : quiz.best_score >= 50 ? 'warning' : 'error'}
+                        />
+                        <Typography variant="body2" fontWeight="bold">
+                          {quiz.best_score}%
+                        </Typography>
                       </Box>
                     </Box>
                   )}
                 </CardContent>
                 <Box sx={{ p: 2, pt: 0 }}>
-                  <Button variant="contained" fullWidth startIcon={quiz.attempts > 0 ? <ReplayIcon /> : <PlayIcon />}
-                    onClick={() => startQuiz(quiz)}>
-                    {quiz.attempts > 0 ? 'Réessayer' : 'Commencer'}
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    disabled={actionLoading}
+                    startIcon={quiz.attempts > 0 ? <ReplayIcon /> : <PlayIcon />}
+                    onClick={() => startQuiz(quiz)}
+                  >
+                    {actionLoading && selectedQuiz?.id === quiz.id
+                      ? 'Chargement...'
+                      : quiz.attempts > 0 ? 'Réessayer' : 'Commencer'}
                   </Button>
                 </Box>
               </Card>
@@ -205,51 +383,61 @@ const PracticeQuizPage = () => {
     );
   }
 
-  // === PASSAGE DU QUIZ ===
   if (quizState === 'taking') {
-    const question = MOCK_QUESTIONS[currentQuestionIdx];
-    const progress = ((currentQuestionIdx + 1) / MOCK_QUESTIONS.length) * 100;
+    const question = selectedQuestions[currentQuestionIdx];
+    const progress = selectedQuestions.length > 0
+      ? ((currentQuestionIdx + 1) / selectedQuestions.length) * 100
+      : 0;
 
     return (
       <Box sx={{ p: { xs: 1, md: 2 }, maxWidth: 800, mx: 'auto' }}>
-        {/* Barre de progression */}
         <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant="subtitle1" fontWeight="bold">{selectedQuiz?.title}</Typography>
-            <Chip label={`${currentQuestionIdx + 1}/${MOCK_QUESTIONS.length}`} color="primary" />
+            <Chip label={`${currentQuestionIdx + 1}/${selectedQuestions.length}`} color="primary" />
           </Box>
           <LinearProgress variant="determinate" value={progress} sx={{ height: 8, borderRadius: 4 }} />
-          {/* Navigation rapide */}
           <Box sx={{ display: 'flex', gap: 0.5, mt: 1, flexWrap: 'wrap' }}>
-            {MOCK_QUESTIONS.map((_, idx) => (
-              <Chip key={idx} label={idx + 1} size="small"
-                variant={idx === currentQuestionIdx ? 'filled' : 'outlined'}
-                color={answers[idx] !== undefined ? (flagged.has(idx) ? 'warning' : 'success') : 'default'}
-                onClick={() => setCurrentQuestionIdx(idx)}
-                sx={{ cursor: 'pointer', minWidth: 32 }} />
-            ))}
+            {selectedQuestions.map((item, index) => {
+              const key = getQuestionKey(item, index);
+              const hasAnswer = answers[key] !== '' && answers[key] !== undefined
+                && (!Array.isArray(answers[key]) || answers[key].length > 0);
+
+              return (
+                <Chip
+                  key={key}
+                  label={index + 1}
+                  size="small"
+                  variant={index === currentQuestionIdx ? 'filled' : 'outlined'}
+                  color={hasAnswer ? (flagged.has(index) ? 'warning' : 'success') : 'default'}
+                  onClick={() => setCurrentQuestionIdx(index)}
+                  sx={{ cursor: 'pointer', minWidth: 32 }}
+                />
+              );
+            })}
           </Box>
         </Paper>
 
-        {/* Question */}
         <QuestionRenderer
-          question={{ ...question, text: question.text }}
-          answer={answers[currentQuestionIdx]}
+          question={question}
+          answer={answers[getQuestionKey(question, currentQuestionIdx)]}
           onAnswerChange={handleAnswer}
           flagged={flagged.has(currentQuestionIdx)}
           onToggleFlag={toggleFlag}
           questionNumber={currentQuestionIdx + 1}
-          totalQuestions={MOCK_QUESTIONS.length}
+          totalQuestions={selectedQuestions.length}
         />
 
-        {/* Navigation */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-          <Button variant="outlined" disabled={currentQuestionIdx === 0}
-            onClick={() => setCurrentQuestionIdx(prev => prev - 1)}>
+          <Button
+            variant="outlined"
+            disabled={currentQuestionIdx === 0}
+            onClick={() => setCurrentQuestionIdx((previous) => previous - 1)}
+          >
             Précédent
           </Button>
-          {currentQuestionIdx < MOCK_QUESTIONS.length - 1 ? (
-            <Button variant="contained" onClick={() => setCurrentQuestionIdx(prev => prev + 1)}>
+          {currentQuestionIdx < selectedQuestions.length - 1 ? (
+            <Button variant="contained" onClick={() => setCurrentQuestionIdx((previous) => previous + 1)}>
               Suivant
             </Button>
           ) : (
@@ -262,33 +450,53 @@ const PracticeQuizPage = () => {
     );
   }
 
-  // === RÉSULTATS ===
   if (quizState === 'results' && score) {
     return (
       <Box sx={{ p: { xs: 1, md: 2 }, maxWidth: 800, mx: 'auto' }}>
-        {/* Score global */}
-        <Paper elevation={3} sx={{ p: 4, mb: 3, textAlign: 'center',
-          bgcolor: score.percentage >= 70 ? 'success.50' : score.percentage >= 50 ? 'warning.50' : 'error.50' }}>
-          <TrophyIcon sx={{ fontSize: 64, color: score.percentage >= 70 ? 'success.main' : score.percentage >= 50 ? 'warning.main' : 'error.main', mb: 1 }} />
+        <Paper
+          elevation={3}
+          sx={{
+            p: 4,
+            mb: 3,
+            textAlign: 'center',
+            bgcolor: score.percentage >= 70 ? 'success.50' : score.percentage >= 50 ? 'warning.50' : 'error.50',
+          }}
+        >
+          <TrophyIcon
+            sx={{
+              fontSize: 64,
+              color: score.percentage >= 70 ? 'success.main' : score.percentage >= 50 ? 'warning.main' : 'error.main',
+              mb: 1,
+            }}
+          />
           <Typography variant="h3" fontWeight="bold">{score.percentage}%</Typography>
           <Typography variant="h6" color="text.secondary">
             {score.correct}/{score.total} questions correctes — {score.earnedPts}/{score.totalPts} points
           </Typography>
-          <Chip label={score.percentage >= 70 ? 'Bien joué !' : score.percentage >= 50 ? 'Peut mieux faire' : 'À retravailler'}
+          <Chip
+            label={score.percentage >= 70 ? 'Bien joué !' : score.percentage >= 50 ? 'Peut mieux faire' : 'À retravailler'}
             color={score.percentage >= 70 ? 'success' : score.percentage >= 50 ? 'warning' : 'error'}
-            sx={{ mt: 1, fontSize: '1rem' }} />
+            sx={{ mt: 1, fontSize: '1rem' }}
+          />
         </Paper>
 
-        {/* Corrections détaillées */}
-        <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>Corrections détaillées</Typography>
-        {MOCK_QUESTIONS.map((question, idx) => (
+        {pageError && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {pageError}
+          </Alert>
+        )}
+
+        <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
+          Corrections détaillées
+        </Typography>
+        {selectedQuestions.map((question, index) => (
           <QuestionRenderer
-            key={question.id}
+            key={getQuestionKey(question, index)}
             question={question}
-            answer={answers[idx]}
+            answer={answers[getQuestionKey(question, index)]}
             onAnswerChange={() => {}}
-            questionNumber={idx + 1}
-            totalQuestions={MOCK_QUESTIONS.length}
+            questionNumber={index + 1}
+            totalQuestions={selectedQuestions.length}
             readOnly
             showCorrection
           />
@@ -302,6 +510,17 @@ const PracticeQuizPage = () => {
             Retour à la liste
           </Button>
         </Box>
+
+        <Snackbar
+          open={Boolean(successMessage)}
+          autoHideDuration={3000}
+          onClose={() => setSuccessMessage('')}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert severity="success" onClose={() => setSuccessMessage('')} sx={{ width: '100%' }}>
+            {successMessage}
+          </Alert>
+        </Snackbar>
       </Box>
     );
   }
