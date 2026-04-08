@@ -203,9 +203,9 @@ const StudentFormPage = () => {
     const errors = {};
     
     // Validation du numéro étudiant
-    if (!student.student_id.trim()) {
-      errors.student_id = 'Le numéro étudiant est requis';
-    } else if (!/^[A-Za-z0-9-]+$/.test(student.student_id)) {
+    if (isEditMode && !student.student_id.trim()) {
+      errors.student_id = 'Le numéro étudiant est requis en modification';
+    } else if (student.student_id.trim() && !/^[A-Za-z0-9-]+$/.test(student.student_id)) {
       errors.student_id = 'Le numéro étudiant doit contenir uniquement des lettres, des chiffres et des tirets';
     }
     
@@ -447,13 +447,13 @@ const StudentFormPage = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                required
                 label="Numéro étudiant"
                 name="student_id"
                 value={student.student_id}
                 onChange={handleChange}
                 error={!!formErrors.student_id}
-                helperText={formErrors.student_id}
+                helperText={formErrors.student_id || (!isEditMode ? "Laissez vide pour une génération automatique" : "")}
+                placeholder={!isEditMode ? "Auto-généré si vide" : ""}
               />
             </Grid>
             

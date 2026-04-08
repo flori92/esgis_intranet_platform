@@ -22,7 +22,8 @@ import {
   EventNote as EventNoteIcon,
   Newspaper as NewspaperIcon,
   MenuBook as MenuBookIcon,
-  FiberManualRecord as DotIcon
+  FiberManualRecord as DotIcon,
+  Work as WorkIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -703,6 +704,42 @@ const DashboardPage = () => {
         {/* ── Quick Access Column ── */}
         <Grid item xs={12} md={7}>
           <Stack spacing={3} sx={{ height: '100%' }}>
+            {/* Career Opportunities */}
+            <Paper elevation={0} sx={{ p: 3, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider' }}>
+              <SectionHeader
+                icon={<WorkIcon sx={{ color: '#003366' }} />}
+                title="Opportunités de Carrière"
+                action={<Button size="small" variant="text" component={Link} to="/student/stages" sx={{ fontWeight: 600, color: NAVY }}>Tout voir</Button>}
+              />
+              {dashboardData.career_opportunities?.length > 0 ? (
+                <List disablePadding>
+                  {dashboardData.career_opportunities.map((opp, idx) => (
+                    <Box key={`${opp.type}-${opp.id}`}>
+                      <ListItem sx={{ px: 0, py: 1.2 }}>
+                        <ListItemText
+                          primary={<Typography fontWeight="600" variant="body2">{opp.title}</Typography>}
+                          secondary={`${opp.company} • ${opp.type === 'stage' ? 'Stage' : 'Emploi'}`}
+                        />
+                        <Chip 
+                          label="Voir" 
+                          size="small" 
+                          component={Link} 
+                          to="/student/stages" 
+                          clickable
+                          sx={{ fontWeight: 700, fontSize: '0.75rem', bgcolor: alpha(NAVY, 0.08), color: NAVY }} 
+                        />
+                      </ListItem>
+                      {idx < dashboardData.career_opportunities.length - 1 && <Divider />}
+                    </Box>
+                  ))}
+                </List>
+              ) : (
+                <Box sx={{ py: 2, textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">Aucune offre récente</Typography>
+                </Box>
+              )}
+            </Paper>
+
             {/* Grades detail */}
             {dashboardData.recent_grades.length > 0 && (
               <Paper elevation={0} sx={{ p: 3, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider' }}>

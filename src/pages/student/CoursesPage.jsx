@@ -540,32 +540,66 @@ const StudentCoursesPage = () => {
                 />
               </Stack>
 
-              <Grid container spacing={2}>
+              <Grid container spacing={2} alignItems="stretch">
                 {[
                   { label: 'Cours inscrits', value: courses.length, icon: <SchoolIcon fontSize="small" /> },
                   { label: 'Ressources disponibles', value: allCourseResources.length, icon: <AutoStoriesIcon fontSize="small" /> },
                   { label: 'Documents récents', value: allCourseResources.filter((resource) => isRecentResource(resource.date)).length, icon: <CalendarMonthIcon fontSize="small" /> },
                   { label: 'Favoris enregistrés', value: favorites.size, icon: <FavoriteIcon fontSize="small" /> },
                 ].map((metric) => (
-                  <Grid item xs={6} md={3} key={metric.label}>
+                  <Grid item xs={6} md={3} key={metric.label} sx={{ display: 'flex' }}>
                     <Paper
                       elevation={0}
                       sx={{
-                        p: 2,
-                        borderRadius: 4,
+                        width: '100%',
+                        height: '100%',
+                        minHeight: { xs: 148, sm: 140, md: 128 },
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: 1.75,
+                        p: { xs: 2.25, sm: 2.5, md: 2.75 },
+                        borderRadius: 4.5,
                         bgcolor: alpha('#ffffff', 0.1),
                         color: 'common.white',
                         border: `1px solid ${alpha('#ffffff', 0.1)}`,
                         backdropFilter: 'blur(6px)',
+                        boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.08)}`,
                       }}
                     >
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                        {metric.icon}
-                        <Typography variant="body2" sx={{ color: alpha('#ffffff', 0.8) }}>
+                      <Stack
+                        direction="row"
+                        spacing={1.25}
+                        alignItems="flex-start"
+                        sx={{ minHeight: { xs: 52, sm: 48, md: 46 } }}
+                      >
+                        <Box
+                          sx={{
+                            width: { xs: 34, md: 36 },
+                            height: { xs: 34, md: 36 },
+                            flexShrink: 0,
+                            display: 'grid',
+                            placeItems: 'center',
+                            borderRadius: 2.5,
+                            bgcolor: alpha('#ffffff', 0.14),
+                            color: 'common.white',
+                          }}
+                        >
+                          {metric.icon}
+                        </Box>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: alpha('#ffffff', 0.8),
+                            lineHeight: 1.35,
+                            fontWeight: 600,
+                            minHeight: { xs: '2.7em', md: '2.4em' },
+                          }}
+                        >
                           {metric.label}
                         </Typography>
                       </Stack>
-                      <Typography variant="h5" fontWeight={800}>
+                      <Typography variant="h5" fontWeight={800} sx={{ letterSpacing: '-0.03em' }}>
                         {metric.value}
                       </Typography>
                     </Paper>

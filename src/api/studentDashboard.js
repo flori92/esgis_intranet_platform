@@ -4,31 +4,19 @@ import { getStudentCourseIds, getScheduleSessions } from './schedule';
 import { getCMSBanners, getCMSNews, getCMSEvents, getCMSAnnouncements } from './cms';
 
 const toIsoString = (value) => {
-  if (!value) {
-    return null;
-  }
-
+  if (!value) return null;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date.toISOString();
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
 const addMinutes = (value, minutes = 0) => {
   const start = new Date(value);
-  if (Number.isNaN(start.getTime())) {
-    return null;
-  }
-
-  return new Date(start.getTime() + Number(minutes || 0) * 60000);
+  return Number.isNaN(start.getTime()) ? null : new Date(start.getTime() + Number(minutes || 0) * 60000);
 };
 
 const normalizeScheduleItem = (session) => {
   const start = new Date(session.date);
   const end = addMinutes(session.date, session.duration);
-
   return {
     id: session.id,
     course_name: session.courses?.name || 'Cours inconnu',
@@ -36,155 +24,72 @@ const normalizeScheduleItem = (session) => {
     end_time: toIsoString(end),
     day_of_week: start.getDay(),
     room: session.room || '',
-    professor_name:
-      session.professors?.profiles?.full_name ||
-      session.professors?.full_name ||
-      session.professors?.name ||
-      'Professeur inconnu',
+    professor_name: session.professors?.profiles?.full_name || 'Professeur inconnu',
     course_id: session.course_id,
     status: session.status || 'scheduled'
   };
 };
 
-const normalizeGradeItem = (grade) => ({
-  id: grade.id,
-  course_name: grade.cours?.name || grade.cours?.code || 'Cours inconnu',
-  value: Number(grade.note ?? 0),
-  max_value: Number(grade.max_value ?? 20),
-  published_at: grade.published_at || grade.date_evaluation || grade.created_at || null
-});
-
-const normalizeNewsItem = (item) => ({
-  id: item.id,
-  title: item.title,
-  content: item.description || item.content || '',
-  published_at: item.date || item.published_at || item.created_at || null,
-  author: item.author || '',
-  image_url: item.image_url || null
-});
-
-const normalizeEventItem = (item) => ({
-  id: item.id,
-  title: item.title,
-  description: item.description || '',
-  start_date: item.start_date,
-  end_date: item.end_date || item.start_date,
-  location: item.location || '',
-  event_type: item.type || item.event_type || 'general'
-});
-
 export const getStudentDashboardData = async ({ profileId, studentId }) => {
   try {
     const numericStudentId = Number(studentId);
     if (!profileId || isNaN(numericStudentId)) {
-      return { data: null, error: new Error('Étudiant non identifié ou ID invalide') };
+      return { data: null, error: new Error('Étudiant non identifié') };
     }
 
     const safe = async (fn) => {
       try { return await fn(); } catch { return { data: null, error: null }; }
     };
 
-    const [
-      courseIdsResult,
-      gradesResult,
-      cmsNewsResult,
-      cmsEventsResult,
-      cmsBannersResult,
-      cmsAnnouncementsResult,
-      requestsResult,
-      examsResult
-    ] = await Promise.all([
+    const results = await Promise.all([
       safe(() => getStudentCourseIds(profileId)),
       safe(() => getStudentPublishedGrades(numericStudentId)),
       safe(() => getCMSNews(6)),
       safe(() => getCMSEvents(6)),
       safe(() => getCMSBanners()),
       safe(() => getCMSAnnouncements(5)),
-      safe(() =>
-        supabase
-          .from('validation_queue')
-          .select('id, request_type, status, created_at')
-          .eq('requester_id', profileId)
-          .order('created_at', { ascending: false })
-          .limit(3)
-      ),
-      safe(() =>
-        supabase
-          .from('student_exams')
-          .select('*, exams(*)')
-          .eq('student_id', profileId)
-          .eq('status', 'pending')
-          .order('created_at', { ascending: true })
-          .limit(2)
-      )
+      safe(() => supabase.from('validation_queue').select('id, request_type, status, created_at').eq('requester_id', profileId).order('created_at', { ascending: false }).limit(3)),
+      safe(() => supabase.from('student_exams').select('*, exams(*)').eq('student_id', profileId).eq('status', 'pending').order('created_at', { ascending: true }).limit(2)),
+      safe(() => supabase.from('stage_offres').select('*, entreprises(nom)').eq('statut', 'publiee').order('created_at', { ascending: false }).limit(3)),
+      safe(() => supabase.from('job_offers').select('*').eq('is_active', true).order('published_at', { ascending: false }).limit(3))
     ]);
 
-    const courseIds = courseIdsResult?.courseIds || [];
-    const grades = gradesResult?.data || [];
-    const cmsNews = cmsNewsResult?.data || [];
-    const cmsEvents = cmsEventsResult?.data || [];
-    const cmsBanners = cmsBannersResult?.data || [];
-    const cmsAnnouncements = cmsAnnouncementsResult?.data || [];
-    const requests = requestsResult?.data || [];
-    const exams = examsResult?.data || [];
+    const [
+      courseIdsRes, gradesRes, newsRes, eventsRes, bannersRes, 
+      annRes, reqRes, examsRes, stagesRes, jobsRes
+    ] = results;
 
+    const courseIds = courseIdsRes?.courseIds || [];
     let sessions = [];
     if (courseIds.length) {
-      try {
-        const scheduleResult = await getScheduleSessions({ courseIds });
-        sessions = scheduleResult?.sessions || [];
-      } catch {
-        sessions = [];
-      }
+      const scheduleResult = await safe(() => getScheduleSessions({ courseIds }));
+      sessions = scheduleResult?.sessions || [];
     }
 
     const upcomingSchedule = (sessions || [])
-      .filter((session) => session.date && new Date(session.date).getTime() >= Date.now())
+      .filter((s) => s.date && new Date(s.date).getTime() >= Date.now())
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .map(normalizeScheduleItem);
 
-    const recentGrades = (grades || []).slice(0, 5).map(normalizeGradeItem);
-    const nextCourse = upcomingSchedule[0]
-      ? {
-          name: upcomingSchedule[0].course_name,
-          time: upcomingSchedule[0].start_time
-        }
-      : null;
-
     return {
       data: {
-        next_course: nextCourse,
-        recent_grades: recentGrades,
+        next_course: upcomingSchedule[0] ? { name: upcomingSchedule[0].course_name, time: upcomingSchedule[0].start_time } : null,
+        recent_grades: (gradesRes?.data || []).slice(0, 5).map(g => ({
+          id: g.id, course_name: g.cours?.name || g.cours?.code || 'Cours', value: g.note, max_value: g.max_value || 20, published_at: g.published_at || g.created_at
+        })),
         schedule: upcomingSchedule.slice(0, 8),
-        banners: cmsBanners || [],
-        news: (cmsNews || []).map((item) => ({
-          id: item.id,
-          title: item.title,
-          content: item.excerpt || item.content || '',
-          excerpt: item.excerpt || '',
-          image_url: item.image_url || null,
-          category: item.category || 'general',
-          is_featured: item.is_featured || false,
-          published_at: item.published_at || item.created_at || null
+        banners: bannersRes?.data || [],
+        news: (newsRes?.data || []).map(n => ({ ...n, content: n.excerpt || n.content || '' })),
+        events: eventsRes?.data || [],
+        announcements: annRes?.data || [],
+        requests: reqRes?.data || [],
+        upcoming_exams: (examsRes?.data || []).map(e => ({
+          id: e.exams?.id, title: e.exams?.title, start_time: e.exams?.exam_date
         })),
-        events: (cmsEvents || []).map((item) => ({
-          id: item.id,
-          title: item.title,
-          description: item.description || '',
-          start_date: item.start_date,
-          end_date: item.end_date || item.start_date,
-          location: item.location || '',
-          category: item.category || 'general',
-          image_url: item.image_url || null
-        })),
-        announcements: cmsAnnouncements || [],
-        requests: (requests || []),
-        upcoming_exams: (exams || []).map(e => ({
-          id: e.exams?.id,
-          title: e.exams?.title,
-          start_time: e.exams?.exam_date,
-          duration: e.exams?.duration
-        }))
+        career_opportunities: [
+          ...(stagesRes?.data || []).map(s => ({ id: s.id, type: 'stage', title: s.titre, company: s.entreprises?.nom || 'Entreprise', date: s.created_at })),
+          ...(jobsRes?.data || []).map(j => ({ id: j.id, type: 'job', title: j.title, company: j.company_name, date: j.published_at }))
+        ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4)
       },
       error: null
     };
