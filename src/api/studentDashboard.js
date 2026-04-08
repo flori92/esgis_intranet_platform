@@ -50,8 +50,8 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
       safe(() => getCMSAnnouncements(5)),
       safe(() => supabase.from('validation_queue').select('id, request_type, status, created_at').eq('requester_id', profileId).order('created_at', { ascending: false }).limit(3)),
       safe(() => supabase.from('student_exams').select('*, exams(*)').eq('student_id', profileId).eq('status', 'pending').order('created_at', { ascending: true }).limit(2)),
-      safe(() => supabase.from('stage_offres').select('*, entreprises(nom)').eq('statut', 'publiee').order('created_at', { ascending: false }).limit(3)),
-      safe(() => supabase.from('job_offers').select('*').eq('is_active', true).order('published_at', { ascending: false }).limit(3))
+      safe(() => supabase.from('stage_offres').select('*, entreprises(nom)').eq('etat', 'active').order('created_at', { ascending: false }).limit(3)),
+      safe(() => supabase.from('job_offers').select('*').eq('status', 'open').order('created_at', { ascending: false }).limit(3))
     ]);
 
     const [
@@ -88,7 +88,7 @@ export const getStudentDashboardData = async ({ profileId, studentId }) => {
         })),
         career_opportunities: [
           ...(stagesRes?.data || []).map(s => ({ id: s.id, type: 'stage', title: s.titre, company: s.entreprises?.nom || 'Entreprise', date: s.created_at })),
-          ...(jobsRes?.data || []).map(j => ({ id: j.id, type: 'job', title: j.title, company: j.company_name, date: j.published_at }))
+          ...(jobsRes?.data || []).map(j => ({ id: j.id, type: 'job', title: j.title, company: j.company_name, date: j.created_at }))
         ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4)
       },
       error: null

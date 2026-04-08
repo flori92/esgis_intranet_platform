@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   signInWithEmail,
   signUpWithEmail,
@@ -34,17 +34,31 @@ export const useSupabaseAuth = () => {
     fullName: ''
   });
 
+  const authChangeInFlight = useRef(null);
+
+  const handleAuthChangeDeduped = (session) => {
+    const userId = session?.user?.id || null;
+    if (authChangeInFlight.current) {
+      return authChangeInFlight.current;
+    }
+    const promise = handleAuthChange(session).finally(() => {
+      authChangeInFlight.current = null;
+    });
+    authChangeInFlight.current = promise;
+    return promise;
+  };
+
   // Récupérer la session au chargement
   useEffect(() => {
     const { data: { subscription } } = onAuthStateChange(
       (_event, session) => {
-        handleAuthChange(session);
+        handleAuthChangeDeduped(session);
       }
     );
 
     // Récupérer la session initiale
     getSession().then(({ data: { session } }) => {
-      handleAuthChange(session);
+      handleAuthChangeDeduped(session);
     });
 
     // Nettoyer l'abonnement
