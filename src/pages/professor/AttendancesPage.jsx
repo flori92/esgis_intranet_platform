@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box, Typography, Paper, Grid, CircularProgress, Alert, Button,
   Card, CardContent, Divider, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Select, MenuItem,
-  Chip, Stack, Avatar, TextField
+  Chip, Stack, Avatar, TextField, InputAdornment, IconButton,
+  Tooltip
 } from '@mui/material';
 import {
   Event as EventIcon,
@@ -11,8 +12,12 @@ import {
   Cancel as AbsentIcon,
   Schedule as LateIcon,
   Info as ExcusedIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Search as SearchIcon,
+  SortByAlpha as SortByAlphaIcon,
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { getScheduleSessions } from '@/api/schedule';
 import { getSessionAttendances, bulkUpsertAttendances } from '@/api/attendances';
@@ -29,16 +34,44 @@ const STATUS_CONFIG = {
 
 const AttendancesPage = () => {
   const { authState } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState(null);
-  
+
   // Data for the active session
   const [students, setStudents] = useState([]);
   const [attendances, setAttendances] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Search and sort
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortAsc, setSortAsc] = useState(true);
+
+  const filteredStudents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const filtered = query
+      ? students.filter(st =>
+          st.full_name?.toLowerCase().includes(query) ||
+          st.student_number?.toLowerCase().includes(query)
+        )
+      : [...students];
+
+    filtered.sort((a, b) => {
+      const nameA = (a.full_name || '').toLowerCase();
+      const nameB = (b.full_name || '').toLowerCase();
+      return sortAsc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+    });
+
+    return filtered;
+  }, [students, searchQuery, sortAsc]);
+
+  const handleStudentClick = (studentId) => {
+    if (!selectedSession?.course_id) return;
+    navigate(`/professor/students?course=${selectedSession.course_id}&student=${studentId}`);
+  };
 
   const loadSessions = useCallback(async () => {
     setLoading(true);
@@ -211,6 +244,39 @@ const AttendancesPage = () => {
             ) : students.length === 0 ? (
               <Alert severity="info">Aucun étudiant n'est inscrit à ce cours.</Alert>
             ) : (
+              <>
+                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                  <TextField
+                    size="small"
+                    placeholder="Rechercher un étudiant..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    sx={{ flex: 1, maxWidth: 400 }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon color="action" fontSize="small" />
+                        </InputAdornment>
+                      )
+                    }}
+                  />
+                  <Tooltip title={sortAsc ? 'Tri A → Z' : 'Tri Z → A'}>
+                    <IconButton
+                      onClick={() => setSortAsc(prev => !prev)}
+                      color={sortAsc ? 'primary' : 'secondary'}
+                      size="small"
+                    >
+                      <SortByAlphaIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Typography variant="caption" color="text.secondary">
+                    {filteredStudents.length} / {students.length} étudiant(s)
+                  </Typography>
+                </Stack>
+
+                {filteredStudents.length === 0 ? (
+                  <Alert severity="info">Aucun étudiant ne correspond à la recherche.</Alert>
+                ) : (
               <TableContainer>
                 <Table size="small">
                   <TableHead sx={{ bgcolor: 'grey.50' }}>
@@ -221,13 +287,21 @@ const AttendancesPage = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {students.map(st => (
+                    {filteredStudents.map(st => (
                       <TableRow key={st.id} hover>
                         <TableCell>
                           <Stack direction="row" spacing={1} alignItems="center">
                             <Avatar sx={{ width: 32, height: 32 }}>{st.full_name?.charAt(0)}</Avatar>
-                            <Box>
-                              <Typography variant="body2" fontWeight="bold">{st.full_name}</Typography>
+                            <Box
+                              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                              onClick={() => handleStudentClick(st.id)}
+                            >
+                              <Stack direction="row" spacing={0.5} alignItems="center">
+                                <Typography variant="body2" fontWeight="bold" color="primary">
+                                  {st.full_name}
+                                </Typography>
+                                <OpenInNewIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                              </Stack>
                               <Typography variant="caption" color="text.secondary">{st.student_number}</Typography>
                             </Box>
                           </Stack>
@@ -263,6 +337,8 @@ const AttendancesPage = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

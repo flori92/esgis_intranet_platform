@@ -155,7 +155,12 @@ const ProfessorStudentsPage = () => {
         }
 
         setOverview(data);
-        setSelectedStudentId(data?.students?.[0]?.id || null);
+
+        const requestedStudentId = Number(searchParams.get('student'));
+        const matchedStudent = requestedStudentId
+          ? (data?.students || []).find((s) => s.id === requestedStudentId)
+          : null;
+        setSelectedStudentId(matchedStudent?.id || data?.students?.[0]?.id || null);
       } catch (overviewError) {
         console.error('Erreur chargement vue etudiants:', overviewError);
         if (active) {
