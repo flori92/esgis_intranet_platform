@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Typography, Alert, CircularProgress, Paper, Button,
   Stack, MenuItem, Select, FormControl, InputLabel, Chip, Dialog,
@@ -53,16 +53,23 @@ const formatWeekRange = (weekStartDate) => {
   return `Semaine du ${format(start, 'd MMM yyyy', { locale: fr })} au ${format(end, 'd MMM yyyy', { locale: fr })}`;
 };
 
-const buildTrackLabel = (levelCode, departmentName) => {
+const buildTrackLabel = (levelCode, filiereName, departmentName) => {
+  if (levelCode && filiereName) {
+    return `${levelCode} • ${filiereName}`;
+  }
+
   if (levelCode && departmentName) {
     return `${levelCode} • ${departmentName}`;
   }
 
-  return levelCode || departmentName || 'Filiere non precisee';
+  return levelCode || filiereName || departmentName || 'Filiere non precisee';
 };
+
+const SIGNED_URL_CACHE_TTL_MS = 55 * 60 * 1000;
 
 const WeeklySchedulesPage = () => {
   const { authState } = useAuth();
+  const signedUrlCacheRef = useRef(new Map());
 
   const [current, setCurrent] = useState(null);
   const [history, setHistory] = useState([]);
@@ -70,6 +77,7 @@ const WeeklySchedulesPage = () => {
   const [error, setError] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
 
@@ -80,8 +88,37 @@ const WeeklySchedulesPage = () => {
   const currentWeekLabel = formatWeekRange(selectedSchedule?.week_start_date || current?.week_start_date);
   const trackLabel = buildTrackLabel(
     levelCode,
+    selectedSchedule?.filieres?.name || current?.filieres?.name || '',
     selectedSchedule?.departments?.name || current?.departments?.name || ''
   );
+
+  const resolveScheduleUrl = useCallback(async (schedule) => {
+    if (!schedule?.file_path) {
+      return null;
+    }
+
+    const cacheKey = schedule.id || schedule.file_path;
+    const cachedEntry = signedUrlCacheRef.current.get(cacheKey);
+
+    if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+      return cachedEntry.url;
+    }
+
+    const { signedUrl, error: urlErr } = await getScheduleSignedUrl(schedule.file_path);
+
+    if (urlErr) {
+      throw urlErr;
+    }
+
+    if (signedUrl) {
+      signedUrlCacheRef.current.set(cacheKey, {
+        url: signedUrl,
+        expiresAt: Date.now() + SIGNED_URL_CACHE_TTL_MS
+      });
+    }
+
+    return signedUrl;
+  }, []);
 
   const loadSchedule = useCallback(async () => {
     if (!departmentId || !levelCode) return;
@@ -98,14 +135,9 @@ const WeeklySchedulesPage = () => {
 
       setCurrent(currentRes.data);
       setHistory(historyRes.data);
-
-      if (currentRes.data?.file_path) {
-        const { signedUrl, error: urlErr } = await getScheduleSignedUrl(currentRes.data.file_path);
-        if (!urlErr && signedUrl) {
-          setPdfUrl(signedUrl);
-          setSelectedId(currentRes.data.id);
-        }
-      }
+      setPdfUrl(null);
+      setFullscreenOpen(false);
+      setSelectedId(currentRes.data?.id || historyRes.data?.[0]?.id || null);
     } catch (err) {
       setError(err.message || 'Impossible de charger l\'emploi du temps');
     } finally {
@@ -115,21 +147,48 @@ const WeeklySchedulesPage = () => {
 
   useEffect(() => { loadSchedule(); }, [loadSchedule]);
 
-  const handleSelectWeek = async (scheduleId) => {
+  const handleSelectWeek = (scheduleId) => {
     const schedule = history.find((s) => s.id === scheduleId);
-    if (!schedule || !schedule.file_path) return;
+    if (!schedule) return;
+
     setSelectedId(scheduleId);
+    setPdfUrl(null);
+    setFullscreenOpen(false);
+    setError(null);
+  };
+
+  const handlePreviewOpen = async () => {
+    if (!selectedSchedule?.file_path) return;
+
+    setPreviewLoading(true);
+    setPdfUrl(null);
+    setError(null);
+    setFullscreenOpen(true);
+
     try {
-      const { signedUrl, error: urlErr } = await getScheduleSignedUrl(schedule.file_path);
-      if (urlErr) throw urlErr;
-      setPdfUrl(signedUrl);
+      const signedUrl = await resolveScheduleUrl(selectedSchedule);
+      if (signedUrl) {
+        setPdfUrl(signedUrl);
+      }
     } catch (err) {
-      setError('Impossible de charger cet emploi du temps');
+      setFullscreenOpen(false);
+      setError(err.message || 'Impossible de charger cet emploi du temps');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
-  const handleDownload = () => {
-    if (pdfUrl) window.open(pdfUrl, '_blank');
+  const handleDownload = async () => {
+    if (!selectedSchedule?.file_path) return;
+
+    try {
+      const signedUrl = await resolveScheduleUrl(selectedSchedule);
+      if (signedUrl) {
+        window.open(signedUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err) {
+      setError(err.message || 'Impossible de télécharger cet emploi du temps');
+    }
   };
 
   if (!departmentId || !levelCode) {
@@ -153,20 +212,22 @@ const WeeklySchedulesPage = () => {
             Emploi du temps de votre filiere — {trackLabel} • {currentWeekLabel}
           </Typography>
         </Box>
-        {pdfUrl && (
+        {selectedSchedule?.file_path && (
           <Stack direction="row" spacing={1}>
             <Button
               variant="outlined"
-              startIcon={<PreviewIcon />}
-              onClick={() => setFullscreenOpen(true)}
+              startIcon={previewLoading ? <CircularProgress size={18} color="inherit" /> : <PreviewIcon />}
+              onClick={handlePreviewOpen}
+              disabled={previewLoading}
               sx={{ borderColor: '#003366', color: '#003366', fontFamily: 'Montserrat' }}
             >
-              Plein écran
+              Aperçu
             </Button>
             <Button
               variant="contained"
               startIcon={<DownloadIcon />}
               onClick={handleDownload}
+              disabled={previewLoading}
               sx={{ bgcolor: '#003366', fontFamily: 'Montserrat', '&:hover': { bgcolor: '#002244' } }}
             >
               Télécharger
@@ -212,7 +273,7 @@ const WeeklySchedulesPage = () => {
         <Box display="flex" justifyContent="center" py={8}>
           <CircularProgress />
         </Box>
-      ) : !current ? (
+      ) : !selectedSchedule ? (
         <Paper sx={{ p: 6, textAlign: 'center' }}>
           <EventNoteIcon sx={{ fontSize: 80, color: '#ccc', mb: 2 }} />
           <Typography variant="h6" color="text.secondary" fontFamily="Montserrat">
@@ -225,30 +286,36 @@ const WeeklySchedulesPage = () => {
       ) : (
         <Paper
           sx={{
-            overflow: 'hidden',
             borderRadius: 2,
             boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-            height: '75vh'
+            p: { xs: 3, md: 4 }
           }}
         >
-          {pdfUrl ? (
-            <iframe
-              src={pdfUrl}
-              title={current.title}
-              style={{ width: '100%', height: '100%', border: 'none' }}
-            />
-          ) : (
-            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-              <CircularProgress />
-            </Box>
-          )}
+          <Stack spacing={2}>
+            <Typography variant="h6" fontFamily="Montserrat" fontWeight="bold" color="#003366">
+              Aperçu du PDF à la demande
+            </Typography>
+            <Typography variant="body2" color="text.secondary" fontFamily="Montserrat">
+              Le document n&apos;est chargé que lorsque vous ouvrez l&apos;aperçu ou le téléchargement.
+              Cela évite de bloquer la page avec le viewer PDF dès l&apos;arrivée.
+            </Typography>
+            {selectedSchedule?.notes && (
+              <Chip
+                label={selectedSchedule.notes}
+                size="small"
+                variant="outlined"
+                color="warning"
+                sx={{ fontFamily: 'Montserrat', width: 'fit-content' }}
+              />
+            )}
+          </Stack>
         </Paper>
       )}
 
-      {current && (
+      {selectedSchedule && (
         <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontFamily: 'Montserrat' }}>
-          Publié par {current.profiles?.full_name || 'Administration'} le{' '}
-          {new Date(current.created_at).toLocaleDateString('fr-FR')}
+          Publié par {selectedSchedule.profiles?.full_name || current?.profiles?.full_name || 'Administration'} le{' '}
+          {new Date(selectedSchedule.created_at || current?.created_at).toLocaleDateString('fr-FR')}
         </Typography>
       )}
 
@@ -258,13 +325,17 @@ const WeeklySchedulesPage = () => {
           {selectedSchedule?.title || current?.title || 'Emploi du temps'} • {currentWeekLabel}
         </DialogTitle>
         <DialogContent sx={{ p: 0, height: '100%' }}>
-          {pdfUrl && (
+          {previewLoading ? (
+            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+              <CircularProgress />
+            </Box>
+          ) : pdfUrl ? (
             <iframe
               src={pdfUrl}
               title="EDT plein écran"
               style={{ width: '100%', height: '100%', border: 'none' }}
             />
-          )}
+          ) : null}
         </DialogContent>
         <DialogActions sx={{ bgcolor: '#f5f5f5' }}>
           <Button onClick={() => setFullscreenOpen(false)} sx={{ fontFamily: 'Montserrat' }}>Fermer</Button>

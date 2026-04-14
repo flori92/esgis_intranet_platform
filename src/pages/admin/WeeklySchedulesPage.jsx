@@ -24,6 +24,7 @@ import {
   getDepartments,
   notifyStudentsOfNewSchedule
 } from '@/api/weeklySchedules';
+import { getFilieres } from '@/api/admin';
 import { addDays, format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -63,9 +64,9 @@ const formatWeekRange = (weekStartDate) => {
   return `Semaine du ${format(start, 'd MMM yyyy', { locale: fr })} au ${format(end, 'd MMM yyyy', { locale: fr })}`;
 };
 
-const buildScheduleTitle = ({ levelCode, departmentName, weekStartDate }) => {
+const buildScheduleTitle = ({ levelCode, departmentName, filiereName, weekStartDate }) => {
   const weekLabel = formatWeekRange(weekStartDate);
-  const scope = [levelCode, departmentName].filter(Boolean).join(' ');
+  const scope = [levelCode, filiereName || departmentName].filter(Boolean).join(' ');
 
   return `EDT Hebdomadaire ${scope} - ${weekLabel}`.trim();
 };
@@ -87,6 +88,7 @@ const getNextMonday = () => {
 const emptyForm = () => ({
   title: '',
   departmentId: '',
+  filiereId: '',
   levelCode: '',
   weekStartDate: getNextMonday(),
   academicYear: getCurrentAcademicYear(),
@@ -94,12 +96,16 @@ const emptyForm = () => ({
   file: null
 });
 
+const SIGNED_URL_CACHE_TTL_MS = 55 * 60 * 1000;
+
 const WeeklySchedulesPage = () => {
   const { authState } = useAuth();
   const fileInputRef = useRef(null);
+  const signedUrlCacheRef = useRef(new Map());
 
   const [schedules, setSchedules] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [filieres, setFilieres] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -111,19 +117,51 @@ const WeeklySchedulesPage = () => {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewTitle, setPreviewTitle] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const resolveScheduleUrl = useCallback(async (schedule) => {
+    if (!schedule?.file_path) {
+      return null;
+    }
+
+    const cacheKey = schedule.id || schedule.file_path;
+    const cachedEntry = signedUrlCacheRef.current.get(cacheKey);
+
+    if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+      return cachedEntry.url;
+    }
+
+    const { signedUrl, error: urlErr } = await getScheduleSignedUrl(schedule.file_path);
+
+    if (urlErr) {
+      throw urlErr;
+    }
+
+    if (signedUrl) {
+      signedUrlCacheRef.current.set(cacheKey, {
+        url: signedUrl,
+        expiresAt: Date.now() + SIGNED_URL_CACHE_TTL_MS
+      });
+    }
+
+    return signedUrl;
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [schedulesRes, deptsRes] = await Promise.all([
+      const [schedulesRes, deptsRes, filieresRes] = await Promise.all([
         getWeeklySchedules(),
-        getDepartments()
+        getDepartments(),
+        getFilieres()
       ]);
       if (schedulesRes.error) throw schedulesRes.error;
       if (deptsRes.error) throw deptsRes.error;
+      if (filieresRes.error) throw filieresRes.error;
       setSchedules(schedulesRes.data);
       setDepartments(deptsRes.data);
+      setFilieres(filieresRes.data);
     } catch (err) {
       setError(err.message || 'Erreur de chargement');
     } finally {
@@ -137,11 +175,19 @@ const WeeklySchedulesPage = () => {
     const value = e.target.value;
     setForm((prev) => {
       const updated = { ...prev, [field]: value };
-      if (field === 'departmentId' || field === 'levelCode' || field === 'weekStartDate') {
+      if (field === 'departmentId') {
+        const selectedFiliere = filieres.find((f) => f.id === Number(updated.filiereId));
+        if (selectedFiliere && selectedFiliere.department_id !== Number(value)) {
+          updated.filiereId = '';
+        }
+      }
+      if (field === 'departmentId' || field === 'filiereId' || field === 'levelCode' || field === 'weekStartDate') {
         const dept = departments.find((d) => d.id === Number(updated.departmentId));
+        const filiere = filieres.find((f) => f.id === Number(updated.filiereId));
         updated.title = buildScheduleTitle({
           levelCode: updated.levelCode,
           departmentName: dept?.name || '',
+          filiereName: filiere?.name || '',
           weekStartDate: updated.weekStartDate
         });
       }
@@ -177,6 +223,7 @@ const WeeklySchedulesPage = () => {
         title: form.title,
         departmentId: Number(form.departmentId),
         levelCode: form.levelCode,
+        filiereId: form.filiereId ? Number(form.filiereId) : null,
         weekStartDate: form.weekStartDate,
         academicYear: form.academicYear,
         notes: form.notes,
@@ -187,6 +234,7 @@ const WeeklySchedulesPage = () => {
       await notifyStudentsOfNewSchedule({
         departmentId: Number(form.departmentId),
         levelCode: form.levelCode,
+        filiereId: form.filiereId ? Number(form.filiereId) : null,
         title: form.title,
         weekStartDate: form.weekStartDate
       });
@@ -204,22 +252,26 @@ const WeeklySchedulesPage = () => {
   };
 
   const handlePreview = async (schedule) => {
+    setPreviewTitle(schedule.title);
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewUrl(null);
+
     try {
-      const { signedUrl, error: urlErr } = await getScheduleSignedUrl(schedule.file_path);
-      if (urlErr) throw urlErr;
+      const signedUrl = await resolveScheduleUrl(schedule);
       setPreviewUrl(signedUrl);
-      setPreviewTitle(schedule.title);
-      setPreviewOpen(true);
     } catch (err) {
+      setPreviewOpen(false);
       setError(err.message || 'Impossible de charger la prévisualisation');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
   const handleDownload = async (schedule) => {
     try {
-      const { signedUrl, error: urlErr } = await getScheduleSignedUrl(schedule.file_path);
-      if (urlErr) throw urlErr;
-      window.open(signedUrl, '_blank');
+      const signedUrl = await resolveScheduleUrl(schedule);
+      window.open(signedUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
       setError(err.message || 'Impossible de télécharger');
     }
@@ -292,7 +344,7 @@ const WeeklySchedulesPage = () => {
           <Table>
             <TableHead sx={{ bgcolor: '#003366' }}>
               <TableRow>
-                {['Titre', 'Filière', 'Niveau', 'Semaine du', 'Statut', 'Publié par', 'Actions'].map((h) => (
+                {['Titre', 'Département', 'Parcours', 'Niveau', 'Semaine du', 'Statut', 'Publié par', 'Actions'].map((h) => (
                   <TableCell key={h} sx={{ color: 'white', fontFamily: 'Montserrat', fontWeight: 'bold' }}>{h}</TableCell>
                 ))}
               </TableRow>
@@ -302,6 +354,7 @@ const WeeklySchedulesPage = () => {
                 <TableRow key={s.id} hover>
                   <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.title}</TableCell>
                   <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.departments?.name || '-'}</TableCell>
+                  <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.filieres?.name || 'Toutes filières'}</TableCell>
                   <TableCell><Chip label={s.level_code} size="small" color="primary" /></TableCell>
                   <TableCell sx={{ fontFamily: 'Montserrat' }}>{formatWeekRange(s.week_start_date)}</TableCell>
                   <TableCell><Chip label={s.status} size="small" color={statusColor(s.status)} /></TableCell>
@@ -327,11 +380,23 @@ const WeeklySchedulesPage = () => {
         <DialogContent>
           <Stack spacing={2.5} sx={{ mt: 1 }}>
             <FormControl fullWidth required>
-              <InputLabel>Filière (Département)</InputLabel>
-              <Select value={form.departmentId} onChange={handleFormChange('departmentId')} label="Filière (Département)">
+              <InputLabel>Département</InputLabel>
+              <Select value={form.departmentId} onChange={handleFormChange('departmentId')} label="Département">
                 {departments.map((d) => (
                   <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
                 ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth disabled={!form.departmentId}>
+              <InputLabel>Filière / parcours</InputLabel>
+              <Select value={form.filiereId} onChange={handleFormChange('filiereId')} label="Filière / parcours">
+                <MenuItem value="">Toutes les filières</MenuItem>
+                {filieres
+                  .filter((f) => !form.departmentId || f.department_id === Number(form.departmentId))
+                  .map((f) => (
+                    <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
+                  ))}
               </Select>
             </FormControl>
 
@@ -417,20 +482,25 @@ const WeeklySchedulesPage = () => {
           {previewTitle}
         </DialogTitle>
         <DialogContent sx={{ p: 0, height: '80vh' }}>
-          {previewUrl && (
+          {previewLoading ? (
+            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+              <CircularProgress />
+            </Box>
+          ) : previewUrl ? (
             <iframe
               src={previewUrl}
               title="Prévisualisation EDT"
               style={{ width: '100%', height: '100%', border: 'none' }}
             />
-          )}
+          ) : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPreviewOpen(false)}>Fermer</Button>
           <Button
             variant="contained"
             startIcon={<DownloadIcon />}
-            onClick={() => window.open(previewUrl, '_blank')}
+            onClick={() => window.open(previewUrl, '_blank', 'noopener,noreferrer')}
+            disabled={!previewUrl}
             sx={{ bgcolor: '#003366' }}
           >
             Télécharger

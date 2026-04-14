@@ -2,9 +2,22 @@ import { supabase } from '../supabase';
 import { uploadFile, removeFiles, createSignedUrl } from './storage';
 
 const BUCKET = 'schedules';
+const SCHEDULE_SELECT = `
+  *,
+  departments(id, name),
+  filieres(id, name, code),
+  profiles!uploaded_by(id, full_name)
+`;
 
-const buildFilePath = ({ departmentId, levelCode, academicYear, weekStartDate }) =>
-  `${departmentId}/${levelCode}/${academicYear || 'default'}/${weekStartDate}.pdf`;
+const buildFilePath = ({ departmentId, levelCode, filiereId, academicYear, weekStartDate }) =>
+  `${departmentId}/${levelCode}/${filiereId ? `filiere-${filiereId}` : 'all'}/${academicYear || 'default'}/${weekStartDate}.pdf`;
+
+const createPublishedSchedulesQuery = () =>
+  supabase
+    .from('weekly_schedules')
+    .select(SCHEDULE_SELECT)
+    .eq('status', 'published')
+    .order('week_start_date', { ascending: false });
 
 /**
  * List weekly schedules with optional filters.
@@ -13,11 +26,7 @@ export const getWeeklySchedules = async (filters = {}) => {
   try {
     let query = supabase
       .from('weekly_schedules')
-      .select(`
-        *,
-        departments(id, name),
-        profiles!uploaded_by(id, full_name)
-      `)
+      .select(SCHEDULE_SELECT)
       .order('week_start_date', { ascending: false });
 
     if (filters.departmentId) {
@@ -25,6 +34,9 @@ export const getWeeklySchedules = async (filters = {}) => {
     }
     if (filters.levelCode) {
       query = query.eq('level_code', filters.levelCode);
+    }
+    if (filters.filiereId) {
+      query = query.eq('filiere_id', filters.filiereId);
     }
     if (filters.status) {
       query = query.eq('status', filters.status);
@@ -43,24 +55,26 @@ export const getWeeklySchedules = async (filters = {}) => {
  */
 export const getStudentCurrentSchedule = async ({ departmentId, levelCode, filiereId }) => {
   try {
-    let query = supabase
-      .from('weekly_schedules')
-      .select(`
-        *,
-        departments(id, name),
-        profiles!uploaded_by(id, full_name)
-      `)
-      .eq('status', 'published')
-      .order('week_start_date', { ascending: false });
-
     if (filiereId) {
-      // Priorité à la filière spécifique
-      query = query.eq('filiere_id', filiereId);
-    } else {
-      query = query.eq('department_id', departmentId).eq('level_code', levelCode);
+      const { data, error } = await createPublishedSchedulesQuery()
+        .eq('department_id', departmentId)
+        .eq('level_code', levelCode)
+        .eq('filiere_id', filiereId)
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        return { data, error: null };
+      }
     }
 
-    const { data, error } = await query.limit(1).maybeSingle();
+    const { data, error } = await createPublishedSchedulesQuery()
+      .eq('department_id', departmentId)
+      .eq('level_code', levelCode)
+      .is('filiere_id', null)
+      .limit(1)
+      .maybeSingle();
 
     if (error) throw error;
     return { data, error: null };
@@ -74,23 +88,24 @@ export const getStudentCurrentSchedule = async ({ departmentId, levelCode, filie
  */
 export const getStudentScheduleHistory = async ({ departmentId, levelCode, filiereId }) => {
   try {
-    let query = supabase
-      .from('weekly_schedules')
-      .select(`
-        id, title, week_start_date, notes, file_path, created_at,
-        departments(id, name),
-        profiles!uploaded_by(id, full_name)
-      `)
-      .eq('status', 'published')
-      .order('week_start_date', { ascending: false });
-
     if (filiereId) {
-      query = query.eq('filiere_id', filiereId);
-    } else {
-      query = query.eq('department_id', departmentId).eq('level_code', levelCode);
+      const { data, error } = await createPublishedSchedulesQuery()
+        .eq('department_id', departmentId)
+        .eq('level_code', levelCode)
+        .eq('filiere_id', filiereId)
+        .limit(20);
+
+      if (error) throw error;
+      if (data?.length) {
+        return { data, error: null };
+      }
     }
 
-    const { data, error } = await query.limit(20);
+    const { data, error } = await createPublishedSchedulesQuery()
+      .eq('department_id', departmentId)
+      .eq('level_code', levelCode)
+      .is('filiere_id', null)
+      .limit(20);
 
     if (error) throw error;
     return { data: data || [], error: null };
@@ -107,13 +122,14 @@ export const uploadWeeklySchedule = async ({
   title,
   departmentId,
   levelCode,
+  filiereId,
   weekStartDate,
   academicYear,
   notes,
   uploadedBy
 }) => {
   try {
-    const filePath = buildFilePath({ departmentId, levelCode, academicYear, weekStartDate });
+    const filePath = buildFilePath({ departmentId, levelCode, filiereId, academicYear, weekStartDate });
 
     const { error: uploadError } = await uploadFile(BUCKET, filePath, file, {
       upsert: true,
@@ -128,6 +144,7 @@ export const uploadWeeklySchedule = async ({
         file_path: filePath,
         department_id: departmentId,
         level_code: levelCode,
+        filiere_id: filiereId || null,
         week_start_date: weekStartDate,
         academic_year: academicYear,
         uploaded_by: uploadedBy,
@@ -225,13 +242,19 @@ export const getDepartments = async () => {
 /**
  * Notify students of a new schedule.
  */
-export const notifyStudentsOfNewSchedule = async ({ departmentId, levelCode, title, weekStartDate }) => {
+export const notifyStudentsOfNewSchedule = async ({ departmentId, levelCode, filiereId, title, weekStartDate }) => {
   try {
-    const { data: students, error: studentsError } = await supabase
+    let query = supabase
       .from('students')
       .select('profile_id')
       .eq('department_id', departmentId)
       .eq('level', levelCode);
+
+    if (filiereId) {
+      query = query.eq('filiere_id', filiereId);
+    }
+
+    const { data: students, error: studentsError } = await query;
 
     if (studentsError) throw studentsError;
     if (!students?.length) return { sent: 0, error: null };
