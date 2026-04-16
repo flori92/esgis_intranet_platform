@@ -15,7 +15,11 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "checkJs": false
+    "checkJs": false,
+    "ignoreDeprecations": "6.0"
+  },
+  "typeAcquisition": {
+    "enable": true
   },
   "include": [
     "src/**/*.js",

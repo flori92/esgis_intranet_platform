@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -21,8 +21,9 @@ import AuthLayout from '../../components/layout/AuthLayout';
  * @returns {JSX.Element} Page de récupération de mot de passe
  */
 const ForgotPasswordPage = () => {
+  const location = useLocation();
   // États pour le formulaire
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => new URLSearchParams(location.search).get('email') || '');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);

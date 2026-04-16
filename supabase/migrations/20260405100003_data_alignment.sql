@@ -36,5 +36,16 @@ WHERE prof.profile_id = p.id AND prof.department_id IS NULL AND p.department_id 
 
 -- 4. Nettoyage des chaînes vides dans les colonnes critiques
 UPDATE public.students SET level = NULL WHERE level = '';
-UPDATE public.students SET academic_year = NULL WHERE academic_year = '';
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'students'
+      AND column_name = 'academic_year'
+  ) THEN
+    EXECUTE 'UPDATE public.students SET academic_year = NULL WHERE academic_year = ''''''';
+  END IF;
+END $$;
 UPDATE public.profiles SET full_name = email WHERE full_name = '' OR full_name IS NULL;

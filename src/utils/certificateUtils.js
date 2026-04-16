@@ -24,7 +24,7 @@ import { loadPdfLib } from './pdfLib';
  * @param {string} studentData.metadata.level - Niveau d'études
  * @returns {Promise<Uint8Array>} Données binaires du PDF généré
  */
-export const generateCertificate = async (studentData) => {
+const generateEnrollmentDocument = async (studentData, options = {}) => {
   try {
     const { PDFDocument, rgb, StandardFonts } = await loadPdfLib();
 
@@ -76,7 +76,7 @@ export const generateCertificate = async (studentData) => {
     });
     
     // Titre du document
-    page.drawText("CERTIFICAT DE SCOLARITÉ", {
+    page.drawText(options.title || "CERTIFICAT DE SCOLARITÉ", {
       x: 150,
       y: height - 150,
       size: 24,
@@ -129,7 +129,7 @@ export const generateCertificate = async (studentData) => {
       font: timesRomanFont
     });
     
-    page.drawText("pour l'année académique en cours.", {
+    page.drawText(options.enrollmentLine || "pour l'année académique en cours.", {
       x: 100,
       y: height - 370,
       size: 12,
@@ -137,7 +137,7 @@ export const generateCertificate = async (studentData) => {
     });
     
     // Mention légale
-    page.drawText("Ce certificat est délivré pour servir et valoir ce que de droit.", {
+    page.drawText(options.legalLine || "Ce certificat est délivré pour servir et valoir ce que de droit.", {
       x: 50,
       y: height - 430,
       size: 12,
@@ -187,10 +187,24 @@ export const generateCertificate = async (studentData) => {
     // Génération et retour direct du PDF
     return await pdfDoc.save();
   } catch (error) {
-    console.error("Erreur lors de la génération du certificat:", error);
-    throw new Error("Impossible de générer le certificat de scolarité");
+    console.error("Erreur lors de la génération du document d'inscription:", error);
+    throw new Error(options.errorMessage || "Impossible de générer le document");
   }
 };
+
+export const generateCertificate = async (studentData) => generateEnrollmentDocument(studentData, {
+  title: 'CERTIFICAT DE SCOLARITÉ',
+  enrollmentLine: "pour l'année académique en cours.",
+  legalLine: 'Ce certificat est délivré pour servir et valoir ce que de droit.',
+  errorMessage: 'Impossible de générer le certificat de scolarité'
+});
+
+export const generateEnrollmentAttestation = async (studentData) => generateEnrollmentDocument(studentData, {
+  title: "ATTESTATION D'INSCRIPTION",
+  enrollmentLine: "pour l'année académique en cours au sein de notre établissement.",
+  legalLine: "La présente attestation est délivrée à l'intéressé(e) pour servir et valoir ce que de droit.",
+  errorMessage: "Impossible de générer l'attestation d'inscription"
+});
 
 /**
  * Récupère les données complètes d'un étudiant

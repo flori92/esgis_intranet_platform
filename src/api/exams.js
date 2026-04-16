@@ -398,6 +398,9 @@ const normalizeExamRecord = (record) => {
     // Alias rétro-compat : le reste du code lit .date et .type
     date: record.exam_date || record.date || null,
     type: record.exam_type || record.type || null,
+    access_code_required: Boolean(record.access_code_required),
+    allow_direct_join: Boolean(record.allow_direct_join),
+    max_cheating_alerts: Number(record.max_cheating_alerts || 3),
     course,
     course_name: course?.name || null,
     course_code: course?.code || null,
@@ -435,11 +438,139 @@ const normalizeStudentRecord = (record) => {
   };
 };
 
+const resolveStudentId = async (profileId) => {
+  if (!profileId) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .select('id')
+      .eq('profile_id', profileId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return data?.id || profileId;
+  } catch (error) {
+    console.error('Erreur resolveStudentId:', error);
+    return profileId;
+  }
+};
+
+const isStudentIdTypeMismatchError = (error) => {
+  const message = error?.message || '';
+
+  return error?.code === '22P02' || /invalid input syntax for type (uuid|integer)/i.test(message);
+};
+
+const getStudentExamLookupCandidates = async (profileId) => {
+  const studentId = await resolveStudentId(profileId);
+
+  return [...new Set([profileId, studentId].filter(Boolean).map((value) => String(value)))];
+};
+
+const queryStudentExamsByCandidates = async ({ candidates, buildQuery, expectSingle = false }) => {
+  const rows = [];
+  const seenIds = new Set();
+  let lastTypeMismatchError = null;
+
+  for (const candidate of candidates) {
+    const { data, error } = await buildQuery(candidate);
+
+    if (error) {
+      if (isStudentIdTypeMismatchError(error)) {
+        lastTypeMismatchError = error;
+        continue;
+      }
+
+      return { data: expectSingle ? null : [], error };
+    }
+
+    if (expectSingle) {
+      if (data) {
+        return { data, error: null };
+      }
+
+      continue;
+    }
+
+    for (const row of data || []) {
+      if (seenIds.has(row.id)) {
+        continue;
+      }
+
+      seenIds.add(row.id);
+      rows.push(row);
+    }
+  }
+
+  if (expectSingle) {
+    return { data: null, error: null, fallbackError: lastTypeMismatchError };
+  }
+
+  return { data: rows, error: null, fallbackError: lastTypeMismatchError };
+};
+
+const isQuizResultsOnConflictSchemaError = (error) => {
+  const message = `${error?.message || ''} ${error?.details || ''}`;
+
+  return error?.code === '42P10' || /no unique|no unique or exclusion constraint|on conflict/i.test(message);
+};
+
+const persistQuizResult = async (payload) => {
+  const { error: upsertError } = await supabase
+    .from('quiz_results')
+    .upsert(payload, {
+      onConflict: 'student_id,exam_id'
+    });
+
+  if (!upsertError) {
+    return { error: null };
+  }
+
+  if (!isQuizResultsOnConflictSchemaError(upsertError)) {
+    return { error: upsertError };
+  }
+
+  const { data: existingResult, error: existingError } = await supabase
+    .from('quiz_results')
+    .select('id')
+    .eq('student_id', payload.student_id)
+    .eq('exam_id', payload.exam_id)
+    .order('updated_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    return { error: existingError };
+  }
+
+  if (existingResult?.id) {
+    const { error: updateError } = await supabase
+      .from('quiz_results')
+      .update(payload)
+      .eq('id', existingResult.id);
+
+    return { error: updateError || null };
+  }
+
+  const { error: insertError } = await supabase
+    .from('quiz_results')
+    .insert(payload);
+
+  return { error: insertError || null };
+};
+
 export const getStudentExamLaunchData = async ({ examId, profileId }) => {
   try {
     const numericExamId = Number(examId);
-
-    const [{ data: examData, error: examError }, { data: studentExam, error: studentExamError }] = await Promise.all([
+    const [studentCandidates, { data: examData, error: examError }] = await Promise.all([
+      getStudentExamLookupCandidates(profileId),
       supabase
         .from('exams')
         .select(`
@@ -455,6 +586,9 @@ export const getStudentExamLaunchData = async ({ examId, profileId }) => {
           exam_type,
           category,
           share_token,
+          access_code_required,
+          allow_direct_join,
+          max_cheating_alerts,
           room,
           total_points,
           passing_grade,
@@ -466,8 +600,13 @@ export const getStudentExamLaunchData = async ({ examId, profileId }) => {
           exam_centers!exam_center_id(id, name, location, status)
         `)
         .eq('id', numericExamId)
-        .single(),
-      supabase
+        .single()
+    ]);
+
+    const { data: studentExam, error: studentExamError } = await queryStudentExamsByCandidates({
+      candidates: studentCandidates,
+      expectSingle: true,
+      buildQuery: (candidate) => supabase
         .from('student_exams')
         .select(`
           id,
@@ -482,13 +621,18 @@ export const getStudentExamLaunchData = async ({ examId, profileId }) => {
           answers,
           arrival_time,
           departure_time,
+          access_verified_at,
+          access_verification_failures,
+          access_locked_until,
+          start_count,
+          submission_reason,
           created_at,
           updated_at
         `)
         .eq('exam_id', numericExamId)
-        .eq('student_id', profileId)
+        .eq('student_id', candidate)
         .maybeSingle()
-    ]);
+    });
 
     if (examError) {
       return { exam: null, studentExam: null, error: examError };
@@ -519,46 +663,53 @@ export const getStudentExamLaunchData = async ({ examId, profileId }) => {
 
 export const getStudentExamsListData = async (profileId) => {
   try {
-    const { data, error } = await supabase
-      .from('student_exams')
-      .select(`
-        id,
-        exam_id,
-        student_id,
-        seat_number,
-        attendance,
-        attempt_status,
-        status,
-        grade,
-        comments,
-        created_at,
-        updated_at,
-        exams(
+    const studentCandidates = await getStudentExamLookupCandidates(profileId);
+    const { data, error } = await queryStudentExamsByCandidates({
+      candidates: studentCandidates,
+      buildQuery: (candidate) => supabase
+        .from('student_exams')
+        .select(`
           id,
-          title,
-          description,
-          course_id,
-          professor_id,
-          exam_session_id,
-          exam_center_id,
-          exam_date,
-          duration,
-          exam_type,
-          category,
-          share_token,
-          room,
-          total_points,
-          passing_grade,
+          exam_id,
+          student_id,
+          seat_number,
+          attendance,
+          attempt_status,
           status,
-          parent_exam:exams!parent_exam_id(id, title),
-          courses(id, name, code),
-          profiles!professor_id(id, full_name, email),
-          exam_sessions!exam_session_id(id, name, academic_year, semester, status),
-          exam_centers!exam_center_id(id, name, location, status)
-        )
-      `)
-      .eq('student_id', profileId)
-      .order('created_at', { ascending: false });
+          grade,
+          comments,
+          created_at,
+          updated_at,
+          exams(
+            id,
+            title,
+            description,
+            course_id,
+            professor_id,
+            exam_session_id,
+            exam_center_id,
+            exam_date,
+            duration,
+            exam_type,
+            category,
+            share_token,
+            access_code_required,
+            allow_direct_join,
+            max_cheating_alerts,
+            room,
+            total_points,
+            passing_grade,
+            status,
+            parent_exam:exams!parent_exam_id(id, title),
+            courses(id, name, code),
+            profiles!professor_id(id, full_name, email),
+            exam_sessions!exam_session_id(id, name, academic_year, semester, status),
+            exam_centers!exam_center_id(id, name, location, status)
+          )
+        `)
+        .eq('student_id', candidate)
+        .order('created_at', { ascending: false })
+    });
 
     if (error) {
       throw error;
@@ -597,39 +748,50 @@ export const getStudentExamsListData = async (profileId) => {
   }
 };
 
-export const markStudentExamStarted = async ({ studentExamId, examId }) => {
+export const markStudentExamStarted = async ({ studentExamId, examId, profileId }) => {
   try {
-    const now = new Date().toISOString();
+    const resolvedProfileId = profileId || (await supabase.auth.getUser()).data.user?.id || null;
+    const { data, error } = await supabase.rpc('start_exam_attempt', {
+      p_exam_id: Number(examId),
+      p_student_exam_id: Number(studentExamId),
+      p_profile_id: resolvedProfileId
+    });
 
-    const { error: studentExamError } = await supabase
-      .from('student_exams')
-      .update({
-        attempt_status: 'in_progress',
-        arrival_time: now,
-        updated_at: now
-      })
-      .eq('id', studentExamId);
-
-    if (studentExamError) {
-      return { success: false, error: studentExamError };
+    if (error) {
+      return { success: false, error };
     }
 
-    const { error: examError } = await supabase
-      .from('exams')
-      .update({
-        status: 'in_progress',
-        updated_at: now
-      })
-      .eq('id', examId)
-      .in('status', ['published', 'in_progress']);
-
-    if (examError) {
-      console.error("Erreur lors du passage de l'examen en cours:", examError);
+    if (!data?.success) {
+      return { success: false, error: new Error(data?.message || "Impossible de démarrer l'examen.") };
     }
 
-    return { success: true, error: null };
+    return { success: true, error: null, data };
   } catch (error) {
     console.error('Erreur markStudentExamStarted:', error);
+    return { success: false, error };
+  }
+};
+
+export const verifyExamAccessCode = async ({ studentExamId, examId, profileId, code }) => {
+  try {
+    const { data, error } = await supabase.rpc('verify_exam_access_code', {
+      p_exam_id: Number(examId),
+      p_student_exam_id: Number(studentExamId),
+      p_profile_id: profileId,
+      p_code: code
+    });
+
+    if (error) {
+      return { success: false, error };
+    }
+
+    if (!data?.success) {
+      return { success: false, error: new Error(data?.message || "Code d'accès invalide."), data };
+    }
+
+    return { success: true, error: null, data };
+  } catch (error) {
+    console.error('Erreur verifyExamAccessCode:', error);
     return { success: false, error };
   }
 };
@@ -669,7 +831,8 @@ export const finalizeStudentExamSubmission = async ({
   completionTime,
   cheatingAttempts,
   hasManualQuestions,
-  passingGrade
+  passingGrade,
+  submissionReason = 'manual'
 }) => {
   try {
     const now = new Date().toISOString();
@@ -681,21 +844,18 @@ export const finalizeStudentExamSubmission = async ({
         ? 'passed'
         : 'failed';
 
-    const { error: quizResultError } = await supabase
-      .from('quiz_results')
-      .upsert({
-        student_id: profileId,
-        exam_id: numericExamId,
-        score: normalizedScore,
-        total_questions: Number(totalQuestions || 0),
-        completion_time: Number(completionTime || 0),
-        answers: answers || {},
-        cheating_attempts: Number(cheatingAttempts || 0),
-        completed_at: now,
-        updated_at: now
-      }, {
-        onConflict: 'student_id,exam_id'
-      });
+    const quizResultPayload = {
+      student_id: profileId,
+      exam_id: numericExamId,
+      score: normalizedScore,
+      total_questions: Number(totalQuestions || 0),
+      completion_time: Number(completionTime || 0),
+      answers: answers || {},
+      cheating_attempts: Number(cheatingAttempts || 0),
+      completed_at: now,
+      updated_at: now
+    };
+    const { error: quizResultError } = await persistQuizResult(quizResultPayload);
 
     if (quizResultError) {
       return { success: false, error: quizResultError };
@@ -709,6 +869,7 @@ export const finalizeStudentExamSubmission = async ({
         answers: answers || {},
         departure_time: now,
         grade: hasManualQuestions ? null : normalizedScore,
+        submission_reason: submissionReason,
         updated_at: now
       })
       .eq('id', studentExamId);
@@ -931,12 +1092,12 @@ export const getProfessorExamMonitoringData = async (examId) => {
           student_exam_id,
           details,
           attempt_count,
-          timestamp,
           detected_at,
+          created_at,
           student:profiles!student_id(full_name, email)
         `)
         .eq('exam_id', numericExamId)
-        .order('timestamp', { ascending: false })
+        .order('detected_at', { ascending: false })
         .limit(50),
       supabase
         .from('exam_questions')
@@ -1378,6 +1539,41 @@ export const getExamRaw = async (examId) => {
     return { data, error: null };
   } catch (error) {
     console.error('Erreur getExamRaw:', error);
+    return { data: null, error };
+  }
+};
+
+export const getExamAccessSettings = async (examId) => {
+  try {
+    const { data, error } = await supabase
+      .from('exam_access_settings')
+      .select('*')
+      .eq('exam_id', examId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return { data: data || null, error: null };
+  } catch (error) {
+    console.error('Erreur getExamAccessSettings:', error);
+    return { data: null, error };
+  }
+};
+
+export const upsertExamAccessSettings = async (settings) => {
+  try {
+    const { data, error } = await supabase
+      .from('exam_access_settings')
+      .upsert({
+        ...settings,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'exam_id' })
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+    return { data: data || null, error: null };
+  } catch (error) {
+    console.error('Erreur upsertExamAccessSettings:', error);
     return { data: null, error };
   }
 };

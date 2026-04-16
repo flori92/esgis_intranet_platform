@@ -40,6 +40,7 @@ import { updateRequestStatus } from '@/api/requests';
 import { useAuth } from '../../hooks/useAuth';
 
 const VALIDATION_STATUSES = [
+  { value: 'pending', label: 'Reçue (legacy)', color: 'info' },
   { value: 'received', label: 'Reçue', color: 'info' },
   { value: 'processing', label: 'En cours', color: 'warning' },
   { value: 'approved', label: 'Approuvée', color: 'success' },
@@ -51,6 +52,7 @@ const REQUEST_TYPES = [
   { value: 'certificate', label: 'Certificat de scolarité' },
   { value: 'attestation', label: 'Attestation d\'inscription' },
   { value: 'transcript', label: 'Relevé de notes' },
+  { value: 'report_card', label: 'Bulletin de notes' },
   { value: 'correction', label: 'Correction d\'informations' },
   { value: 'duplicate', label: 'Duplicata' },
   { value: 'access_reset', label: 'Réinitialisation d\'accès' },
@@ -68,7 +70,7 @@ export default function ValidationQueuePage() {
   const { authState } = useAuth();
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('pending');
+  const [filterStatus, setFilterStatus] = useState('received');
   const [filterType, setFilterType] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -106,7 +108,8 @@ export default function ValidationQueuePage() {
     const query = searchQuery.trim().toLowerCase();
 
     return queue.filter((item) => {
-      const matchesStatus = !filterStatus || item.status === filterStatus;
+      const matchesStatus = !filterStatus
+        || (filterStatus === 'received' ? item.status === 'received' || item.status === 'pending' : item.status === filterStatus);
       const matchesType = !filterType || item.request_type === filterType;
       const matchesSearch = !query
         || getRequesterName(item.requester).toLowerCase().includes(query)
@@ -120,7 +123,9 @@ export default function ValidationQueuePage() {
   }, [filterStatus, filterType, queue, searchQuery]);
 
   const stats = useMemo(() => ({
-    pending: queue.filter((item) => item.status === 'pending').length,
+    received: queue.filter((item) => item.status === 'received' || item.status === 'pending').length,
+    processing: queue.filter((item) => item.status === 'processing').length,
+    ready: queue.filter((item) => item.status === 'ready').length,
     approved: queue.filter((item) => item.status === 'approved').length,
     rejected: queue.filter((item) => item.status === 'rejected').length,
   }), [queue]);
@@ -187,7 +192,9 @@ export default function ValidationQueuePage() {
         />
         <CardContent>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 3 }}>
-            <Chip icon={<InfoIcon />} label={`En attente: ${stats.pending}`} color={stats.pending ? 'warning' : 'default'} variant="outlined" />
+            <Chip icon={<InfoIcon />} label={`Reçues: ${stats.received}`} color={stats.received ? 'info' : 'default'} variant="outlined" />
+            <Chip icon={<InfoIcon />} label={`En cours: ${stats.processing}`} color={stats.processing ? 'warning' : 'default'} variant="outlined" />
+            <Chip icon={<InfoIcon />} label={`Prêtes: ${stats.ready}`} color={stats.ready ? 'secondary' : 'default'} variant="outlined" />
             <Chip icon={<CheckIcon />} label={`Approuvées: ${stats.approved}`} color="success" variant="outlined" />
             <Chip icon={<CloseIcon />} label={`Rejetées: ${stats.rejected}`} color="error" variant="outlined" />
           </Stack>

@@ -258,7 +258,7 @@ const BulkBulletinPage = () => {
 
       {generationComplete && (
         <Alert severity="success" sx={{ mb: 3 }} icon={<CheckIcon />}>
-          <strong>{generatedCount} bulletins</strong> ont été générés et enregistrés dans l'espace documents de chaque étudiant.
+          <strong>{generatedCount} bulletins</strong> ont été générés et enregistrés dans l'espace Documents officiels de chaque étudiant.
         </Alert>
       )}
 
@@ -332,7 +332,7 @@ const BulkBulletinPage = () => {
             Vous allez générer <strong>{selectedStudents.length} bulletins PDF</strong> pour le semestre {selectedSemestre} de l'année {anneeAcademique}.
           </Alert>
           <Typography variant="body2">
-            Les bulletins seront automatiquement uploadés et mis à disposition dans l'espace documents de chaque étudiant.
+            Les bulletins seront automatiquement uploadés et mis à disposition dans l'espace Documents officiels de chaque étudiant.
           </Typography>
         </DialogContent>
         <DialogActions>

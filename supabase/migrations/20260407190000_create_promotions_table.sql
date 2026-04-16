@@ -27,13 +27,16 @@ ADD COLUMN IF NOT EXISTS promotion_id UUID REFERENCES public.promotions(id) ON D
 -- 4. Enable RLS
 ALTER TABLE public.promotions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Promotions are viewable by all authenticated users" ON public.promotions;
 CREATE POLICY "Promotions are viewable by all authenticated users" 
 ON public.promotions FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Admins can manage promotions" ON public.promotions;
 CREATE POLICY "Admins can manage promotions" 
 ON public.promotions FOR ALL TO authenticated USING (check_is_admin());
 
 -- 5. Trigger for updated_at
+DROP TRIGGER IF EXISTS update_promotions_updated_at ON public.promotions;
 CREATE TRIGGER update_promotions_updated_at
 BEFORE UPDATE ON public.promotions
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

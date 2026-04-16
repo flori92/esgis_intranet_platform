@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
 import QuestionCard from "./QuestionCard";
@@ -15,14 +15,19 @@ import {
   Paper,
   CircularProgress,
   Button,
+  Card,
+  CardContent,
+  Chip,
+  Fade,
+  IconButton,
   Stack,
-  LinearProgress,
-  Divider
+  LinearProgress
 } from '@mui/material';
 import {
   Timer as TimerIcon,
   Person as PersonIcon,
-  GppBad as WarningIcon
+  GppBad as WarningIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 
 /**
@@ -47,14 +52,14 @@ const Quiz = () => {
     goToNextQuestion,
     goToPreviousQuestion,
     endQuiz,
+    submitQuiz,
     calculateScore,
     cheatingAttempts,
     scoreSummary,
     countCorrectAnswers
   } = useQuiz();
-  
-  // Référence pour le div d'alerte personnalisé
-  const alertRef = useRef(null);
+
+  const [incidentAlert, setIncidentAlert] = useState(null);
 
   // Référence stable pour le son d'alerte
   const alertSoundRef = React.useRef(null);
@@ -64,77 +69,25 @@ const Quiz = () => {
   const antiCheatServiceRef = useRef(null);
   const trackedQuestionIndexRef = useRef(0);
   const lastMajorIncidentRef = useRef({ family: null, at: 0 });
+  const displayedCheatingCountRef = useRef(0);
+  const examViewportRef = useRef(null);
 
   /**
-   * Affiche une alerte personnalisée en rouge
-   * @param {string} message - Message à afficher dans l'alerte
+   * Affiche une carte d'alerte visible et joue un signal sonore.
    */
-  const showCustomAlert = useCallback((message) => {
-    if (alertRef.current && document.body.contains(alertRef.current)) {
-      document.body.removeChild(alertRef.current);
-      alertRef.current = null;
-    }
-    const alertDiv = document.createElement('div');
-    alertDiv.style.position = 'fixed';
-    alertDiv.style.top = '0';
-    alertDiv.style.left = '0';
-    alertDiv.style.width = '100%';
-    alertDiv.style.height = '100%';
-    alertDiv.style.backgroundColor = 'rgba(211, 47, 47, 0.95)';
-    alertDiv.style.color = 'white';
-    alertDiv.style.display = 'flex';
-    alertDiv.style.flexDirection = 'column';
-    alertDiv.style.justifyContent = 'center';
-    alertDiv.style.alignItems = 'center';
-    alertDiv.style.zIndex = '99999';
-    alertDiv.style.fontWeight = 'bold';
-    alertDiv.style.fontFamily = 'Roboto, Helvetica, Arial, sans-serif';
-    alertDiv.style.textAlign = 'center';
-    alertDiv.style.padding = '40px';
-
-    const iconElement = document.createElement('div');
-    iconElement.innerHTML = '<svg style="width:100px;height:100px" viewBox="0 0 24 24"><path fill="currentColor" d="M13,13H11V7H13M13,17H11V15H13M12,2L1,21H23L12,2Z" /></svg>';
-    iconElement.style.marginBottom = '20px';
-
-    const titleElement = document.createElement('div');
-    titleElement.textContent = 'TRICHE DÉTECTÉE';
-    titleElement.style.fontSize = '48px';
-    titleElement.style.marginBottom = '20px';
-
-    const messageElement = document.createElement('div');
-    messageElement.innerHTML = message.replace('🚨 TRICHE DÉTECTÉE 🚨\n\n', '').replace(/\n/g, '<br>');
-    messageElement.style.marginBottom = '40px';
-    messageElement.style.fontSize = '24px';
-    messageElement.style.maxWidth = '800px';
-
-    const closeButton = document.createElement('button');
-    closeButton.textContent = 'JE COMPRENDS ET JE REVIENS À L\'ÉPREUVE';
-    closeButton.style.padding = '16px 32px';
-    closeButton.style.backgroundColor = 'white';
-    closeButton.style.color = '#d32f47';
-    closeButton.style.border = 'none';
-    closeButton.style.borderRadius = '4px';
-    closeButton.style.fontWeight = 'bold';
-    closeButton.style.fontSize = '18px';
-    closeButton.style.cursor = 'pointer';
-    closeButton.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.3)';
-    closeButton.onclick = () => {
-      if (alertRef.current && document.body.contains(alertRef.current)) {
-        document.body.removeChild(alertRef.current);
-        alertRef.current = null;
-      }
-    };
-
-    alertDiv.appendChild(iconElement);
-    alertDiv.appendChild(titleElement);
-    alertDiv.appendChild(messageElement);
-    alertDiv.appendChild(closeButton);
-    document.body.appendChild(alertDiv);
-    alertRef.current = alertDiv;
+  const showCustomAlert = useCallback((payload) => {
+    setIncidentAlert(payload);
     if (alertSoundRef.current) {
+      alertSoundRef.current.currentTime = 0;
       alertSoundRef.current.play().catch((err) => console.error('Erreur lors de la lecture du son:', err));
     }
   }, []);
+
+  useEffect(() => {
+    displayedCheatingCountRef.current = cheatingAttempts;
+  }, [cheatingAttempts]);
+
+  const maxCheatingAttempts = Math.max(1, Number(examData?.max_cheating_alerts || 3));
 
   const isDesktopSecureMode = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -145,8 +98,62 @@ const Quiz = () => {
     return window.innerWidth >= 1024 && (!supportsPointerQuery || window.matchMedia('(pointer:fine)').matches);
   }, []);
 
+  const requestSecureFullscreen = useCallback(() => {
+    if (typeof document === 'undefined' || document.fullscreenElement || !isDesktopSecureMode()) {
+      return;
+    }
+
+    const fullscreenTarget = document.documentElement;
+    if (typeof fullscreenTarget?.requestFullscreen !== 'function') {
+      return;
+    }
+
+    fullscreenTarget.requestFullscreen().catch(() => {});
+  }, [isDesktopSecureMode]);
+
+  const restoreExamFocus = useCallback(() => {
+    if (typeof window !== 'undefined' && typeof window.focus === 'function') {
+      window.focus();
+    }
+
+    window.requestAnimationFrame(() => {
+      if (examViewportRef.current) {
+        examViewportRef.current.scrollIntoView({ block: 'start', behavior: 'auto' });
+        examViewportRef.current.focus({ preventScroll: true });
+
+        const firstInteractiveField = examViewportRef.current.querySelector(
+          'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        firstInteractiveField?.focus?.({ preventScroll: true });
+      }
+    });
+  }, []);
+
+  const dismissIncidentAlert = useCallback(() => {
+    if (!incidentAlert || incidentAlert.willAutoSubmit) {
+      return;
+    }
+
+    requestSecureFullscreen();
+    setIncidentAlert(null);
+    restoreExamFocus();
+  }, [incidentAlert, requestSecureFullscreen, restoreExamFocus]);
+
   const isMajorIncident = useCallback((incidentType) => (
-    ['tab_switch', 'window_blur', 'fullscreen_exit', 'fullscreen_denied', 'devtools_attempt', 'view_source_attempt', 'alt_tab'].includes(incidentType)
+    [
+      'tab_switch',
+      'window_blur',
+      'fullscreen_exit',
+      'fullscreen_denied',
+      'devtools_attempt',
+      'view_source_attempt',
+      'alt_tab',
+      'copy_attempt',
+      'paste_attempt',
+      'cut_attempt',
+      'right_click',
+      'print_attempt',
+    ].includes(incidentType)
   ), []);
 
   const getIncidentFamily = useCallback((incidentType) => {
@@ -156,6 +163,10 @@ const Quiz = () => {
 
     if (['devtools_attempt', 'view_source_attempt'].includes(incidentType)) {
       return 'devtools';
+    }
+
+    if (['copy_attempt', 'paste_attempt', 'cut_attempt'].includes(incidentType)) {
+      return 'clipboard';
     }
 
     return incidentType;
@@ -174,21 +185,51 @@ const Quiz = () => {
     return false;
   }, [getIncidentFamily]);
 
-  const buildIncidentAlert = useCallback((incidentType) => {
+  const buildIncidentAlert = useCallback((incidentType, attemptCount, willAutoSubmit = false) => {
+    const safeAttemptCount = Math.max(0, Math.min(attemptCount, maxCheatingAttempts));
+    const attemptLabel = `${safeAttemptCount}/${maxCheatingAttempts}`;
+    const counterMessage = willAutoSubmit
+      ? `Seuil de ${maxCheatingAttempts} alertes atteint. L'examen va être arrêté et soumis automatiquement.`
+      : `Alerte ${attemptLabel}. À partir de ${maxCheatingAttempts} alertes, l'examen sera arrêté et soumis automatiquement.`;
+
+    let detail = "Une action interdite a été détectée pendant l'examen.";
+
     switch (incidentType) {
       case 'fullscreen_exit':
       case 'fullscreen_denied':
-        return '🚨 TRICHE DÉTECTÉE 🚨\n\nLe mode plein écran sécurisé a été quitté ou refusé.\n\nRevenez immédiatement à l’épreuve. Cet incident a été enregistré.';
+        detail = 'Le mode plein écran sécurisé a été quitté ou refusé.';
+        break;
       case 'devtools_attempt':
       case 'view_source_attempt':
-        return '🚨 TRICHE DÉTECTÉE 🚨\n\nUne tentative d’inspection technique de l’épreuve a été détectée.\n\nCet incident a été enregistré et transmis au surveillant.';
+        detail = "Une tentative d'inspection technique de l'épreuve a été détectée.";
+        break;
+      case 'copy_attempt':
+      case 'paste_attempt':
+      case 'cut_attempt':
+        detail = 'Une tentative de copier-coller a été bloquée.';
+        break;
+      case 'right_click':
+        detail = 'Le clic droit est interdit pendant cette épreuve.';
+        break;
+      case 'print_attempt':
+        detail = "Une tentative d'impression a été bloquée.";
+        break;
       case 'alt_tab':
       case 'tab_switch':
       case 'window_blur':
       default:
-        return '🚨 TRICHE DÉTECTÉE 🚨\n\nVous avez quitté l\'onglet ou changé de fenêtre pendant l\'examen.\n\nCet incident a été enregistré et transmis au surveillant. Au bout de 3 alertes majeures, votre copie sera automatiquement soumise.';
+        detail = "Vous avez quitté l'onglet ou changé de fenêtre pendant l'examen.";
+        break;
     }
-  }, []);
+
+    return {
+      title: willAutoSubmit ? 'Examen interrompu' : 'Tentative de triche détectée',
+      detail,
+      counterMessage,
+      attemptLabel,
+      willAutoSubmit,
+    };
+  }, [maxCheatingAttempts]);
 
   useEffect(() => {
     const shouldProtectExam = quizStatus === 'IN_PROGRESS' && examData && examData.category !== 'training';
@@ -198,21 +239,31 @@ const Quiz = () => {
       antiCheatServiceRef.current = null;
       trackedQuestionIndexRef.current = 0;
       lastMajorIncidentRef.current = { family: null, at: 0 };
+      setIncidentAlert(null);
       return undefined;
     }
 
     const service = new AntiCheatService({
-      maxTabSwitches: 3,
+      maxTabSwitches: maxCheatingAttempts,
       autoSubmitOnMaxSwitches: true,
       disableCopyPaste: true,
       disableRightClick: true,
       requireFullscreen: isDesktopSecureMode(),
       onIncident: (incident) => {
-        const incrementCounter = isMajorIncident(incident.type) && !shouldIgnoreIncident(incident.type);
+        if (!isMajorIncident(incident.type)) {
+          return;
+        }
+
+        const incrementCounter = !shouldIgnoreIncident(incident.type);
+        const nextAttemptCount = incrementCounter
+          ? Math.min(displayedCheatingCountRef.current + 1, maxCheatingAttempts)
+          : displayedCheatingCountRef.current;
 
         if (incrementCounter) {
-          showCustomAlert(buildIncidentAlert(incident.type));
+          displayedCheatingCountRef.current = nextAttemptCount;
         }
+
+        showCustomAlert(buildIncidentAlert(incident.type, nextAttemptCount, nextAttemptCount >= maxCheatingAttempts));
 
         reportCheatingAttempt({
           details: `[${incident.type}] ${incident.details}`,
@@ -221,8 +272,9 @@ const Quiz = () => {
         });
       },
       onAutoSubmit: () => {
-        showCustomAlert('🚨 SESSION INTERROMPUE 🚨\n\nLe nombre maximum d’alertes majeures a été atteint.\n\nVotre copie va être soumise automatiquement.');
-        setTimeout(() => submitQuiz(), 0);
+        displayedCheatingCountRef.current = maxCheatingAttempts;
+        showCustomAlert(buildIncidentAlert('tab_switch', maxCheatingAttempts, true));
+        setTimeout(() => submitQuiz({ reason: 'anti_cheat_limit' }), 1200);
       },
       onFullscreenExit: () => {}
     });
@@ -237,7 +289,7 @@ const Quiz = () => {
         antiCheatServiceRef.current = null;
       }
     };
-  }, [buildIncidentAlert, examData, isDesktopSecureMode, isMajorIncident, quizStatus, reportCheatingAttempt, shouldIgnoreIncident, showCustomAlert]);
+  }, [buildIncidentAlert, examData, isDesktopSecureMode, isMajorIncident, maxCheatingAttempts, quizStatus, reportCheatingAttempt, shouldIgnoreIncident, showCustomAlert, submitQuiz]);
 
   useEffect(() => {
     if (!antiCheatServiceRef.current) {
@@ -327,7 +379,7 @@ const Quiz = () => {
                 {cheatingAttempts > 0 && (
                   <Chip 
                     icon={<WarningIcon />} 
-                    label={`${cheatingAttempts} alertes`} 
+                    label={`${Math.min(cheatingAttempts, maxCheatingAttempts)}/${maxCheatingAttempts} alertes`} 
                     color="error" 
                     variant="outlined" 
                     size="small" 
@@ -349,7 +401,97 @@ const Quiz = () => {
         <LinearProgress variant="determinate" value={progress} sx={{ height: 4 }} />
       </AppBar>
 
-      <Container maxWidth="md" sx={{ py: 4, flexGrow: 1 }}>
+      <Fade in={Boolean(incidentAlert)}>
+        <Box
+          sx={{
+            position: 'fixed',
+            top: { xs: 88, md: 102 },
+            left: 16,
+            right: 16,
+            zIndex: 1400,
+            display: incidentAlert ? 'flex' : 'none',
+            justifyContent: 'center',
+            pointerEvents: 'none'
+          }}
+        >
+          <Card
+            sx={{
+              width: '100%',
+              maxWidth: 760,
+              pointerEvents: 'auto',
+              bgcolor: 'error.dark',
+              color: 'common.white',
+              border: '2px solid',
+              borderColor: 'error.main',
+              boxShadow: '0 20px 45px rgba(183, 28, 28, 0.35)'
+            }}
+          >
+            <CardContent sx={{ p: 2.5 }}>
+              <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ flex: 1 }}>
+                  <WarningIcon sx={{ mt: 0.25 }} />
+                  <Box>
+                    <Typography variant="h6" fontWeight={800}>
+                      {incidentAlert?.title}
+                    </Typography>
+                    <Typography variant="body1" sx={{ mt: 0.75 }}>
+                      {incidentAlert?.detail}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 1.25, opacity: 0.92 }}>
+                      {incidentAlert?.counterMessage}
+                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap' }}>
+                      <Chip
+                        label={`Compteur ${incidentAlert?.attemptLabel || `0/${maxCheatingAttempts}`}`}
+                        size="small"
+                        sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: 'common.white' }}
+                      />
+                      <Chip
+                        label={incidentAlert?.willAutoSubmit ? 'Soumission automatique en cours' : "Surveillance renforcée active"}
+                        size="small"
+                        sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: 'common.white' }}
+                      />
+                    </Stack>
+                  </Box>
+                </Stack>
+                <IconButton
+                  onClick={dismissIncidentAlert}
+                  disabled={incidentAlert?.willAutoSubmit}
+                  sx={{ color: 'common.white' }}
+                  aria-label="Fermer l'alerte de triche"
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Stack>
+              {!incidentAlert?.willAutoSubmit && (
+                <Button
+                  variant="contained"
+                  color="inherit"
+                  onClick={dismissIncidentAlert}
+                  sx={{
+                    mt: 2,
+                    bgcolor: 'common.white',
+                    color: 'error.dark',
+                    fontWeight: 800,
+                    '&:hover': {
+                      bgcolor: 'grey.100'
+                    }
+                  }}
+                >
+                  Je comprends et je reprends l'examen
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
+      </Fade>
+
+      <Container
+        maxWidth="md"
+        sx={{ py: 4, flexGrow: 1 }}
+        ref={examViewportRef}
+        tabIndex={-1}
+      >
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="subtitle2" color="text.secondary">
             Question {currentQuestionIndex + 1} sur {questions.length}

@@ -20,7 +20,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import Quiz from '../core/Quiz';
-import { getStudentExamLaunchData, markStudentExamStarted } from '@/api/exams';
+import { getStudentExamLaunchData, markStudentExamStarted, verifyExamAccessCode } from '@/api/exams';
 
 /**
  * Page permettant à un étudiant de passer un examen
@@ -37,7 +37,7 @@ const TakeExamPage = () => {
   const [examStarted, setExamStarted] = useState(false);
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
   const [otpValue, setOtpValue] = useState('');
-  const [otpError, setOtpValueError] = useState(false);
+  const [otpError, setOtpError] = useState('');
   
   useEffect(() => {
     const fetchExam = async () => {
@@ -80,7 +80,8 @@ const TakeExamPage = () => {
           course_name: examData.course_name || 'Cours inconnu',
           professor_name: examData.professor_name || 'Professeur inconnu',
           student_exam_id: studentExam.id,
-          attempt_status: studentExam.attempt_status
+          attempt_status: studentExam.attempt_status,
+          access_verified_at: studentExam.access_verified_at || null
         };
         
         setExam(formattedExam);
@@ -103,7 +104,8 @@ const TakeExamPage = () => {
     try {
       const { error } = await markStudentExamStarted({
         studentExamId: exam.student_exam_id,
-        examId: Number(id)
+        examId: Number(id),
+        profileId: authState.user.id
       });
 
       if (error) throw error;
@@ -116,20 +118,47 @@ const TakeExamPage = () => {
       setOtpDialogOpen(false);
     } catch (error) {
       console.error('Erreur lors du démarrage de l\'examen:', error);
-      setError('Impossible de démarrer l\'examen. Veuillez réessayer.');
+      setError(error.message || 'Impossible de démarrer l\'examen. Veuillez réessayer.');
     }
   };
 
-  const handleOtpSubmit = () => {
-    if (otpValue.toLowerCase() === "esgis2026") {
-      setOtpValueError(false);
+  const handleOtpSubmit = async () => {
+    if (!exam?.access_code_required) {
+      setOtpError('');
+      setOtpDialogOpen(false);
       setConfirmDialogOpen(true);
-    } else {
-      setOtpValueError(true);
+      return;
+    }
+
+    try {
+      const { success, error: verificationError } = await verifyExamAccessCode({
+        studentExamId: exam.student_exam_id,
+        examId: Number(id),
+        profileId: authState.user.id,
+        code: otpValue
+      });
+
+      if (!success) {
+        throw verificationError || new Error("Code d'accès invalide.");
+      }
+
+      setOtpError('');
+      setExam((previous) => ({
+        ...previous,
+        access_verified_at: new Date().toISOString()
+      }));
+      setOtpDialogOpen(false);
+      setConfirmDialogOpen(true);
+    } catch (verificationError) {
+      setOtpError(verificationError.message || "Code d'accès invalide.");
     }
   };
   
   const handleConfirmStart = () => {
+    if (exam?.access_code_required && !exam?.access_verified_at) {
+      setOtpDialogOpen(true);
+      return;
+    }
     setConfirmDialogOpen(true);
   };
   
@@ -139,6 +168,10 @@ const TakeExamPage = () => {
   
   const handleGoBack = () => {
     navigate('/student/exams');
+  };
+
+  const handleViewResults = () => {
+    navigate(`/student/exams/${id}/results`);
   };
   
   // Si l'examen est commencé, afficher le composant Quiz
@@ -161,9 +194,16 @@ const TakeExamPage = () => {
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
-          <Button variant="contained" onClick={handleGoBack}>
-            Retour à la liste des examens
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            {error.toLowerCase().includes('déjà soumis') && (
+              <Button variant="contained" onClick={handleViewResults}>
+                Voir le résultat
+              </Button>
+            )}
+            <Button variant="outlined" onClick={handleGoBack}>
+              Retour à la liste des examens
+            </Button>
+          </Box>
         </Box>
       ) : (
         <Paper elevation={3} sx={{ p: 4 }}>
@@ -207,7 +247,9 @@ const TakeExamPage = () => {
             </Box>
             <Typography variant="body2">
               Une fois que vous aurez commencé l'examen, vous ne pourrez pas le quitter avant de l'avoir terminé.
-              Toute tentative de quitter la page ou de changer d'onglet sera considérée comme une tentative de triche.
+              {exam.access_code_required && ' Le code d\'accès communiqué par le surveillant est obligatoire avant l\'entrée dans la copie.'}
+              Toute tentative de quitter la page, changer d'onglet, ouvrir les outils techniques ou copier-coller déclenchera
+              une alerte sonore et une carte rouge visible. À la {exam.max_cheating_alerts || 3}e alerte, l'examen sera arrêté puis soumis automatiquement.
             </Typography>
           </Box>
           
@@ -220,7 +262,7 @@ const TakeExamPage = () => {
               <Button 
                 variant="contained" 
                 color="primary"
-                onClick={() => setOtpDialogOpen(true)}
+                onClick={handleConfirmStart}
               >
                 Commencer l'examen
               </Button>
@@ -235,23 +277,28 @@ const TakeExamPage = () => {
         onClose={() => setOtpDialogOpen(false)}
       >
         <DialogTitle>
-          Code d'accès requis
+          {exam?.access_code_required ? "Code d'accès requis" : 'Déverrouillage de l\'épreuve'}
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Veuillez saisir le code confidentiel (OTP) fourni par le surveillant pour déverrouiller l'épreuve.
+            Veuillez saisir le code communiqué par le surveillant pour déverrouiller l'épreuve.
           </DialogContentText>
           <TextField
             autoFocus
             margin="dense"
-            label="Code OTP"
+            label="Code d'accès"
             type="text"
             fullWidth
             variant="outlined"
             value={otpValue}
-            onChange={(e) => setOtpValue(e.target.value)}
-            error={otpError}
-            helperText={otpError ? "Code incorrect. Veuillez réessayer." : "Indice: ESGIS2026"}
+            onChange={(e) => {
+              setOtpValue(e.target.value);
+              if (otpError) {
+                setOtpError('');
+              }
+            }}
+            error={Boolean(otpError)}
+            helperText={otpError || 'Le code est vérifié côté serveur avant le démarrage de votre copie.'}
             onKeyPress={(e) => e.key === 'Enter' && handleOtpSubmit()}
           />
         </DialogContent>

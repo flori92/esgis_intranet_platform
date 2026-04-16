@@ -1,0 +1,19 @@
+update auth.users
+set instance_id = coalesce(instance_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    aud = coalesce(aud, 'authenticated'),
+    role = coalesce(role, 'authenticated'),
+    confirmation_token = coalesce(confirmation_token, ''),
+    recovery_token = coalesce(recovery_token, ''),
+    email_change_token_new = coalesce(email_change_token_new, ''),
+    email_change = coalesce(email_change, ''),
+    email_change_token_current = coalesce(email_change_token_current, ''),
+    phone_change = coalesce(phone_change, ''),
+    phone_change_token = coalesce(phone_change_token, ''),
+    reauthentication_token = coalesce(reauthentication_token, ''),
+    email_change_confirm_status = coalesce(email_change_confirm_status, 0),
+    is_sso_user = coalesce(is_sso_user, false),
+    is_anonymous = coalesce(is_anonymous, false),
+    deleted_at = null,
+    banned_until = null,
+    updated_at = now()
+where id = '06b1308c-7b62-4e94-af1c-38d963ec8bb0'::uuid;

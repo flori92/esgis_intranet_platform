@@ -5,6 +5,7 @@ import RouteLoader from './components/common/RouteLoader';
 import notificationService from './services/NotificationService';
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
 const MainLayout = lazy(() => import('./components/layout/MainLayout'));
 const AdminRoutes = lazy(() => import('./routes/AdminRoutes'));
@@ -89,6 +90,7 @@ function App() {
           <Routes>
             {/* Routes d'authentification */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             
             {/* Routes protégées avec layout */}

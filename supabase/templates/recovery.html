@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Réinitialisation du mot de passe</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f7fb;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #dbe5f0;">
+            <tr>
+              <td style="background:linear-gradient(135deg,#003366 0%,#00509d 100%);padding:28px 32px;">
+                <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:#c9def3;font-weight:700;">
+                  ESGIS CAMPUS PLATFORM
+                </div>
+                <div style="margin-top:10px;font-size:28px;line-height:1.2;color:#ffffff;font-weight:800;">
+                  Réinitialisation du mot de passe
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0 0 16px;font-size:16px;line-height:1.6;">
+                  Bonjour,
+                </p>
+                <p style="margin:0 0 16px;font-size:16px;line-height:1.6;">
+                  Une demande de réinitialisation du mot de passe a été effectuée pour votre compte
+                  <strong>ESGIS Campus Platform</strong>
+                  associé à l’adresse
+                  <strong>{{ .Email }}</strong>.
+                </p>
+                <p style="margin:0 0 24px;font-size:16px;line-height:1.6;">
+                  Si vous êtes bien à l’origine de cette demande, cliquez sur le bouton ci-dessous pour définir un nouveau mot de passe sécurisé.
+                </p>
+                <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px;">
+                  <tr>
+                    <td align="center" bgcolor="#003366" style="border-radius:12px;">
+                      <a
+                        href="{{ .ConfirmationURL }}"
+                        style="display:inline-block;padding:14px 22px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;"
+                      >
+                        Réinitialiser mon mot de passe
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
+                  Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :
+                </p>
+                <p style="margin:0 0 24px;font-size:13px;line-height:1.7;word-break:break-all;color:#00509d;">
+                  {{ .ConfirmationURL }}
+                </p>
+                <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#475569;">
+                  Si vous n’avez pas demandé cette réinitialisation, vous pouvez ignorer ce message. Aucun changement ne sera appliqué à votre compte.
+                </p>
+                <p style="margin:0;font-size:14px;line-height:1.6;color:#475569;">
+                  Ce message concerne uniquement la plateforme ESGIS Campus Platform.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px;background:#f8fbff;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.6;color:#64748b;">
+                ESGIS Campus Platform<br />
+                Notification automatique de sécurité
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

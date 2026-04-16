@@ -4,6 +4,7 @@ const getRelation = (value) => (Array.isArray(value) ? value[0] : value);
 
 const normalizeUploadedDocument = (document, tagsByDocumentId = {}) => {
   const course = getRelation(document.courses);
+  const department = getRelation(document.departments) || getRelation(course?.departments);
 
   return {
     id: document.id,
@@ -14,6 +15,8 @@ const normalizeUploadedDocument = (document, tagsByDocumentId = {}) => {
     file_type: document.file_type,
     course_id: document.course_id,
     course_name: course?.name || null,
+    department_id: document.department_id || course?.department_id || null,
+    department_name: department?.name || null,
     uploaded_by: document.uploaded_by,
     visibility: document.visibility,
     created_at: document.created_at,
@@ -26,13 +29,32 @@ const normalizeGeneratedDocument = (document) => {
   const template = getRelation(document.document_templates);
   const student = getRelation(document.student);
   const profile = getRelation(student?.profiles);
+  const filePath = `${document.file_path || ''}`.toLowerCase();
+  const templateName = `${template?.name || document.deposit_note || ''}`.toLowerCase();
+
+  let inferredType = template?.type || 'other';
+  let inferredName = template?.name || 'Document officiel';
+
+  if (!template?.type && (filePath.includes('bulletin') || templateName.includes('bulletin'))) {
+    inferredType = 'report_card';
+    inferredName = document.deposit_note || 'Bulletin de notes';
+  } else if (!template?.type && (filePath.includes('attestation') || templateName.includes('attestation'))) {
+    inferredType = 'attestation';
+    inferredName = document.deposit_note || 'Attestation';
+  } else if (!template?.type && (filePath.includes('releve') || filePath.includes('transcript') || templateName.includes('relevé'))) {
+    inferredType = 'transcript';
+    inferredName = document.deposit_note || 'Relevé de notes';
+  } else if (!template?.type && (filePath.includes('certificat') || templateName.includes('certificat'))) {
+    inferredType = 'certificate';
+    inferredName = document.deposit_note || 'Certificat de scolarité';
+  }
 
   return {
     id: document.id,
-    title: template?.name || 'Document officiel',
-    description: `Document généré depuis le modèle ${template?.name || 'inconnu'}`,
-    template_name: template?.name || 'Modèle inconnu',
-    template_type: template?.type || 'other',
+    title: inferredName,
+    description: document.deposit_note || `Document généré depuis le modèle ${template?.name || 'inconnu'}`,
+    template_name: inferredName,
+    template_type: inferredType,
     student_id: document.student_id,
     student_name: profile?.full_name || 'Étudiant inconnu',
     student_number: student?.student_number || '',
@@ -41,6 +63,7 @@ const normalizeGeneratedDocument = (document) => {
     created_at: document.created_at,
     updated_at: document.updated_at,
     approval_date: document.approval_date,
+    deposit_note: document.deposit_note || null,
     file_type: 'application/pdf'
   };
 };
@@ -116,6 +139,7 @@ const normalizeLegacyDocument = (document) => ({
   created_by: document.uploaded_by || null,
   uploaded_by: document.uploaded_by || null,
   course_id: document.course_id || null,
+  department_id: document.department_id || null,
   group_id: document.group_id || null,
   type: document.type || 'other',
   is_public: document.is_public === true || document.visibility === 'public',
@@ -142,7 +166,7 @@ export const getCoursesForDocuments = async ({
     if (isAdmin) {
       const { data, error } = await supabase
         .from('courses')
-        .select('id, name, code')
+        .select('id, name, code, department_id')
         .order('name', { ascending: true });
 
       return { courses: data || [], error };
@@ -151,7 +175,7 @@ export const getCoursesForDocuments = async ({
     if (isStudent) {
       const { data, error } = await supabase
         .from('student_courses')
-        .select('course_id, status, courses(id, name, code)')
+        .select('course_id, status, courses(id, name, code, department_id)')
         .eq('student_id', profileId || studentId)
         .in('status', ['enrolled', 'completed']);
 
@@ -168,7 +192,7 @@ export const getCoursesForDocuments = async ({
     if (isProfessor) {
       const { data, error } = await supabase
         .from('professor_courses')
-        .select('course_id, courses(id, name, code)')
+        .select('course_id, courses(id, name, code, department_id)')
         .eq('professor_id', professorId);
 
       if (error) {
@@ -188,6 +212,20 @@ export const getCoursesForDocuments = async ({
   }
 };
 
+export const getDepartmentsForDocuments = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('departments')
+      .select('id, name, code')
+      .order('name', { ascending: true });
+
+    return { departments: data || [], error: error || null };
+  } catch (error) {
+    console.error('Erreur lors du chargement des départements pour les documents:', error);
+    return { departments: [], error };
+  }
+};
+
 export const getUploadedDocuments = async () => {
   try {
     const { data, error } = await supabase
@@ -200,11 +238,13 @@ export const getUploadedDocuments = async () => {
         file_size,
         file_type,
         course_id,
+        department_id,
         uploaded_by,
         visibility,
         created_at,
         updated_at,
-        courses(id, name, code)
+        courses(id, name, code, department_id, departments(id, name, code)),
+        departments(id, name, code)
       `)
       .order('created_at', { ascending: false });
 
@@ -319,6 +359,8 @@ export const getGeneratedDocuments = async ({
         approval_date,
         created_at,
         updated_at,
+        manual_deposit,
+        deposit_note,
         document_templates!template_id(id, name, type),
         student:students!student_id(
           id,
@@ -352,17 +394,19 @@ export const getGeneratedDocuments = async ({
 
 export const getDocumentsPageData = async (options) => {
   try {
-    const [coursesResult, uploadedResult, generatedResult] = await Promise.all([
+    const [coursesResult, departmentsResult, uploadedResult, generatedResult] = await Promise.all([
       getCoursesForDocuments(options),
+      getDepartmentsForDocuments(),
       getUploadedDocuments(),
       getGeneratedDocuments(options)
     ]);
 
-    const error = coursesResult.error || uploadedResult.error || generatedResult.error;
+    const error = coursesResult.error || departmentsResult.error || uploadedResult.error || generatedResult.error;
 
     if (error) {
       return {
         courses: [],
+        departments: [],
         documents: [],
         generatedDocuments: [],
         error
@@ -378,6 +422,7 @@ export const getDocumentsPageData = async (options) => {
 
     return {
       courses: uniqueCourses,
+      departments: departmentsResult.departments || [],
       documents: uploadedResult.documents || [],
       generatedDocuments: generatedResult.documents || [],
       error: null
@@ -386,6 +431,7 @@ export const getDocumentsPageData = async (options) => {
     console.error('Erreur lors du chargement de la page documents:', error);
     return {
       courses: [],
+      departments: [],
       documents: [],
       generatedDocuments: [],
       error
@@ -415,11 +461,12 @@ export const getDocumentTemplateByType = async (type) => {
 };
 
 /**
- * Récupère les certificats générés d'un étudiant.
+ * Récupère les documents générés d'un étudiant.
  * @param {string} studentId
- * @returns {Promise<{ certificates: Array, error: Error|null }>}
+ * @param {{ templateTypes?: Array<string> }} options
+ * @returns {Promise<{ documents: Array, error: Error|null }>}
  */
-export const getStudentGeneratedCertificates = async (studentId) => {
+export const getStudentGeneratedDocuments = async (studentId, options = {}) => {
   try {
     const { data, error } = await supabase
       .from('generated_documents')
@@ -429,25 +476,37 @@ export const getStudentGeneratedCertificates = async (studentId) => {
         status,
         created_at,
         approval_date,
+        updated_at,
+        deposit_note,
         document_templates(id, name, type)
       `)
       .eq('student_id', studentId)
       .order('created_at', { ascending: false });
 
     if (error) {
-      return { certificates: [], error };
+      return { documents: [], error };
     }
 
-    const certificates = (data || []).filter((document) => {
-      const template = getRelation(document.document_templates);
-      return template?.type === 'certificate';
-    });
+    const templateTypes = Array.isArray(options.templateTypes) ? options.templateTypes : [];
+    const documents = (data || [])
+      .map((document) => normalizeGeneratedDocument(document))
+      .filter((document) => (
+        templateTypes.length === 0 || templateTypes.includes(document.template_type)
+      ));
 
-    return { certificates, error: null };
+    return { documents, error: null };
   } catch (error) {
-    console.error('getStudentGeneratedCertificates:', error);
-    return { certificates: [], error };
+    console.error('getStudentGeneratedDocuments:', error);
+    return { documents: [], error };
   }
+};
+
+export const getStudentGeneratedCertificates = async (studentId) => {
+  const { documents, error } = await getStudentGeneratedDocuments(studentId, {
+    templateTypes: ['certificate']
+  });
+
+  return { certificates: documents, error };
 };
 
 /**
@@ -465,6 +524,10 @@ export const insertGeneratedDocument = async (data) => {
         file_path: data.file_path,
         status: data.status || 'pending',
         generated_by: data.generated_by || null,
+        approved_by: data.approved_by || null,
+        approval_date: data.approval_date || null,
+        manual_deposit: data.manual_deposit ?? false,
+        deposit_note: data.deposit_note || null,
         created_at: new Date().toISOString()
       })
       .select()
@@ -488,6 +551,7 @@ export const createLegacyDocument = async (document) => {
         file_size: document.file_size || 0,
         file_type: document.file_type || 'file',
         course_id: document.course_id || null,
+        department_id: document.department_id || null,
         uploaded_by: document.created_by || document.uploaded_by,
         visibility: document.is_public ? 'public' : (document.visibility || 'course'),
         type: document.type || 'other',
@@ -502,6 +566,7 @@ export const createLegacyDocument = async (document) => {
         file_size,
         file_type,
         course_id,
+        department_id,
         uploaded_by,
         visibility,
         created_at,
@@ -531,6 +596,7 @@ export const updateLegacyDocument = async (documentId, updates) => {
       file_size: updates.file_size,
       file_type: updates.file_type,
       course_id: updates.course_id || null,
+      department_id: Object.prototype.hasOwnProperty.call(updates, 'department_id') ? (updates.department_id || null) : undefined,
       visibility: updates.is_public ? 'public' : (updates.visibility || undefined),
       type: updates.type,
       is_public: typeof updates.is_public === 'boolean' ? updates.is_public : undefined,
@@ -552,6 +618,7 @@ export const updateLegacyDocument = async (documentId, updates) => {
         file_size,
         file_type,
         course_id,
+        department_id,
         uploaded_by,
         visibility,
         created_at,
@@ -704,6 +771,7 @@ export const uploadDocument = async ({
   description,
   visibility = 'course',
   courseId = null,
+  departmentId = null,
   file,
   uploadedBy,
   tags = []
@@ -711,6 +779,36 @@ export const uploadDocument = async ({
   try {
     if (!title?.trim() || !file || !uploadedBy) {
       return { document: null, error: new Error('Le titre, le fichier et l\'auteur sont obligatoires') };
+    }
+
+    if (visibility === 'course' && !courseId) {
+      return {
+        document: null,
+        error: new Error('Un cours est requis pour un document de cours')
+      };
+    }
+
+    let resolvedDepartmentId = departmentId ? Number(departmentId) : null;
+
+    if (courseId && !resolvedDepartmentId) {
+      const { data: courseRow, error: courseError } = await supabase
+        .from('courses')
+        .select('department_id')
+        .eq('id', Number(courseId))
+        .single();
+
+      if (courseError) {
+        return { document: null, error: courseError };
+      }
+
+      resolvedDepartmentId = courseRow?.department_id || null;
+    }
+
+    if (visibility === 'department' && !resolvedDepartmentId) {
+      return {
+        document: null,
+        error: new Error('Un département est requis pour un document de département')
+      };
     }
 
     const storagePath = `${uploadedBy}/documents/${Date.now()}_${file.name}`;
@@ -735,6 +833,7 @@ export const uploadDocument = async ({
         file_type: file.type || 'application/octet-stream',
         file_size: file.size,
         course_id: courseId ? Number(courseId) : null,
+        department_id: resolvedDepartmentId,
         uploaded_by: uploadedBy,
         visibility
       })
@@ -746,11 +845,13 @@ export const uploadDocument = async ({
         file_size,
         file_type,
         course_id,
+        department_id,
         uploaded_by,
         visibility,
         created_at,
         updated_at,
-        courses(id, name, code)
+        courses(id, name, code, department_id, departments(id, name, code)),
+        departments(id, name, code)
       `)
       .single();
 

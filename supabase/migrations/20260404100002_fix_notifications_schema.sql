@@ -16,7 +16,17 @@ ALTER TABLE notifications ADD COLUMN IF NOT EXISTS content TEXT;
 
 -- 2. Copier les données de message vers content si nécessaire
 UPDATE notifications SET title = COALESCE(title, 'Notification') WHERE title IS NULL;
-UPDATE notifications SET content = message WHERE content IS NULL AND message IS NOT NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'notifications'
+      AND column_name = 'message'
+  ) THEN
+    EXECUTE 'UPDATE notifications SET content = message WHERE content IS NULL AND message IS NOT NULL';
+  END IF;
+END $$;
 
 -- 3. Supprimer les colonnes non utilisées et renommer si nécessaire
 ALTER TABLE notifications DROP COLUMN IF EXISTS type;
@@ -49,11 +59,39 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS end_date TIMESTAMPTZ;
 
 -- 7. Migrer les données de start_time/end_time vers start_date/end_date si start_date est NULL
-UPDATE events SET start_date = start_time WHERE start_date IS NULL AND start_time IS NOT NULL;
-UPDATE events SET end_date = end_time WHERE end_date IS NULL AND end_time IS NOT NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'events'
+      AND column_name = 'start_time'
+  ) THEN
+    EXECUTE 'UPDATE events SET start_date = start_time WHERE start_date IS NULL AND start_time IS NOT NULL';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'events'
+      AND column_name = 'end_time'
+  ) THEN
+    EXECUTE 'UPDATE events SET end_date = end_time WHERE end_date IS NULL AND end_time IS NOT NULL';
+  END IF;
+END $$;
 
 -- 8. Migrer event_type vers type si nécessaire
-UPDATE events SET type = event_type WHERE type IS NULL OR type = 'other';
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'events'
+      AND column_name = 'event_type'
+  ) THEN
+    EXECUTE 'UPDATE events SET type = event_type WHERE type IS NULL OR type = ''other''';
+  END IF;
+END $$;
 
 -- 9. Ajouter les index nécessaires pour events
 CREATE INDEX IF NOT EXISTS idx_events_start_date ON events(start_date);

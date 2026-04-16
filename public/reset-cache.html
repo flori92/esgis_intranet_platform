@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ESGIS Campus - Réinitialisation du cache</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: Montserrat, sans-serif;
+        background: linear-gradient(135deg, #f5f7fb 0%, #e6eef9 100%);
+        color: #0f172a;
+      }
+
+      main {
+        width: min(92vw, 520px);
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 20px;
+        padding: 28px 24px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.4rem;
+      }
+
+      p {
+        margin: 0;
+        line-height: 1.6;
+        color: #334155;
+      }
+
+      .status {
+        margin-top: 18px;
+        font-weight: 600;
+        color: #003366;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Réinitialisation du cache ESGIS Campus</h1>
+      <p>Le navigateur supprime les anciens service workers, les caches applicatifs et les données locales, puis recharge la plateforme avec la dernière version.</p>
+      <p class="status" id="status">Nettoyage en cours…</p>
+    </main>
+    <script>
+      const statusNode = document.getElementById('status');
+
+      const deleteIndexedDbDatabases = async () => {
+        if (!('indexedDB' in window) || typeof indexedDB.databases !== 'function') {
+          return;
+        }
+
+        const databases = await indexedDB.databases();
+        await Promise.all((databases || [])
+          .filter((database) => database && database.name)
+          .map((database) => new Promise((resolve) => {
+            const request = indexedDB.deleteDatabase(database.name);
+            request.onsuccess = () => resolve();
+            request.onerror = () => resolve();
+            request.onblocked = () => resolve();
+          })));
+      };
+
+      const resetBrowserState = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const redirectTarget = params.get('redirect') || '/student/exams?cache_reset=1';
+        statusNode.textContent = 'Suppression des caches et des workers…';
+
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        }
+
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+        }
+
+        try { localStorage.clear(); } catch (error) {}
+        try { sessionStorage.clear(); } catch (error) {}
+        await deleteIndexedDbDatabases();
+
+        statusNode.textContent = 'Nettoyage terminé. Redirection…';
+        window.location.replace(redirectTarget);
+      };
+
+      resetBrowserState().catch(() => {
+        statusNode.textContent = 'Le nettoyage a rencontré un blocage. Recharge la page puis réessaie.';
+      });
+    </script>
+  </body>
+  </html>

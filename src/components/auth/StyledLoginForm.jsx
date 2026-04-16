@@ -181,7 +181,7 @@ const StyledLoginForm = () => {
             <button 
               type="button" 
               className="button3"
-              onClick={() => navigate('/reset-password')}
+              onClick={() => navigate('/forgot-password')}
             >
               Mot de passe oublié ?
             </button>

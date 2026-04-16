@@ -119,8 +119,8 @@ const Login = () => {
     }
     
     try {
-      // Rediriger vers la page de réinitialisation de mot de passe
-      navigate(`/reset-password?email=${encodeURIComponent(formData.email)}`);
+      // Rediriger vers la page dédiée à la demande de réinitialisation
+      navigate(`/forgot-password?email=${encodeURIComponent(formData.email)}`);
     } catch (err) {
       setError('Une erreur est survenue. Veuillez réessayer plus tard.');
       console.error(err);

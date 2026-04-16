@@ -197,6 +197,33 @@ export const recordCheatingAttempt = async (cheatingData) => {
       .insert(cheatingData);
 
     if (error) {
+      const isMissingColumnError =
+        error.code === 'PGRST204' &&
+        typeof error.message === 'string' &&
+        error.message.includes('column of \'cheating_attempts\'');
+
+      if (isMissingColumnError) {
+        const fallbackData = {
+          student_id: cheatingData.student_id,
+          exam_id: cheatingData.exam_id,
+          details: cheatingData.details,
+          detected_at: cheatingData.detected_at || new Date().toISOString(),
+          created_at: cheatingData.created_at || new Date().toISOString(),
+          updated_at: cheatingData.updated_at || new Date().toISOString()
+        };
+
+        const { error: fallbackError } = await supabase
+          .from('cheating_attempts')
+          .insert(fallbackData);
+
+        if (!fallbackError) {
+          return { success: true, error: null };
+        }
+
+        console.error('Erreur lors du fallback d\'enregistrement de la tentative de triche:', fallbackError);
+        return { success: false, error: fallbackError };
+      }
+
       console.error('Erreur lors de l\'enregistrement de la tentative de triche:', error);
       return { success: false, error };
     }

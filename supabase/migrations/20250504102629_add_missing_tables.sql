@@ -17,13 +17,13 @@ CREATE TABLE IF NOT EXISTS entreprises (
 -- Création de la table schedule (emploi du temps)
 CREATE TABLE IF NOT EXISTS schedule (
   id BIGSERIAL PRIMARY KEY,
-  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-  course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
   room TEXT,
-  professor_id UUID REFERENCES professors(id) ON DELETE SET NULL,
+  professor_id INTEGER REFERENCES professors(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -53,9 +53,9 @@ CREATE TABLE IF NOT EXISTS stage_offres (
   competences_requises TEXT[] NOT NULL,
   remuneration DECIMAL(10, 2),
   duree INTEGER NOT NULL,
-  professeur_id UUID REFERENCES professors(id) ON DELETE SET NULL,
+  professeur_id INTEGER REFERENCES professors(id) ON DELETE SET NULL,
   date_publication TIMESTAMP WITH TIME ZONE NOT NULL,
-  departement_id BIGINT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+  departement_id INTEGER NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
   niveau_requis TEXT[] NOT NULL,
   etat TEXT NOT NULL DEFAULT 'active',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS stage_offres (
 CREATE TABLE IF NOT EXISTS stage_candidatures (
   id BIGSERIAL PRIMARY KEY,
   offre_id BIGINT NOT NULL REFERENCES stage_offres(id) ON DELETE CASCADE,
-  etudiant_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  etudiant_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   date_candidature TIMESTAMP WITH TIME ZONE NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   lettre_motivation TEXT NOT NULL,
@@ -93,109 +93,105 @@ CREATE TABLE IF NOT EXISTS stage_entretiens (
 );
 
 -- Création de la fonction RPC get_student_dashboard
-CREATE OR REPLACE FUNCTION get_student_dashboard(student_id UUID)
+CREATE OR REPLACE FUNCTION get_student_dashboard(student_id INTEGER)
 RETURNS JSON AS $$
 DECLARE
   dashboard_data JSON;
 BEGIN
-  WITH schedule_data AS (
-    SELECT json_agg(
-      json_build_object(
-        'id', s.id,
-        'student_id', s.student_id,
-        'course_id', s.course_id,
-        'day_of_week', s.day_of_week,
-        'start_time', s.start_time,
-        'end_time', s.end_time,
-        'room', s.room,
-        'professor_id', s.professor_id,
-        'created_at', s.created_at,
-        'updated_at', s.updated_at,
-        'course', (
-          SELECT json_build_object(
-            'id', c.id,
-            'name', c.name,
-            'code', c.code,
-            'description', c.description,
-            'credits', c.credits,
-            'department_id', c.department_id
-          )
-          FROM courses c
-          WHERE c.id = s.course_id
-        ),
-        'professor', (
-          SELECT json_build_object(
-            'id', p.id,
-            'first_name', p.first_name,
-            'last_name', p.last_name,
-            'email', p.email
-          )
-          FROM professors p
-          WHERE p.id = s.professor_id
-        )
-      )
-    ) AS schedule
-    FROM schedule s
-    WHERE s.student_id = $1
-  ),
-  news_data AS (
-    SELECT json_agg(
-      json_build_object(
-        'id', n.id,
-        'title', n.title,
-        'content', n.content,
-        'published_at', n.published_at,
-        'author', n.author,
-        'image_url', n.image_url,
-        'created_at', n.created_at,
-        'updated_at', n.updated_at
-      )
-    ) AS news
-    FROM news n
-    ORDER BY n.published_at DESC
-    LIMIT 5
-  ),
-  events_data AS (
-    SELECT json_agg(
-      json_build_object(
-        'id', e.id,
-        'title', e.title,
-        'description', e.description,
-        'start_date', e.start_date,
-        'end_date', e.end_date,
-        'location', e.location,
-        'event_type', e.event_type,
-        'organizer', e.organizer,
-        'department_id', e.department_id,
-        'is_public', e.is_public,
-        'created_at', e.created_at,
-        'updated_at', e.updated_at,
-        'department', (
-          SELECT json_build_object(
-            'id', d.id,
-            'name', d.name,
-            'code', d.code
-          )
-          FROM departments d
-          WHERE d.id = e.department_id
-        )
-      )
-    ) AS events
-    FROM events e
-    WHERE e.is_public = true OR e.department_id IN (
-      SELECT c.department_id
-      FROM student_courses sc
-      JOIN courses c ON sc.course_id = c.id
-      WHERE sc.student_id = $1
-    )
-    ORDER BY e.start_date
-    LIMIT 10
-  )
-  
   SELECT json_build_object(
-    'schedule', COALESCE((SELECT schedule FROM schedule_data), '[]'::json),
-    'news', COALESCE((SELECT news FROM news_data), '[]'::json),
-    'events', COALESCE((SELECT events FROM events_data), '[]'::json)
+    'schedule',
+    COALESCE((
+      SELECT json_agg(
+        json_build_object(
+          'id', item.id,
+          'student_id', item.student_id,
+          'course_id', item.course_id,
+          'day_of_week', item.day_of_week,
+          'start_time', item.start_time,
+          'end_time', item.end_time,
+          'room', item.room,
+          'professor_id', item.professor_id,
+          'created_at', item.created_at,
+          'updated_at', item.updated_at,
+          'course', item.course,
+          'professor', item.professor
+        )
+      )
+      FROM (
+        SELECT
+          s.*,
+          (
+            SELECT json_build_object(
+              'id', c.id,
+              'name', c.name,
+              'code', c.code,
+              'description', c.description,
+              'credits', c.credits,
+              'department_id', c.department_id
+            )
+            FROM courses c
+            WHERE c.id = s.course_id
+          ) AS course,
+          (
+            SELECT json_build_object(
+              'id', p.id,
+              'full_name', pr.full_name,
+              'email', pr.email
+            )
+            FROM professors p
+            LEFT JOIN profiles pr ON pr.id = p.profile_id
+            WHERE p.id = s.professor_id
+          ) AS professor
+        FROM schedule s
+        WHERE s.student_id = $1
+        ORDER BY s.day_of_week, s.start_time
+        LIMIT 10
+      ) AS item
+    ), '[]'::json),
+    'news',
+    COALESCE((
+      SELECT json_agg(
+        json_build_object(
+          'id', item.id,
+          'title', item.title,
+          'content', item.content,
+          'published_at', item.published_at,
+          'author', item.author,
+          'image_url', item.image_url,
+          'created_at', item.created_at,
+          'updated_at', item.updated_at
+        )
+      )
+      FROM (
+        SELECT *
+        FROM news
+        ORDER BY published_at DESC
+        LIMIT 5
+      ) AS item
+    ), '[]'::json),
+    'events',
+    COALESCE((
+      SELECT json_agg(
+        json_build_object(
+          'id', item.id,
+          'title', item.title,
+          'description', item.description,
+          'start_date', item.start_date,
+          'end_date', item.end_date,
+          'location', item.location,
+          'type', item.type,
+          'created_by', item.created_by,
+          'created_at', item.created_at,
+          'updated_at', item.updated_at
+        )
+      )
+      FROM (
+        SELECT *
+        FROM events
+        ORDER BY start_date
+        LIMIT 10
+      ) AS item
+    ), '[]'::json)
   ) INTO dashboard_data;
   
   RETURN dashboard_data;
@@ -203,8 +199,8 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Attribution des droits d'exécution
-GRANT EXECUTE ON FUNCTION get_student_dashboard(UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION get_student_dashboard(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION get_student_dashboard(INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_student_dashboard(INTEGER) TO service_role;
 
 -- Ajout de déclencheurs pour mettre à jour automatiquement le champ updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()

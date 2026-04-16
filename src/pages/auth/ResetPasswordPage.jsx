@@ -10,7 +10,12 @@ import {
   Alert,
 } from '@mui/material';
 
-import { updatePassword } from '@/api/auth';
+import {
+  exchangeRecoveryCodeForSession,
+  getSession,
+  setRecoverySession,
+  updatePassword,
+} from '@/api/auth';
 
 /**
  * Page de réinitialisation de mot de passe
@@ -23,17 +28,113 @@ const ResetPasswordPage = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [canResetPassword, setCanResetPassword] = useState(false);
 
-  // Extraire le token de réinitialisation de l'URL
+  const getRecoveryParams = () => {
+    const searchParams = new URLSearchParams(location.search);
+    const hashValue = location.hash.startsWith('#') ? location.hash.slice(1) : '';
+    const hashParams = new URLSearchParams(hashValue);
+    const readParam = (key) => searchParams.get(key) || hashParams.get(key);
+
+    return {
+      accessToken: readParam('access_token'),
+      refreshToken: readParam('refresh_token'),
+      recoveryType: readParam('type'),
+      code: readParam('code'),
+      hasInvalidLinkFlag: readParam('error') === 'invalid_recovery_link',
+    };
+  };
+
   useEffect(() => {
-    // Le hash contient le token après le #
-    const hashParams = new URLSearchParams(location.hash.substring(1));
-    if (!hashParams.get('type') || !hashParams.get('access_token')) {
-      setError('Lien de réinitialisation invalide ou expiré.');
-    }
-  }, [location]);
+    let isActive = true;
+
+    const bootstrapRecoverySession = async () => {
+      setSessionLoading(true);
+      setError(null);
+
+      try {
+        const {
+          accessToken,
+          refreshToken,
+          recoveryType,
+          code,
+          hasInvalidLinkFlag,
+        } = getRecoveryParams();
+
+        if (hasInvalidLinkFlag) {
+          throw new Error('Lien de réinitialisation invalide ou expiré.');
+        }
+
+        if (accessToken && refreshToken && recoveryType === 'recovery') {
+          const { error: sessionError } = await setRecoverySession(accessToken, refreshToken);
+
+          if (sessionError) {
+            throw sessionError;
+          }
+
+          if (!isActive) {
+            return;
+          }
+
+          setCanResetPassword(true);
+          navigate('/reset-password', { replace: true });
+          return;
+        }
+
+        if (code) {
+          const { error: exchangeError } = await exchangeRecoveryCodeForSession(code);
+
+          if (exchangeError) {
+            throw exchangeError;
+          }
+
+          if (!isActive) {
+            return;
+          }
+
+          setCanResetPassword(true);
+          navigate('/reset-password', { replace: true });
+          return;
+        }
+
+        const { data, error: sessionError } = await getSession();
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!isActive) {
+          return;
+        }
+
+        if (data?.session) {
+          setCanResetPassword(true);
+        } else {
+          throw new Error('Lien de réinitialisation invalide ou expiré.');
+        }
+      } catch (err) {
+        if (!isActive) {
+          return;
+        }
+
+        console.error('Erreur lors de l\'initialisation de la réinitialisation du mot de passe:', err);
+        setCanResetPassword(false);
+        setError('Lien de réinitialisation invalide ou expiré.');
+      } finally {
+        if (isActive) {
+          setSessionLoading(false);
+        }
+      }
+    };
+
+    bootstrapRecoverySession();
+
+    return () => {
+      isActive = false;
+    };
+  }, [location.search, location.hash, navigate]);
 
   /**
    * Gestion de la soumission du formulaire
@@ -57,12 +158,8 @@ const ResetPasswordPage = () => {
     setError(null);
 
     try {
-      // Récupérer le token de l'URL
-      const hashParams = new URLSearchParams(location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-
-      if (!accessToken) {
-        throw new Error('Token de réinitialisation manquant.');
+      if (!canResetPassword) {
+        throw new Error('Session de récupération indisponible.');
       }
 
       // Mettre à jour le mot de passe
@@ -100,17 +197,28 @@ const ResetPasswordPage = () => {
         Réinitialisation du mot de passe
       </Typography>
 
-      {error && (
+      {sessionLoading && (
+        <Paper elevation={3} sx={{ p: 3, width: '100%', textAlign: 'center' }}>
+          <CircularProgress />
+          <Typography variant="body2" sx={{ mt: 2 }}>
+            Vérification du lien de réinitialisation...
+          </Typography>
+        </Paper>
+      )}
+
+      {!sessionLoading && error && (
         <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      {success ? (
+      {!sessionLoading && success ? (
         <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
           Votre mot de passe a été réinitialisé avec succès. Vous allez être redirigé vers la page de connexion.
         </Alert>
-      ) : (
+      ) : null}
+
+      {!sessionLoading && !success && canResetPassword ? (
         <Paper elevation={3} sx={{ p: 3, width: '100%' }}>
           <form onSubmit={handleSubmit}>
             <TextField
@@ -145,7 +253,7 @@ const ResetPasswordPage = () => {
             </Button>
           </form>
         </Paper>
-      )}
+      ) : null}
 
       <Button
         variant="text"

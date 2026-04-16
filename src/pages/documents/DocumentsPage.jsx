@@ -59,6 +59,7 @@ const uploadInitialState = {
   description: '',
   visibility: 'course',
   course_id: '',
+  department_id: '',
   file: null,
   tags: []
 };
@@ -83,6 +84,7 @@ const DocumentsPage = () => {
   const [selectedVisibility, setSelectedVisibility] = useState('all');
   const [selectedTag, setSelectedTag] = useState('all');
   const [courses, setCourses] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [generatedDocuments, setGeneratedDocuments] = useState([]);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -259,7 +261,13 @@ const DocumentsPage = () => {
     setError(null);
 
     try {
-      const { courses: courseRows, documents: uploadedRows, generatedDocuments: generatedRows, error: loadError } = await getDocumentsPageData({
+      const {
+        courses: courseRows,
+        departments: departmentRows,
+        documents: uploadedRows,
+        generatedDocuments: generatedRows,
+        error: loadError
+      } = await getDocumentsPageData({
         isAdmin: authState.isAdmin,
         isStudent: authState.isStudent,
         isProfessor: authState.isProfessor,
@@ -274,6 +282,7 @@ const DocumentsPage = () => {
       }
 
       setCourses(courseRows);
+      setDepartments(departmentRows);
       setDocuments(uploadedRows);
       setGeneratedDocuments(generatedRows);
     } catch (loadError) {
@@ -362,7 +371,16 @@ const DocumentsPage = () => {
     }
 
     if (uploadData.visibility === 'course' && !uploadData.course_id) {
-      setError('Un cours est obligatoire pour un document de cours');
+      setError(
+        'Un cours est obligatoire pour un document de cours'
+      );
+      return;
+    }
+
+    if (uploadData.visibility === 'department' && !uploadData.department_id) {
+      setError(
+        'Un département est obligatoire pour un document de département'
+      );
       return;
     }
 
@@ -376,6 +394,7 @@ const DocumentsPage = () => {
         description: uploadData.description,
         visibility: uploadData.visibility,
         courseId: uploadData.course_id,
+        departmentId: uploadData.department_id,
         file: uploadData.file,
         uploadedBy: currentProfileId,
         tags: uploadData.tags
@@ -425,6 +444,13 @@ const DocumentsPage = () => {
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
+        </Alert>
+      )}
+
+      {canUploadDocuments && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Les documents déposés ici alimentent la Bibliothèque étudiante selon leur visibilité.
+          Les documents publics, de département et de cours remontent automatiquement pour les étudiants autorisés.
         </Alert>
       )}
 
@@ -602,7 +628,7 @@ const DocumentsPage = () => {
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                           {item.source === 'uploaded'
-                            ? `${item.course_name ? `${item.course_name} • ` : ''}${formatFileSize(item.file_size)} • Ajouté le ${formatDate(item.created_at)}`
+                            ? `${item.course_name ? `${item.course_name} • ` : ''}${item.department_name && !item.course_name ? `${item.department_name} • ` : ''}${formatFileSize(item.file_size)} • Ajouté le ${formatDate(item.created_at)}`
                             : `${item.template_name} • ${item.student_name} • Généré le ${formatDate(item.created_at)}`}
                         </Typography>
                         {item.tags?.length > 0 && (
@@ -659,7 +685,8 @@ const DocumentsPage = () => {
               onChange={(event) => setUploadData((prev) => ({
                 ...prev,
                 visibility: event.target.value,
-                course_id: event.target.value === 'course' ? prev.course_id : ''
+                course_id: event.target.value === 'course' ? prev.course_id : '',
+                department_id: event.target.value === 'department' ? prev.department_id : event.target.value === 'course' ? prev.department_id : ''
               }))}
             >
               <MenuItem value="course">Cours</MenuItem>
@@ -675,7 +702,16 @@ const DocumentsPage = () => {
                 labelId="upload-course-label"
                 label="Cours"
                 value={uploadData.course_id}
-                onChange={(event) => setUploadData((prev) => ({ ...prev, course_id: event.target.value }))}
+                onChange={(event) => {
+                  const selectedCourseId = event.target.value;
+                  const selectedCourseData = courses.find((course) => String(course.id) === String(selectedCourseId));
+
+                  setUploadData((prev) => ({
+                    ...prev,
+                    course_id: selectedCourseId,
+                    department_id: selectedCourseData?.department_id ? String(selectedCourseData.department_id) : prev.department_id
+                  }));
+                }}
               >
                 {courses.map((course) => (
                   <MenuItem key={course.id} value={String(course.id)}>
@@ -683,6 +719,34 @@ const DocumentsPage = () => {
                   </MenuItem>
                 ))}
               </Select>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                Le document sera visible par les utilisateurs rattachés à ce cours.
+              </Typography>
+            </FormControl>
+          )}
+
+          {uploadData.visibility === 'department' && (
+            <FormControl fullWidth margin="normal">
+              <InputLabel id="upload-department-label">Département</InputLabel>
+              <Select
+                labelId="upload-department-label"
+                label="Département"
+                value={uploadData.department_id}
+                onChange={(event) => setUploadData((prev) => ({
+                  ...prev,
+                  department_id: event.target.value,
+                  course_id: ''
+                }))}
+              >
+                {departments.map((department) => (
+                  <MenuItem key={department.id} value={String(department.id)}>
+                    {department.name}
+                  </MenuItem>
+                ))}
+              </Select>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                Le document sera visible aux étudiants et professeurs rattachés à ce département, sans dépendre d’un cours précis.
+              </Typography>
             </FormControl>
           )}
 

@@ -270,12 +270,92 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
   UNIQUE(exam_id, session_number, session_date)
 );
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'exam_sessions'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'exam_id'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN exam_id INTEGER REFERENCES exams(id);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'session_number'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN session_number INTEGER;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'session_date'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN session_date DATE;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'start_time'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN start_time TIME;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'end_time'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN end_time TIME;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'location'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN location TEXT;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'proctor_id'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN proctor_id UUID REFERENCES profiles(id);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'max_students'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN max_students INTEGER;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'current_students_count'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN current_students_count INTEGER DEFAULT 0;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'exam_sessions' AND column_name = 'equipment_required'
+    ) THEN
+      ALTER TABLE exam_sessions ADD COLUMN equipment_required TEXT[];
+    END IF;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_exam_sessions_exam ON exam_sessions(exam_id);
 CREATE INDEX IF NOT EXISTS idx_exam_sessions_date ON exam_sessions(session_date);
 
 CREATE TABLE IF NOT EXISTS exam_registrations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  exam_session_id UUID NOT NULL REFERENCES exam_sessions(id),
+  exam_session_id INTEGER NOT NULL REFERENCES exam_sessions(id),
   student_id INTEGER NOT NULL REFERENCES students(id),
   seat_number VARCHAR(10),
   registration_status VARCHAR(20) DEFAULT 'pending' CHECK (registration_status IN ('pending', 'confirmed', 'attended', 'absent', 'forfeited')),
@@ -290,7 +370,7 @@ CREATE INDEX IF NOT EXISTS idx_exam_registrations_student ON exam_registrations(
 
 CREATE TABLE IF NOT EXISTS exam_monitoring (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  exam_session_id UUID NOT NULL REFERENCES exam_sessions(id),
+  exam_session_id INTEGER NOT NULL REFERENCES exam_sessions(id),
   student_id INTEGER,
   monitor_type TEXT NOT NULL CHECK (monitor_type IN ('proctoring', 'behavior', 'technical', 'security')),
   alert_level TEXT CHECK (alert_level IN ('low', 'medium', 'high', 'critical')),

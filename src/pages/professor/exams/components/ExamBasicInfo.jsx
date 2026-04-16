@@ -11,8 +11,14 @@ import {
   Grid,
   Paper,
   Alert,
-  Button
+  Button,
+  Divider,
+  Chip,
+  Stack,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
+import { formatExamAccessCode } from '@/utils/examSecurityUtils';
 
 /**
  * Composant pour les informations de base d'un examen
@@ -57,6 +63,8 @@ const ExamBasicInfo = ({
   setParentExamId,
   isPractice,
   setIsPractice,
+  practiceQuizId,
+  setPracticeQuizId,
   totalPoints,
   setTotalPoints,
   passingGrade,
@@ -73,6 +81,16 @@ const ExamBasicInfo = ({
   filieres,
   studentGroups,
   promotions,
+  accessCodeRequired,
+  setAccessCodeRequired,
+  accessCode,
+  setAccessCode,
+  hasAccessCode,
+  allowDirectJoin,
+  setAllowDirectJoin,
+  maxCheatingAlerts,
+  setMaxCheatingAlerts,
+  onGenerateAccessCode,
   shareToken,
   errors
 }) => {
@@ -129,7 +147,9 @@ const ExamBasicInfo = ({
     }
   };
 
-  const shareLink = shareToken ? `${window.location.origin}/student/exams/join/${shareToken}` : null;
+  const shareLink = allowDirectJoin && shareToken
+    ? `${window.location.origin}/student/exams/join/${shareToken}`
+    : null;
 
   return (
     <Paper sx={{ p: 3 }}>
@@ -309,6 +329,81 @@ const ExamBasicInfo = ({
             helperText={errors.passingGrade}
             required
             inputProps={{ min: 0, max: totalPoints }}
+          />
+        </Grid>
+
+        <Grid item xs={12}>
+          <Divider sx={{ my: 1 }}>
+            <Chip label="Sécurité de l'épreuve" size="small" />
+          </Divider>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <FormControlLabel
+            control={(
+              <Switch
+                checked={Boolean(accessCodeRequired)}
+                onChange={(event) => setAccessCodeRequired(event.target.checked)}
+              />
+            )}
+            label="Code d'accès requis au démarrage"
+          />
+          <FormHelperText>
+            Le surveillant donne ce code en salle avant le lancement de l'épreuve.
+          </FormHelperText>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <FormControlLabel
+            control={(
+              <Switch
+                checked={Boolean(allowDirectJoin)}
+                onChange={(event) => setAllowDirectJoin(event.target.checked)}
+              />
+            )}
+            label="Autoriser l'inscription par lien"
+          />
+          <FormHelperText>
+            Désactivez cette option pour empêcher l'ajout via simple lien partagé.
+          </FormHelperText>
+        </Grid>
+
+        <Grid item xs={12} sm={8}>
+          <TextField
+            fullWidth
+            label="Code d'accès surveillant"
+            value={formatExamAccessCode(accessCode)}
+            onChange={(event) => setAccessCode(event.target.value)}
+            error={!!errors.accessCode}
+            helperText={
+              errors.accessCode ||
+              (hasAccessCode
+                ? 'Un code est déjà configuré. Saisissez-en un nouveau uniquement pour le remplacer.'
+                : 'Code recommandé: 8 caractères alphanumériques.')
+            }
+          />
+        </Grid>
+
+        <Grid item xs={12} sm={4}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
+            <Button variant="outlined" onClick={onGenerateAccessCode}>
+              Générer
+            </Button>
+            {hasAccessCode && (
+              <Chip color="success" size="small" label="Code actif" />
+            )}
+          </Stack>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Alertes anti-triche avant arrêt"
+            value={maxCheatingAlerts || 3}
+            onChange={(event) => setMaxCheatingAlerts(Number(event.target.value) || 1)}
+            inputProps={{ min: 1, max: 5 }}
+            helperText="À ce seuil, l'épreuve est stoppée puis soumise automatiquement."
           />
         </Grid>
 

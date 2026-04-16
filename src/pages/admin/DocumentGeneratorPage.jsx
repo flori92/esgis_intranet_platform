@@ -1,47 +1,106 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Box, 
-  Typography,
-  Paper,
-  Grid,
-  TextField,
-  Button,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  CircularProgress,
   Alert,
+  Box,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  Checkbox,
+  Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
-  Checkbox,
-  Card,
-  CardContent,
-  CardActions,
   Divider,
+  FormControl,
+  FormControlLabel,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
   Stack,
-  Chip
+  TextField,
+  Typography
 } from '@mui/material';
 import {
   Description as DescriptionIcon,
-  Print as PrintIcon,
   Download as DownloadIcon,
   Preview as PreviewIcon,
-  School as SchoolIcon,
-  Send as SendIcon,
   Save as SaveIcon
 } from '@mui/icons-material';
-import { useAuth } from '../../hooks/useAuth';
-import { uploadFile, downloadFile } from '@/api/storage';
-import { insertGeneratedDocument, updateGeneratedDocumentStatus, getAllGeneratedDocuments } from '@/api/documents';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { getRecordsWithRelation as fetchRecords, insertRecord, getRecordsWithRelation as fetchWithRelations } from '@/utils/supabase-helpers';
+
+import { useAuth } from '../../hooks/useAuth';
+import { uploadFile } from '@/api/storage';
+import {
+  createDocumentDownloadUrl,
+  getAllGeneratedDocuments,
+  insertGeneratedDocument,
+  updateGeneratedDocumentStatus
+} from '@/api/documents';
+import {
+  getRecordsWithRelation as fetchRecords,
+  getRecordsWithRelation as fetchWithRelations
+} from '@/utils/supabase-helpers';
 import { triggerDownload } from '@/utils/DownloadLinkUtil';
 import { loadPdfLib } from '@/utils/pdfLib';
+
+const getRelation = (value) => (Array.isArray(value) ? value[0] : value);
+
+const STATUS_OPTIONS = [
+  { value: 'approved', label: 'Disponible immédiatement' },
+  { value: 'pending', label: 'En attente de validation' },
+  { value: 'draft', label: 'Brouillon' }
+];
+
+const defaultDepositNote = (template) => {
+  const templateType = template?.type || '';
+  const templateName = `${template?.name || ''}`.toLowerCase();
+
+  if (templateType === 'transcript') {
+    return 'Relevé de notes certifié';
+  }
+
+  if (templateType === 'attestation' && templateName.includes('réussite')) {
+    return 'Attestation de réussite';
+  }
+
+  if (templateType === 'attestation') {
+    return "Attestation d'inscription";
+  }
+
+  if (templateType === 'certificate') {
+    return 'Certificat de scolarité';
+  }
+
+  return template?.name || 'Document officiel';
+};
+
+const slugify = (value) => (
+  `${value || 'document'}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase()
+);
+
+const buildFallbackContent = ({ template, student, depositNote }) => [
+  `Objet : ${depositNote || template?.name || 'Document officiel'}`,
+  '',
+  `L'administration certifie que ${student?.full_name || 'cet étudiant'} est inscrit(e) à l'ESGIS.`,
+  `Numéro étudiant : ${student?.student_number || '-'}`,
+  `Niveau : ${student?.level || '-'}`,
+  `Département : ${student?.department_name || '-'}`,
+  '',
+  `Document édité le ${format(new Date(), 'dd MMMM yyyy', { locale: fr })}.`,
+  '',
+  'Ce document est généré par le guichet administratif et versé dans le dossier officiel de l’étudiant.'
+].join('\n');
 
 const DocumentGeneratorPage = () => {
   const { authState } = useAuth();
@@ -49,15 +108,28 @@ const DocumentGeneratorPage = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [templates, setTemplates] = useState([]);
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [selectedStudent, setSelectedStudent] = useState(null);
   const [students, setStudents] = useState([]);
+  const [generatedDocuments, setGeneratedDocuments] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
   const [formValues, setFormValues] = useState({});
+  const [depositNote, setDepositNote] = useState('');
+  const [publicationStatus, setPublicationStatus] = useState('approved');
+  const [sendEmailChecked, setSendEmailChecked] = useState(false);
   const [documentData, setDocumentData] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [generatedDocuments, setGeneratedDocuments] = useState([]);
-  const [sendEmailChecked, setSendEmailChecked] = useState(false);
+  const [previewFileName, setPreviewFileName] = useState('document_officiel.pdf');
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => String(template.id) === String(selectedTemplateId)) || null,
+    [selectedTemplateId, templates]
+  );
+
+  const selectedStudent = useMemo(
+    () => students.find((student) => String(student.id) === String(selectedStudentId)) || null,
+    [selectedStudentId, students]
+  );
 
   useEffect(() => {
     if (!documentData) {
@@ -65,368 +137,263 @@ const DocumentGeneratorPage = () => {
       return undefined;
     }
 
-    const url = URL.createObjectURL(new Blob([documentData], { type: 'application/pdf' }));
-    setPreviewUrl(url);
+    const objectUrl = URL.createObjectURL(new Blob([documentData], { type: 'application/pdf' }));
+    setPreviewUrl(objectUrl);
 
-    return () => {
-      URL.revokeObjectURL(url);
-    };
+    return () => URL.revokeObjectURL(objectUrl);
   }, [documentData]);
 
-  // Fonction pour charger les modèles de documents
-  const fetchTemplates = async () => {
-    setLoading(true);
-    try {
-      const templates = await fetchRecords('document_templates');
-      
-      if (templates) {
-        // Map required_fields to variables for compatibility
-        const formatted = templates.map(t => ({
-          ...t,
-          variables: t.required_fields || []
-        }));
-        setTemplates(formatted);
-      }
-    } catch (err) {
-      console.error('Erreur lors du chargement des modèles:', err);
-      setError('Erreur lors du chargement des modèles');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fonction pour charger les étudiants
-  const fetchStudents = async () => {
-    try {
-      const students = await fetchWithRelations(
-        'students',
-        `
-          id,
-          profile_id,
-          profiles (
-            full_name,
-            email
-          ),
-          student_number,
-          entry_year,
-          level,
-          status,
-          department_id,
-          departments (
-            name
-          )
-        `
-      );
-      
-      if (students) {
-        // Transformer les données pour inclure le nom complet et l'email du profil
-        const formattedStudents = students.map(student => ({
-          id: student.id,
-          profile_id: student.profile_id,
-          full_name: student.profiles?.full_name || 'Nom inconnu',
-          email: student.profiles?.email || '',
-          student_number: student.student_number,
-          entry_year: student.entry_year,
-          level: student.level,
-          status: student.status,
-          department_id: student.department_id,
-          department_name: student.departments?.name || 'Département inconnu'
-        }));
-        
-        setStudents(formattedStudents);
-      }
-    } catch (err) {
-      console.error('Erreur lors du chargement des étudiants:', err);
-      setError('Erreur lors du chargement des étudiants');
-    }
-  };
-  
-  // Fonction principale pour charger les données
   const fetchData = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      await Promise.all([fetchTemplates(), fetchStudents()]);
-      
-      // Récupérer les documents générés
-      const { documents, error: documentsError } = await getAllGeneratedDocuments();
-      
-      if (documentsError) {
-        throw documentsError;
+      const [templateRows, studentRows, generatedRows] = await Promise.all([
+        fetchRecords('document_templates'),
+        fetchWithRelations(
+          'students',
+          `
+            id,
+            profile_id,
+            student_number,
+            level,
+            status,
+            department_id,
+            profiles(full_name, email),
+            departments(name)
+          `
+        ),
+        getAllGeneratedDocuments()
+      ]);
+
+      if (generatedRows.error) {
+        throw generatedRows.error;
       }
-      
-      const limitedDocs = (documents || []).slice(0, 10);
-      
-      // Transformer les données pour inclure le nom de l'étudiant et du modèle
-      const formattedDocuments = limitedDocs.map(doc => ({
-        ...doc,
-        student_name: doc.profiles?.full_name || 'Étudiant inconnu',
-        template_name: doc.document_templates?.name || 'Modèle inconnu'
+
+      const mappedTemplates = (templateRows || []).map((template) => ({
+        ...template,
+        variables: template.required_fields || []
       }));
-      
-      setGeneratedDocuments(formattedDocuments);
-    } catch (err) {
-      console.error('Erreur lors du chargement des données:', err);
-      setError('Une erreur est survenue lors du chargement des données');
+
+      const mappedStudents = (studentRows || []).map((student) => ({
+        id: student.id,
+        profile_id: student.profile_id,
+        full_name: student.profiles?.full_name || 'Étudiant inconnu',
+        email: student.profiles?.email || '',
+        student_number: student.student_number || '-',
+        level: student.level || '-',
+        department_id: student.department_id || null,
+        department_name: student.departments?.name || 'Département inconnu',
+        status: student.status || 'active'
+      }));
+
+      const mappedGeneratedDocuments = (generatedRows.documents || []).slice(0, 12).map((document) => {
+        const studentRelation = getRelation(document.students);
+        const profileRelation = getRelation(studentRelation?.profiles);
+        const templateRelation = getRelation(document.document_templates);
+
+        return {
+          ...document,
+          student_name: profileRelation?.full_name || 'Étudiant inconnu',
+          template_name: templateRelation?.name || document.deposit_note || 'Document officiel',
+          template_type: templateRelation?.type || 'other'
+        };
+      });
+
+      setTemplates(mappedTemplates);
+      setStudents(mappedStudents);
+      setGeneratedDocuments(mappedGeneratedDocuments);
+    } catch (fetchError) {
+      console.error('Erreur lors du chargement du générateur de documents:', fetchError);
+      setError('Impossible de charger les données du générateur de documents.');
     } finally {
       setLoading(false);
     }
   };
-  
-  // Charger les données au chargement du composant
+
   useEffect(() => {
     fetchData();
   }, []);
-  
-  // Réinitialiser le formulaire lorsque le modèle change
+
   useEffect(() => {
-    if (selectedTemplate) {
-      // Trouver le modèle sélectionné
-      const template = templates.find(t => t.id === selectedTemplate);
-      
-      if (template && template.variables) {
-        // Initialiser les valeurs du formulaire avec les variables du modèle
-        const initialValues = {};
-        template.variables.forEach(variable => {
-          initialValues[variable] = '';
-        });
-        
-        setFormValues(initialValues);
-      }
-    } else {
+    if (!selectedTemplate) {
       setFormValues({});
-    }
-  }, [selectedTemplate, templates]);
-
-  // Gérer le changement de modèle
-  const handleTemplateChange = (event) => {
-    setSelectedTemplate(event.target.value);
-  };
-
-  // Gérer les changements dans le formulaire
-  const handleFormChange = (event) => {
-    const { name, value } = event.target;
-    setFormValues(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  // Générer le document PDF
-  const generateDocument = async () => {
-    if (!selectedTemplate || !selectedStudent) {
-      setError('Veuillez sélectionner un modèle et un étudiant');
+      setDepositNote('');
       return;
     }
-    
+
+    const initialValues = {};
+    (selectedTemplate.variables || []).forEach((variable) => {
+      initialValues[variable] = '';
+    });
+
+    setFormValues(initialValues);
+    setDepositNote(defaultDepositNote(selectedTemplate));
+  }, [selectedTemplate]);
+
+  const setPreviewDocument = ({ pdfBytes, fileName }) => {
+    setDocumentData(pdfBytes);
+    setPreviewFileName(fileName);
+    setPreviewOpen(true);
+  };
+
+  const generateDocument = async () => {
+    if (!selectedTemplate || !selectedStudent) {
+      setError('Veuillez sélectionner un modèle et un étudiant.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSuccess(null);
-    
+
     try {
-      // Récupérer le modèle sélectionné
-      const template = templates.find(t => t.id === selectedTemplate);
       const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
-      
-      if (!template) {
-        throw new Error('Modèle non trouvé');
-      }
-      
-      // Créer un nouveau document PDF
       const pdfDoc = await PDFDocument.create();
-      
-      // Ajouter une nouvelle page
-      let page = pdfDoc.addPage([595.28, 841.89]); // A4
-      
-      // Obtenir la police
-      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      
-      // Définir les marges et positions
+      let page = pdfDoc.addPage([595.28, 841.89]);
+      const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
       const margin = 50;
       const titleFontSize = 16;
       const contentFontSize = 12;
       const lineHeight = 20;
-      
-      // Dessiner l'en-tête
-      page.drawText('ÉCOLE SUPÉRIEURE DE GÉNIE INFORMATIQUE', {
+      let yPosition = page.getHeight() - margin;
+
+      page.drawText('ESGIS', {
         x: margin,
-        y: page.getHeight() - margin,
+        y: yPosition,
+        size: 18,
+        font: boldFont,
+        color: rgb(0, 0.2, 0.45)
+      });
+
+      yPosition -= 24;
+
+      page.drawText(depositNote || selectedTemplate.name, {
+        x: margin,
+        y: yPosition,
         size: titleFontSize,
-        font: helveticaBold,
-        color: rgb(0, 0, 0.7)
-      });
-      
-      page.drawText('Document officiel', {
-        x: margin,
-        y: page.getHeight() - margin - titleFontSize - 10,
-        size: contentFontSize,
-        font: helveticaFont,
+        font: boldFont,
         color: rgb(0, 0, 0)
       });
-      
-      // Dessiner le titre du document
-      page.drawText(template.name, {
-        x: margin,
-        y: page.getHeight() - margin - titleFontSize - 50,
-        size: titleFontSize,
-        font: helveticaBold,
-        color: rgb(0, 0, 0)
+
+      yPosition -= 36;
+
+      [
+        `Étudiant : ${selectedStudent.full_name}`,
+        `Numéro étudiant : ${selectedStudent.student_number}`,
+        `Niveau : ${selectedStudent.level}`,
+        `Département : ${selectedStudent.department_name}`,
+        `Date d'édition : ${format(new Date(), 'dd MMMM yyyy', { locale: fr })}`
+      ].forEach((line) => {
+        page.drawText(line, {
+          x: margin,
+          y: yPosition,
+          size: contentFontSize,
+          font: regularFont,
+          color: rgb(0, 0, 0)
+        });
+        yPosition -= lineHeight;
       });
-      
-      // Dessiner les informations de l'étudiant
-      let yPosition = page.getHeight() - margin - titleFontSize - 90;
-      
-      page.drawText(`Étudiant: ${selectedStudent.full_name}`, {
-        x: margin,
-        y: yPosition,
-        size: contentFontSize,
-        font: helveticaFont,
-        color: rgb(0, 0, 0)
-      });
-      
+
       yPosition -= lineHeight;
-      
-      page.drawText(`Numéro étudiant: ${selectedStudent.student_number}`, {
-        x: margin,
-        y: yPosition,
-        size: contentFontSize,
-        font: helveticaFont,
-        color: rgb(0, 0, 0)
-      });
-      
-      yPosition -= lineHeight;
-      
-      page.drawText(`Niveau: ${selectedStudent.level}`, {
-        x: margin,
-        y: yPosition,
-        size: contentFontSize,
-        font: helveticaFont,
-        color: rgb(0, 0, 0)
-      });
-      
-      yPosition -= lineHeight;
-      
-      page.drawText(`Département: ${selectedStudent.department_name}`, {
-        x: margin,
-        y: yPosition,
-        size: contentFontSize,
-        font: helveticaFont,
-        color: rgb(0, 0, 0)
-      });
-      
-      // Ajouter un espace avant le contenu
-      yPosition -= lineHeight * 2;
-      
-      // Remplacer les variables dans le contenu du modèle
-      let content = template.content;
-      
-      // Remplacer les variables standards
+
+      let content = selectedTemplate.content
+        || selectedTemplate.description
+        || buildFallbackContent({
+          template: selectedTemplate,
+          student: selectedStudent,
+          depositNote
+        });
+
       content = content.replace(/\{NOM_ETUDIANT\}/g, selectedStudent.full_name);
       content = content.replace(/\{NUMERO_ETUDIANT\}/g, selectedStudent.student_number);
       content = content.replace(/\{NIVEAU\}/g, selectedStudent.level);
       content = content.replace(/\{DEPARTEMENT\}/g, selectedStudent.department_name);
       content = content.replace(/\{DATE\}/g, format(new Date(), 'dd MMMM yyyy', { locale: fr }));
-      
-      // Remplacer les variables personnalisées
-      Object.keys(formValues).forEach(key => {
-        content = content.replace(new RegExp(`\\{${key}\\}`, 'g'), formValues[key]);
+
+      Object.keys(formValues).forEach((key) => {
+        content = content.replace(new RegExp(`\\{${key}\\}`, 'g'), formValues[key] || '');
       });
-      
-      // Diviser le contenu en lignes pour respecter la largeur de la page
+
+      const words = content.split(/\s+/);
       const maxWidth = page.getWidth() - margin * 2;
-      const words = content.split(' ');
       let line = '';
-      
+
       for (const word of words) {
-        const potentialLine = line ? `${line} ${word}` : word;
-        const width = helveticaFont.widthOfTextAtSize(potentialLine, contentFontSize);
-        
-        if (width <= maxWidth) {
-          line = potentialLine;
-        } else {
-          page.drawText(line, {
-            x: margin,
-            y: yPosition,
-            size: contentFontSize,
-            font: helveticaFont,
-            color: rgb(0, 0, 0)
-          });
-          
-          yPosition -= lineHeight;
-          line = word;
-          
-          // Vérifier si on a besoin d'une nouvelle page
-          if (yPosition < margin) {
-            page = pdfDoc.addPage([595.28, 841.89]); // A4
-            yPosition = page.getHeight() - margin;
-          }
+        const nextLine = line ? `${line} ${word}` : word;
+        const lineWidth = regularFont.widthOfTextAtSize(nextLine, contentFontSize);
+
+        if (lineWidth <= maxWidth) {
+          line = nextLine;
+          continue;
+        }
+
+        page.drawText(line, {
+          x: margin,
+          y: yPosition,
+          size: contentFontSize,
+          font: regularFont,
+          color: rgb(0, 0, 0)
+        });
+
+        yPosition -= lineHeight;
+        line = word;
+
+        if (yPosition < margin + lineHeight) {
+          page = pdfDoc.addPage([595.28, 841.89]);
+          yPosition = page.getHeight() - margin;
         }
       }
-      
-      // Dessiner la dernière ligne
+
       if (line) {
         page.drawText(line, {
           x: margin,
           y: yPosition,
           size: contentFontSize,
-          font: helveticaFont,
+          font: regularFont,
           color: rgb(0, 0, 0)
         });
       }
-      
-      // Dessiner le pied de page
-      page.drawText(`Généré le ${format(new Date(), 'dd/MM/yyyy à HH:mm')}`, {
+
+      page.drawText(`Document généré le ${format(new Date(), 'dd/MM/yyyy à HH:mm')}`, {
         x: margin,
         y: margin,
-        size: 10,
-        font: helveticaFont,
-        color: rgb(0.5, 0.5, 0.5)
+        size: 9,
+        font: regularFont,
+        color: rgb(0.45, 0.45, 0.45)
       });
-      
-      // Sérialiser le document en bytes
+
       const pdfBytes = await pdfDoc.save();
-      
-      // Stocker les données du document
-      setDocumentData(pdfBytes);
-      
-      // Ouvrir l'aperçu
-      setPreviewOpen(true);
-      
-    } catch (err) {
-      console.error('Erreur lors de la génération du document:', err);
-      setError('Une erreur est survenue lors de la génération du document: ' + err.message);
+      setPreviewDocument({
+        pdfBytes,
+        fileName: `${slugify(depositNote || selectedTemplate.name)}_${slugify(selectedStudent.student_number)}.pdf`
+      });
+    } catch (generationError) {
+      console.error('Erreur lors de la génération du document:', generationError);
+      setError(`Une erreur est survenue lors de la génération du document: ${generationError.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Sauvegarder le document généré
   const saveGeneratedDocument = async () => {
     if (!documentData || !selectedTemplate || !selectedStudent) {
-      setError('Impossible de sauvegarder le document');
+      setError('Impossible de sauvegarder le document.');
       return;
     }
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Récupérer le modèle sélectionné
-      const template = templates.find(t => t.id === selectedTemplate);
-      
-      if (!template) {
-        throw new Error('Modèle non trouvé');
-      }
-      
-      // Générer un nom de fichier unique
-      const timestamp = new Date().getTime();
-      const fileName = `document_${selectedStudent.id}_${selectedTemplate}_${timestamp}.pdf`;
-      const filePath = `documents/${fileName}`;
-      
-      // Stocker le fichier dans le bucket de stockage
-      const { error: storageError } = await uploadFile('documents', fileName, documentData, {
+      const now = new Date();
+      const timestamp = format(now, 'yyyyMMdd_HHmmss');
+      const actorId = authState.profile?.id || authState.user?.id || null;
+      const storagePath = `official/admin_deposits/${selectedStudent.profile_id || selectedStudent.id}/${slugify(depositNote || selectedTemplate.name)}_${timestamp}.pdf`;
+
+      const { error: storageError } = await uploadFile('documents', storagePath, documentData, {
         contentType: 'application/pdf',
         cacheControl: '3600'
       });
@@ -435,149 +402,131 @@ const DocumentGeneratorPage = () => {
         throw storageError;
       }
 
-      // Enregistrer le document dans la base de données
-      const { document, error: insertError } = await insertGeneratedDocument({
-        template_id: selectedTemplate,
+      const shouldApprove = publicationStatus === 'approved';
+
+      const { error: insertError } = await insertGeneratedDocument({
+        template_id: selectedTemplate.id,
         student_id: selectedStudent.id,
-        file_path: filePath,
-        status: 'pending',
-        generated_by: authState.user?.id || null
+        file_path: `documents/${storagePath}`,
+        status: publicationStatus,
+        generated_by: actorId,
+        approved_by: shouldApprove ? actorId : null,
+        approval_date: shouldApprove ? now.toISOString() : null,
+        manual_deposit: true,
+        deposit_note: depositNote.trim() || defaultDepositNote(selectedTemplate)
       });
-      
+
       if (insertError) {
         throw insertError;
       }
-      
-      // Fermer l'aperçu
-      setPreviewOpen(false);
-      
-      // Afficher un message de succès
-      setSuccess('Document enregistré avec succès');
-      
-      // Envoyer un email si demandé
+
       if (sendEmailChecked) {
-        // Code pour envoyer un email (à implémenter avec un service d'email)
-        console.log('Envoi d\'email à', selectedStudent.email);
+        console.log('Envoi d’email à implémenter pour', selectedStudent.email);
       }
-      
-      // Rafraîchir la liste des documents
-      fetchData();
-      
-    } catch (err) {
-      console.error('Erreur lors de la sauvegarde du document:', err);
-      setError('Une erreur est survenue lors de la sauvegarde du document: ' + err.message);
+
+      setPreviewOpen(false);
+      setSuccess(shouldApprove
+        ? 'Document généré et rendu disponible dans le dossier officiel de l’étudiant.'
+        : 'Document généré et enregistré pour validation.');
+      await fetchData();
+    } catch (saveError) {
+      console.error('Erreur lors de la sauvegarde du document:', saveError);
+      setError(`Une erreur est survenue lors de la sauvegarde du document: ${saveError.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Télécharger le document
-  const downloadDocument = (pdfBlob) => {
-    const blob = pdfBlob instanceof Blob ? pdfBlob : new Blob([pdfBlob], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    triggerDownload({ url, filename: `document_${new Date().getTime()}.pdf` });
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-  };
-
-  // Prévisualiser un document existant
-  const previewExistingDocument = async (filePath) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      // Extraire le nom du fichier du chemin
-      const fileName = filePath.split('/').pop();
-      
-      // Télécharger le fichier depuis le stockage
-      const { data, error } = await downloadFile('documents', fileName);
-      
-      if (error) {
-        throw error;
-      }
-      
-      // Convertir le blob en Uint8Array
-      const arrayBuffer = await data.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      
-      // Stocker les données du document
-      setDocumentData(uint8Array);
-      
-      // Ouvrir l'aperçu
-      setPreviewOpen(true);
-      
-    } catch (err) {
-      console.error('Erreur lors de la prévisualisation du document:', err);
-      setError('Une erreur est survenue lors de la prévisualisation du document');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Approuver un document (admin uniquement)
-  const approveDocument = async (documentId) => {
-    if (!authState.isAdmin) {
-      setError('Vous n\'avez pas les droits pour approuver un document');
+  const downloadPreviewDocument = () => {
+    if (!documentData) {
       return;
     }
-    
-    setLoading(true);
-    setError(null);
-    
+
+    const blob = documentData instanceof Blob ? documentData : new Blob([documentData], { type: 'application/pdf' });
+    const objectUrl = URL.createObjectURL(blob);
+
+    triggerDownload({
+      url: objectUrl,
+      filename: previewFileName
+    });
+
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+  };
+
+  const openStoredDocumentPreview = async (document) => {
     try {
-      // Mettre à jour le statut du document
-      const { error } = await updateGeneratedDocumentStatus(documentId, 'approved', authState.user?.id);
-      
-      if (error) {
-        throw error;
+      setLoading(true);
+      const { url, error: signedUrlError } = await createDocumentDownloadUrl(document.file_path, 60);
+
+      if (signedUrlError) {
+        throw signedUrlError;
       }
-      
-      // Afficher un message de succès
-      setSuccess('Document approuvé avec succès');
-      
-      // Rafraîchir la liste des documents
-      fetchData();
-      
-    } catch (err) {
-      console.error('Erreur lors de l\'approbation du document:', err);
-      setError('Une erreur est survenue lors de l\'approbation du document');
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error('Impossible de récupérer le document stocké');
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      setPreviewDocument({
+        pdfBytes: new Uint8Array(arrayBuffer),
+        fileName: `${slugify(document.deposit_note || document.template_name || 'document_officiel')}.pdf`
+      });
+    } catch (previewError) {
+      console.error('Erreur lors de l’aperçu du document existant:', previewError);
+      setError(previewError.message || 'Impossible de prévisualiser ce document.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Rejeter un document (admin uniquement)
-  const rejectDocument = async (documentId) => {
+  const downloadStoredDocument = async (document) => {
+    try {
+      const { url, error: downloadError } = await createDocumentDownloadUrl(document.file_path, 60);
+
+      if (downloadError) {
+        throw downloadError;
+      }
+
+      triggerDownload({
+        url,
+        filename: `${slugify(document.deposit_note || document.template_name || 'document_officiel')}.pdf`
+      });
+    } catch (downloadError) {
+      console.error('Erreur lors du téléchargement du document stocké:', downloadError);
+      setError(downloadError.message || 'Impossible de télécharger ce document.');
+    }
+  };
+
+  const updateStoredDocumentStatus = async (documentId, nextStatus) => {
     if (!authState.isAdmin) {
-      setError('Vous n\'avez pas les droits pour rejeter un document');
+      setError('Vous n’avez pas les droits pour modifier le statut d’un document.');
       return;
     }
-    
-    setLoading(true);
-    setError(null);
-    
+
     try {
-      // Mettre à jour le statut du document
-      const { error } = await updateGeneratedDocumentStatus(documentId, 'rejected', authState.user?.id);
-      
-      if (error) {
-        throw error;
+      setLoading(true);
+      const { error: updateError } = await updateGeneratedDocumentStatus(
+        documentId,
+        nextStatus,
+        authState.profile?.id || authState.user?.id || null
+      );
+
+      if (updateError) {
+        throw updateError;
       }
-      
-      // Afficher un message de succès
-      setSuccess('Document rejeté avec succès');
-      
-      // Rafraîchir la liste des documents
-      fetchData();
-      
-    } catch (err) {
-      console.error('Erreur lors du rejet du document:', err);
-      setError('Une erreur est survenue lors du rejet du document');
+
+      setSuccess(nextStatus === 'approved' ? 'Document approuvé.' : 'Document rejeté.');
+      await fetchData();
+    } catch (updateError) {
+      console.error('Erreur de mise à jour du statut du document:', updateError);
+      setError(updateError.message || 'Impossible de mettre à jour ce document.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Rendu du statut avec la couleur correspondante
   const renderStatus = (status) => {
     switch (status) {
       case 'draft':
@@ -585,7 +534,7 @@ const DocumentGeneratorPage = () => {
       case 'pending':
         return <Chip label="En attente" color="warning" size="small" />;
       case 'approved':
-        return <Chip label="Approuvé" color="success" size="small" />;
+        return <Chip label="Disponible" color="success" size="small" />;
       case 'rejected':
         return <Chip label="Rejeté" color="error" size="small" />;
       default:
@@ -595,229 +544,241 @@ const DocumentGeneratorPage = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Générateur de documents administratifs
-      </Typography>
-      
+      <Stack spacing={1} sx={{ mb: 3 }}>
+        <Typography variant="h4">
+          Générateur de documents administratifs
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          La scolarité peut générer un PDF, lui donner un libellé métier clair et le verser directement dans le dossier officiel de l’étudiant.
+        </Typography>
+      </Stack>
+
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
-      
+
       {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
           {success}
         </Alert>
       )}
-      
+
       <Grid container spacing={3}>
-        {/* Générateur de document */}
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Générer un nouveau document
-            </Typography>
-            
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel id="template-select-label">Modèle de document</InputLabel>
-                  <Select
-                    labelId="template-select-label"
-                    value={selectedTemplate || ''}
-                    onChange={handleTemplateChange}
-                    label="Modèle de document"
-                  >
-                    <MenuItem value="" disabled>
-                      Sélectionner un modèle
+            <Stack spacing={2}>
+              <Typography variant="h6">
+                Générer un nouveau document
+              </Typography>
+
+              <Alert severity="info">
+                Utilisez ce module pour déposer une attestation d’inscription, une attestation de réussite ou un relevé certifié dans le dossier officiel de l’étudiant.
+              </Alert>
+
+              <FormControl fullWidth>
+                <InputLabel id="template-select-label">Modèle de document</InputLabel>
+                <Select
+                  labelId="template-select-label"
+                  value={selectedTemplateId}
+                  label="Modèle de document"
+                  onChange={(event) => setSelectedTemplateId(event.target.value)}
+                >
+                  <MenuItem value="" disabled>Sélectionner un modèle</MenuItem>
+                  {templates.map((template) => (
+                    <MenuItem key={template.id} value={template.id}>
+                      {template.name}
                     </MenuItem>
-                    {templates.map(template => (
-                      <MenuItem key={template.id} value={template.id}>
-                        {template.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel id="student-select-label">Étudiant</InputLabel>
-                  <Select
-                    labelId="student-select-label"
-                    value={selectedStudent?.id || ''}
-                    onChange={(event) => {
-                      const student = students.find(
-                        (item) => String(item.id) === String(event.target.value)
-                      ) || null;
-                      setSelectedStudent(student);
-                    }}
-                    label="Étudiant"
-                  >
-                    {students.map((student) => (
-                      <MenuItem key={student.id} value={student.id}>
-                        {`${student.full_name} (${student.student_number})`}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl fullWidth>
+                <InputLabel id="student-select-label">Étudiant</InputLabel>
+                <Select
+                  labelId="student-select-label"
+                  value={selectedStudentId}
+                  label="Étudiant"
+                  onChange={(event) => setSelectedStudentId(event.target.value)}
+                >
+                  {students.map((student) => (
+                    <MenuItem key={student.id} value={student.id}>
+                      {`${student.full_name} (${student.student_number})`}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
               {selectedTemplate && (
                 <>
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Informations supplémentaires
-                    </Typography>
-                    <Divider />
-                  </Grid>
-                  
-                  {/* Champs dynamiques basés sur les variables du modèle */}
-                  {Object.keys(formValues).map(key => (
-                    <Grid item xs={12} key={key}>
-                      <TextField
-                        fullWidth
-                        label={key.replace(/_/g, ' ')}
-                        name={key}
-                        value={formValues[key]}
-                        onChange={handleFormChange}
-                      />
-                    </Grid>
-                  ))}
-                  
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox 
-                          checked={sendEmailChecked}
-                          onChange={(e) => setSendEmailChecked(e.target.checked)}
-                        />
-                      }
-                      label="Envoyer par email après génération"
-                    />
-                  </Grid>
-                  
-                  <Grid item xs={12}>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      startIcon={<DescriptionIcon />}
-                      onClick={generateDocument}
-                      disabled={loading || !selectedStudent}
-                      fullWidth
+                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                    <Chip size="small" label={`Type: ${selectedTemplate.type || 'other'}`} variant="outlined" />
+                    {selectedStudent && (
+                      <Chip size="small" label={selectedStudent.department_name} variant="outlined" />
+                    )}
+                  </Stack>
+
+                  <TextField
+                    fullWidth
+                    label="Libellé visible par l’étudiant"
+                    value={depositNote}
+                    onChange={(event) => setDepositNote(event.target.value)}
+                    helperText="Exemples: Attestation d'inscription, Attestation de réussite, Relevé de notes certifié."
+                  />
+
+                  <FormControl fullWidth>
+                    <InputLabel id="publication-status-label">Disponibilité</InputLabel>
+                    <Select
+                      labelId="publication-status-label"
+                      value={publicationStatus}
+                      label="Disponibilité"
+                      onChange={(event) => setPublicationStatus(event.target.value)}
                     >
-                      {loading ? <CircularProgress size={24} /> : 'Générer le document'}
-                    </Button>
-                  </Grid>
+                      {STATUS_OPTIONS.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  {(selectedTemplate.variables || []).length > 0 && (
+                    <>
+                      <Typography variant="subtitle2">
+                        Variables du modèle
+                      </Typography>
+                      <Divider />
+                      {(selectedTemplate.variables || []).map((variable) => (
+                        <TextField
+                          key={variable}
+                          fullWidth
+                          label={variable.replace(/_/g, ' ')}
+                          name={variable}
+                          value={formValues[variable] || ''}
+                          onChange={(event) => setFormValues((prev) => ({
+                            ...prev,
+                            [variable]: event.target.value
+                          }))}
+                        />
+                      ))}
+                    </>
+                  )}
+
+                  <FormControlLabel
+                    control={(
+                      <Checkbox
+                        checked={sendEmailChecked}
+                        onChange={(event) => setSendEmailChecked(event.target.checked)}
+                      />
+                    )}
+                    label="Préparer un envoi par email ensuite"
+                  />
+
+                  <Button
+                    variant="contained"
+                    startIcon={<DescriptionIcon />}
+                    onClick={generateDocument}
+                    disabled={loading || !selectedStudent}
+                    fullWidth
+                  >
+                    {loading ? <CircularProgress size={20} color="inherit" /> : 'Générer le document'}
+                  </Button>
                 </>
               )}
-            </Grid>
+            </Stack>
           </Paper>
         </Grid>
 
-        {/* Liste des documents générés */}
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" gutterBottom>
-              Documents générés récemment
-            </Typography>
-
-            {generatedDocuments.length === 0 ? (
-              <Typography variant="body1" color="textSecondary">
-                Aucun document généré pour le moment.
+            <Stack spacing={2}>
+              <Typography variant="h6">
+                Dépôts récents
               </Typography>
-            ) : (
-              <Stack spacing={2}>
-                {generatedDocuments.map(doc => (
-                  <Card key={doc.id} variant="outlined">
+
+              {generatedDocuments.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Aucun document généré pour le moment.
+                </Typography>
+              ) : (
+                generatedDocuments.map((document) => (
+                  <Card key={document.id} variant="outlined">
                     <CardContent>
-                      <Typography variant="subtitle1">
-                        {doc.document_templates.name}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Créé le {format(new Date(doc.created_at), 'dd/MM/yyyy à HH:mm')}
-                      </Typography>
-                      <Box sx={{ mt: 1 }}>
-                        {renderStatus(doc.status)}
-                      </Box>
+                      <Stack spacing={1}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                          <Box>
+                            <Typography variant="subtitle1">
+                              {document.deposit_note || document.template_name}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {document.student_name}
+                            </Typography>
+                          </Box>
+                          {renderStatus(document.status)}
+                        </Stack>
+
+                        <Typography variant="caption" color="text.secondary">
+                          {document.template_name} • créé le {format(new Date(document.created_at), 'dd/MM/yyyy à HH:mm')}
+                        </Typography>
+                      </Stack>
                     </CardContent>
                     <Divider />
                     <CardActions>
-                      <Button
-                        size="small"
-                        startIcon={<PreviewIcon />}
-                        onClick={() => previewExistingDocument(doc.file_path)}
-                      >
+                      <Button size="small" startIcon={<PreviewIcon />} onClick={() => openStoredDocumentPreview(document)}>
                         Aperçu
                       </Button>
-                      {authState.isAdmin && doc.status === 'pending' && (
+                      <Button size="small" startIcon={<DownloadIcon />} onClick={() => downloadStoredDocument(document)}>
+                        Télécharger
+                      </Button>
+                      {authState.isAdmin && document.status === 'pending' && (
                         <>
-                          <Button
-                            size="small"
-                            color="success"
-                            onClick={() => approveDocument(doc.id)}
-                          >
+                          <Button size="small" color="success" onClick={() => updateStoredDocumentStatus(document.id, 'approved')}>
                             Approuver
                           </Button>
-                          <Button
-                            size="small"
-                            color="error"
-                            onClick={() => rejectDocument(doc.id)}
-                          >
+                          <Button size="small" color="error" onClick={() => updateStoredDocumentStatus(document.id, 'rejected')}>
                             Rejeter
                           </Button>
                         </>
                       )}
                     </CardActions>
                   </Card>
-                ))}
-              </Stack>
-            )}
+                ))
+              )}
+            </Stack>
           </Paper>
         </Grid>
       </Grid>
 
-      {/* Dialogue d'aperçu du document */}
-      <Dialog
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
+      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Aperçu du document</DialogTitle>
         <DialogContent>
-          {documentData ? (
+          {previewUrl ? (
             <Box sx={{ width: '100%', height: '500px', overflow: 'hidden' }}>
               <iframe
-                src={previewUrl || ''}
+                src={previewUrl}
                 width="100%"
                 height="100%"
                 title="Aperçu du document"
               />
             </Box>
           ) : (
-            <Typography>Impossible de charger l'aperçu.</Typography>
+            <Typography>Impossible de charger l’aperçu.</Typography>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPreviewOpen(false)}>
             Fermer
           </Button>
-          <Button
-            onClick={() => downloadDocument(documentData)}
-            startIcon={<DownloadIcon />}
-            color="primary"
-          >
+          <Button onClick={downloadPreviewDocument} startIcon={<DownloadIcon />}>
             Télécharger
           </Button>
           <Button
             onClick={saveGeneratedDocument}
             startIcon={<SaveIcon />}
             variant="contained"
-            color="primary"
           >
-            Sauvegarder
+            Déposer dans le dossier étudiant
           </Button>
         </DialogActions>
       </Dialog>

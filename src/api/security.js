@@ -135,7 +135,6 @@ export const generateIntegrityReport = async (examId, generatedBy) => {
           student_exam_id,
           details,
           attempt_count,
-          timestamp,
           detected_at,
           created_at,
           profiles(full_name, email)

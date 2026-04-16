@@ -13,7 +13,14 @@ export const getStudentRequests = async (profileId) => {
       .from('validation_queue')
       .select(`
         *,
-        document:generated_documents!document_id(id, file_path, status)
+        document:generated_documents!document_id(
+          id,
+          file_path,
+          status,
+          deposit_note,
+          approval_date,
+          document_templates!template_id(name, type)
+        )
       `)
       .eq('requester_id', profileId)
       .order('created_at', { ascending: false });

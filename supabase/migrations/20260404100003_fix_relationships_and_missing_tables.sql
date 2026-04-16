@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS generated_documents (
 ALTER TABLE generated_documents ENABLE ROW LEVEL SECURITY;
 
 -- Add policies for generated_documents
+DROP POLICY IF EXISTS generated_documents_select_policy ON generated_documents;
 CREATE POLICY generated_documents_select_policy ON generated_documents
 FOR SELECT USING (
   EXISTS (
@@ -42,11 +43,13 @@ FOR SELECT USING (
   )
 );
 
+DROP POLICY IF EXISTS generated_documents_insert_policy ON generated_documents;
 CREATE POLICY generated_documents_insert_policy ON generated_documents
 FOR INSERT WITH CHECK (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'professor'))
 );
 
+DROP POLICY IF EXISTS generated_documents_update_policy ON generated_documents;
 CREATE POLICY generated_documents_update_policy ON generated_documents
 FOR UPDATE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')

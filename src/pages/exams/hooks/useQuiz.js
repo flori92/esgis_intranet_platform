@@ -64,6 +64,7 @@ export const useQuiz = () => {
   const timerRef = useRef({ minutes: 0, seconds: 0 });
   const examDataRef = useRef(null);
   const studentExamIdRef = useRef(null);
+  const submitLockRef = useRef(false);
 
   const clearRuntimeIntervals = useCallback(() => {
     if (timerIntervalRef.current) {
@@ -122,20 +123,23 @@ export const useQuiz = () => {
     studentExamIdRef.current = studentExamId;
   }, [studentExamId]);
 
-  const submitQuiz = useCallback(async () => {
+  const submitQuiz = useCallback(async (options = {}) => {
     if (!examDataRef.current || !studentExamIdRef.current || !authState.profile?.id || !authState.student?.id) {
       return;
     }
 
+    if (submitLockRef.current || quizStatus === 'COMPLETED') {
+      return;
+    }
+
+    submitLockRef.current = true;
     clearRuntimeIntervals();
-    
-    // Clear local backup on submission
-    localStorage.removeItem(`exam_backup_${examId}`);
 
     const currentQuestions = questionsRef.current;
     const currentAnswers = answersRef.current;
     const currentTimer = timerRef.current;
     const currentExam = examDataRef.current;
+    const submissionReason = options.reason || 'manual';
     const autoScore = currentQuestions.reduce((total, question) => {
       if (!isExamQuestionAutoGradable(question)) {
         return total;
@@ -159,7 +163,8 @@ export const useQuiz = () => {
         completionTime,
         cheatingAttempts: cheatingAttemptsRef.current,
         hasManualQuestions,
-        passingGrade: currentExam.passing_grade
+        passingGrade: currentExam.passing_grade,
+        submissionReason
       });
 
       if (submitError) {
@@ -176,8 +181,10 @@ export const useQuiz = () => {
         hasManualQuestions
       });
       setQuizStatus('COMPLETED');
+      localStorage.removeItem(`exam_backup_${examId}`);
       toast.success('Examen soumis avec succès.');
     } catch (submitError) {
+      submitLockRef.current = false;
       console.error("Erreur lors de la soumission de l'examen:", submitError);
       toast.error("Erreur lors de la soumission de l'examen.");
     }
@@ -186,6 +193,7 @@ export const useQuiz = () => {
     authState.student?.id,
     clearRuntimeIntervals,
     examId,
+    quizStatus,
   ]);
 
   useEffect(() => {
@@ -259,7 +267,7 @@ export const useQuiz = () => {
           if (resumeEndTime <= now) {
             setTimer({ minutes: 0, seconds: 0 });
             setQuizStatus('IN_PROGRESS');
-            setTimeout(() => submitQuiz(), 0);
+            setTimeout(() => submitQuiz({ reason: 'time_limit' }), 0);
           } else {
             const diff = resumeEndTime.getTime() - now.getTime();
             setTimer({
@@ -311,7 +319,7 @@ export const useQuiz = () => {
 
       if (diff <= 0) {
         setTimer({ minutes: 0, seconds: 0 });
-        submitQuiz();
+        submitQuiz({ reason: 'time_limit' });
         return;
       }
 
@@ -405,6 +413,10 @@ export const useQuiz = () => {
       return;
     }
 
+    const cheatingAlertLimit = Math.max(
+      1,
+      Number(examDataRef.current?.max_cheating_alerts || examData?.max_cheating_alerts || 3)
+    );
     const shouldIncrementCounter = incident.incrementCounter !== false;
     const nextAttemptCount = shouldIncrementCounter
       ? cheatingAttemptsRef.current + 1
@@ -425,11 +437,11 @@ export const useQuiz = () => {
       detected_at: incident.detected_at || new Date().toISOString()
     });
 
-    if (shouldIncrementCounter && cheatingAttemptsRef.current >= 3) {
+    if (shouldIncrementCounter && cheatingAttemptsRef.current >= cheatingAlertLimit) {
       toast.error("Trop de tentatives de triche detectees. Soumission automatique.");
-      submitQuiz();
+      submitQuiz({ reason: 'anti_cheat_limit' });
     }
-  }, [authState.profile?.id, examId, quizStatus, studentExamId, submitQuiz]);
+  }, [authState.profile?.id, examData, examId, quizStatus, studentExamId, submitQuiz]);
 
   return {
     quizStatus,

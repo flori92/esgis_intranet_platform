@@ -77,8 +77,17 @@ FOR UPDATE USING (
 );
 
 -- Données initiales pour les tests
-INSERT INTO document_templates (name, description, type, requires_signature, required_fields, created_at) VALUES
-('Certificat de scolarité', 'Certificat attestant que l''étudiant est inscrit à l''école', 'certificate', true, '{}', NOW()),
-('Attestation de réussite', 'Attestation de réussite académique', 'attestation', true, '{purpose}', NOW()),
-('Relevé de notes', 'Relevé détaillé des notes obtenues', 'transcript', true, '{semester, academic_year}', NOW()),
-('Demande d''absence', 'Formulaire de demande d''absence justifiée', 'other', true, '{start_date, end_date, reason}', NOW());
+INSERT INTO document_templates (name, description, type, requires_signature, required_fields, created_at)
+SELECT template.name, template.description, template.type, template.requires_signature, template.required_fields, NOW()
+FROM (
+  VALUES
+    ('Certificat de scolarité', 'Certificat attestant que l''étudiant est inscrit à l''école', 'certificate', true, '{}'::text[]),
+    ('Attestation de réussite', 'Attestation de réussite académique', 'attestation', true, '{purpose}'::text[]),
+    ('Relevé de notes', 'Relevé détaillé des notes obtenues', 'transcript', true, '{semester, academic_year}'::text[]),
+    ('Demande d''absence', 'Formulaire de demande d''absence justifiée', 'other', true, '{start_date, end_date, reason}'::text[])
+) AS template(name, description, type, requires_signature, required_fields)
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM document_templates existing
+  WHERE existing.name = template.name
+);

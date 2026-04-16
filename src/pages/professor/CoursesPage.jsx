@@ -484,6 +484,10 @@ const ProfessorCoursesPage = () => {
         Deposez vos supports, structurez votre bibliotheque par chapitre et maintenez le programme de cours.
       </Typography>
 
+      <Alert severity="info" sx={{ mb: 3 }}>
+        Les ressources publiées ici remontent aussi dans la Bibliothèque étudiante pour les étudiants inscrits à ce cours.
+      </Alert>
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}

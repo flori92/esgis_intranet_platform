@@ -127,6 +127,14 @@ export const signOut = async () => {
   }
 };
 
+const getPasswordRecoveryRedirectUrl = () => {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+
+  return `${window.location.origin}/auth-recovery.html`;
+};
+
 /**
  * Envoie une invitation par email (via reset password) pour qu'un utilisateur
  * puisse configurer son accès initial.
@@ -135,7 +143,7 @@ export const signOut = async () => {
 export const sendAccessInvitation = async (email) => {
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/update-password`,
+      redirectTo: getPasswordRecoveryRedirectUrl(),
     });
     if (error) throw error;
     return { success: true, error: null };
@@ -153,7 +161,7 @@ export const sendAccessInvitation = async (email) => {
 export const resetPassword = async (email) => {
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/update-password`,
+      redirectTo: getPasswordRecoveryRedirectUrl(),
     });
     return { error };
   } catch (err) {
@@ -176,6 +184,42 @@ export const updatePassword = async (newPassword) => {
   } catch (err) {
     console.error('Exception lors de la mise à jour du mot de passe:', err);
     return { error: err };
+  }
+};
+
+/**
+ * Etablit explicitement une session de récupération de mot de passe
+ * à partir des tokens reçus par email.
+ * @param {string} accessToken
+ * @param {string} refreshToken
+ * @returns {Promise<{ data: Object|null, error: Error|null }>}
+ */
+export const setRecoverySession = async (accessToken, refreshToken) => {
+  try {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    return { data, error };
+  } catch (err) {
+    console.error('Exception lors de l\'initialisation de la session de récupération:', err);
+    return { data: null, error: err };
+  }
+};
+
+/**
+ * Echange un code de récupération contre une session exploitable.
+ * @param {string} code
+ * @returns {Promise<{ data: Object|null, error: Error|null }>}
+ */
+export const exchangeRecoveryCodeForSession = async (code) => {
+  try {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    return { data, error };
+  } catch (err) {
+    console.error('Exception lors de l\'échange du code de récupération:', err);
+    return { data: null, error: err };
   }
 };
 

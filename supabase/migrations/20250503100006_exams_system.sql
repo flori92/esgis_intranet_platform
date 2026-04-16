@@ -28,9 +28,9 @@ BEGIN
             TO authenticated
             USING (
                 EXISTS (
-                    SELECT 1 FROM user_roles 
-                    WHERE user_roles.user_id = auth.uid() 
-                    AND user_roles.role = 'admin'
+                    SELECT 1 FROM profiles
+                    WHERE profiles.id = auth.uid()
+                    AND profiles.role = 'admin'
                 )
             );
 
@@ -79,9 +79,9 @@ BEGIN
             TO authenticated
             USING (
                 EXISTS (
-                    SELECT 1 FROM user_roles 
-                    WHERE user_roles.user_id = auth.uid() 
-                    AND user_roles.role = 'admin'
+                    SELECT 1 FROM profiles
+                    WHERE profiles.id = auth.uid()
+                    AND profiles.role = 'admin'
                 )
             );
 
@@ -138,9 +138,9 @@ BEGIN
             TO authenticated
             USING (
                 EXISTS (
-                    SELECT 1 FROM user_roles 
-                    WHERE user_roles.user_id = auth.uid() 
-                    AND user_roles.role = 'admin'
+                    SELECT 1 FROM profiles
+                    WHERE profiles.id = auth.uid()
+                    AND profiles.role = 'admin'
                 )
             );
 
@@ -181,6 +181,34 @@ BEGIN
                     AND student_exams.exam_id = exams.id
                 )
             );
+    ELSE
+        IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'exam_session_id') THEN
+            ALTER TABLE exams ADD COLUMN exam_session_id INTEGER REFERENCES exam_sessions(id) ON DELETE SET NULL;
+        END IF;
+
+        IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'exam_center_id') THEN
+            ALTER TABLE exams ADD COLUMN exam_center_id INTEGER REFERENCES exam_centers(id) ON DELETE SET NULL;
+        END IF;
+
+        IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'professor_id') THEN
+            ALTER TABLE exams ADD COLUMN professor_id INTEGER REFERENCES professors(id) ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'total_points') THEN
+            ALTER TABLE exams ADD COLUMN total_points NUMERIC(5,2) NOT NULL DEFAULT 20.00;
+        END IF;
+
+        IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'passing_grade') THEN
+            ALTER TABLE exams ADD COLUMN passing_grade NUMERIC(5,2) NOT NULL DEFAULT 10.00;
+        END IF;
+
+        IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'instructions') THEN
+            ALTER TABLE exams ADD COLUMN instructions TEXT;
+        END IF;
+
+        IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'max_students') THEN
+            ALTER TABLE exams ADD COLUMN max_students INTEGER;
+        END IF;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
@@ -217,9 +245,9 @@ BEGIN
             TO authenticated
             USING (
                 EXISTS (
-                    SELECT 1 FROM user_roles 
-                    WHERE user_roles.user_id = auth.uid() 
-                    AND user_roles.role = 'admin'
+                    SELECT 1 FROM profiles
+                    WHERE profiles.id = auth.uid()
+                    AND profiles.role = 'admin'
                 )
             );
 
@@ -265,9 +293,9 @@ BEGIN
             TO authenticated
             USING (
                 EXISTS (
-                    SELECT 1 FROM user_roles 
-                    WHERE user_roles.user_id = auth.uid() 
-                    AND user_roles.role = 'admin'
+                    SELECT 1 FROM profiles
+                    WHERE profiles.id = auth.uid()
+                    AND profiles.role = 'admin'
                 )
             );
 
@@ -370,9 +398,9 @@ BEGIN
             TO authenticated
             USING (
                 EXISTS (
-                    SELECT 1 FROM user_roles 
-                    WHERE user_roles.user_id = auth.uid() 
-                    AND user_roles.role = 'admin'
+                    SELECT 1 FROM profiles
+                    WHERE profiles.id = auth.uid()
+                    AND profiles.role = 'admin'
                 )
             );
 
@@ -429,9 +457,9 @@ BEGIN
             TO authenticated
             USING (
                 EXISTS (
-                    SELECT 1 FROM user_roles 
-                    WHERE user_roles.user_id = auth.uid() 
-                    AND user_roles.role = 'admin'
+                    SELECT 1 FROM profiles
+                    WHERE profiles.id = auth.uid()
+                    AND profiles.role = 'admin'
                 )
             );
 

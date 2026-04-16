@@ -34,9 +34,11 @@ import {
   getExams,
   getExamSessions,
   getExamCenters,
+  getExamAccessSettings,
   getExamRaw,
   getExamQuestions,
   getStudentExamsByExamId,
+  upsertExamAccessSettings,
   updateExamDirect,
   insertExam,
   deleteExamQuestions,
@@ -49,6 +51,7 @@ import {
 import { getFilieres, getPromotions } from '@/api/admin';
 import notificationService from '@/services/NotificationService';
 import { normalizeExamQuestion, serializeExamQuestion } from '@/utils/examQuestionUtils';
+import { generateExamAccessCode, hashExamAccessCode } from '@/utils/examSecurityUtils';
 import { getAllPracticeQuizzes } from '@/api/quiz';
 
 // Composants du formulaire
@@ -131,6 +134,12 @@ const ExamFormPage = () => {
     passing_grade: 10,
     status: 'draft',
     share_token: null,
+    access_code_required: false,
+    allow_direct_join: false,
+    max_cheating_alerts: 3,
+    access_code: '',
+    has_access_code: false,
+    existing_access_code_hash: null,
     filiere_id: null,
     student_group_id: null,
     promotion_id: null
@@ -171,7 +180,8 @@ const ExamFormPage = () => {
         { exams: allExamsData, error: allExamsError },
         { data: practiceQuizzesData, error: practiceQuizzesError },
         { data: filieresData, error: filieresError },
-        { data: studentGroupsData, error: studentGroupsError }
+        { data: studentGroupsData, error: studentGroupsError },
+        { data: promotionsData, error: promotionsError }
       ] = await Promise.all([
         getCoursesList(),
         getExamSessions(),
@@ -274,11 +284,13 @@ const ExamFormPage = () => {
       const [
         { data: examData, error: examError },
         { data: questionsData, error: questionsError },
-        { data: studentsData, error: studentsError }
+        { data: studentsData, error: studentsError },
+        { data: accessSettingsData, error: accessSettingsError }
       ] = await Promise.all([
         getExamRaw(examId),
         getExamQuestions(examId),
-        getStudentExamsByExamId(examId)
+        getStudentExamsByExamId(examId),
+        getExamAccessSettings(examId)
       ]);
       
       if (examError) {
@@ -288,8 +300,20 @@ const ExamFormPage = () => {
       if (!examData) {
         throw new Error('Examen non trouvé');
       }
+
+      if (accessSettingsError) {
+        throw accessSettingsError;
+      }
       
-      setExam(examData);
+      setExam({
+        ...examData,
+        access_code: '',
+        has_access_code: Boolean(accessSettingsData?.access_code_hash),
+        existing_access_code_hash: accessSettingsData?.access_code_hash || null,
+        access_code_required: Boolean(examData.access_code_required),
+        allow_direct_join: Boolean(examData.allow_direct_join),
+        max_cheating_alerts: Number(examData.max_cheating_alerts || 3)
+      });
       
       if (questionsError) {
         throw questionsError;
@@ -351,6 +375,11 @@ const ExamFormPage = () => {
         
         if (exam.passing_grade <= 0 || exam.passing_grade > exam.total_points) {
           errors.passingGrade = 'La note de passage doit être comprise entre 1 et le total des points';
+          isValid = false;
+        }
+
+        if (exam.access_code_required && !exam.has_access_code && !String(exam.access_code || '').trim()) {
+          errors.accessCode = 'Un code d\'accès doit être configuré pour sécuriser cette épreuve';
           isValid = false;
         }
         break;
@@ -437,10 +466,17 @@ const ExamFormPage = () => {
     setError(null);
     
     try {
+      const now = new Date().toISOString();
+      const {
+        access_code,
+        has_access_code,
+        existing_access_code_hash,
+        ...examPayload
+      } = exam;
       const examData = {
-        ...exam,
+        ...examPayload,
         status: publish ? 'published' : 'draft',
-        updated_at: new Date().toISOString()
+        updated_at: now
       };
       
       let examId = exam.id;
@@ -455,7 +491,7 @@ const ExamFormPage = () => {
         }
       } else {
         // Création
-        examData.created_at = new Date().toISOString();
+        examData.created_at = now;
         
         const { data: insertData, error: insertError } = await insertExam(examData);
         
@@ -464,7 +500,22 @@ const ExamFormPage = () => {
         }
         
         examId = insertData.id;
-        setExam({ ...examData, id: examId });
+        setExam((previous) => ({ ...previous, id: examId }));
+      }
+
+      const nextAccessCodeHash = access_code
+        ? await hashExamAccessCode(access_code)
+        : (exam.access_code_required ? existing_access_code_hash : null);
+
+      const { error: accessSettingsSaveError } = await upsertExamAccessSettings({
+        exam_id: examId,
+        access_code_hash: nextAccessCodeHash,
+        max_failed_attempts: 5,
+        last_rotated_at: access_code ? now : null
+      });
+
+      if (accessSettingsSaveError) {
+        throw accessSettingsSaveError;
       }
       
       // Mettre à jour ou créer les questions
@@ -560,6 +611,13 @@ const ExamFormPage = () => {
       }
       
       setSuccessMessage(`L'examen a été ${isEditing ? 'mis à jour' : 'créé'} avec succès ${publish ? 'et publié' : ''}.`);
+      setExam((previous) => ({
+        ...previous,
+        id: examId,
+        access_code: '',
+        has_access_code: Boolean(nextAccessCodeHash),
+        existing_access_code_hash: nextAccessCodeHash
+      }));
       
       // Rediriger vers la liste des examens après un court délai
       setTimeout(() => {
@@ -603,6 +661,16 @@ const ExamFormPage = () => {
   const handleCancelConfirm = () => {
     setCancelDialogOpen(false);
     navigate('/professor/exams');
+  };
+
+  const handleGenerateAccessCode = () => {
+    try {
+      handleExamChange('access_code_required', true);
+      handleExamChange('access_code', generateExamAccessCode());
+      handleExamChange('has_access_code', true);
+    } catch (generationError) {
+      setError(generationError.message || "Impossible de générer un code d'accès.");
+    }
   };
 
   // Si chargement de l'examen
@@ -681,6 +749,16 @@ const ExamFormPage = () => {
               setStudentGroupId={(value) => handleExamChange('student_group_id', value)}
               promotionId={exam.promotion_id}
               setPromotionId={(value) => handleExamChange('promotion_id', value)}
+              accessCodeRequired={exam.access_code_required}
+              setAccessCodeRequired={(value) => handleExamChange('access_code_required', value)}
+              accessCode={exam.access_code}
+              setAccessCode={(value) => handleExamChange('access_code', value)}
+              hasAccessCode={exam.has_access_code}
+              allowDirectJoin={exam.allow_direct_join}
+              setAllowDirectJoin={(value) => handleExamChange('allow_direct_join', value)}
+              maxCheatingAlerts={exam.max_cheating_alerts}
+              setMaxCheatingAlerts={(value) => handleExamChange('max_cheating_alerts', value)}
+              onGenerateAccessCode={handleGenerateAccessCode}
               courses={courses}
               allExams={allExams.filter(e => e.id !== exam.id)}
               practiceQuizzes={practiceQuizzes}
@@ -786,7 +864,27 @@ const ExamFormPage = () => {
                     <strong>Centre:</strong> {centers.find(c => c.id === exam.exam_center_id)?.name || 'Non défini'}
                   </Typography>
                 </Box>
-                
+
+                <Divider sx={{ my: 2 }} />
+
+                <Typography variant="subtitle1" gutterBottom>
+                  Sécurité
+                </Typography>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body1" gutterBottom>
+                    <strong>Code d'accès requis:</strong> {exam.access_code_required ? 'Oui' : 'Non'}
+                  </Typography>
+
+                  <Typography variant="body1" gutterBottom>
+                    <strong>Inscription via lien:</strong> {exam.allow_direct_join ? 'Autorisée' : 'Désactivée'}
+                  </Typography>
+
+                  <Typography variant="body1">
+                    <strong>Seuil anti-triche:</strong> {exam.max_cheating_alerts || 3} alerte(s)
+                  </Typography>
+                </Box>
+
                 <Divider sx={{ my: 2 }} />
                 
                 <Typography variant="subtitle1" gutterBottom>

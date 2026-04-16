@@ -44,6 +44,7 @@ export const NOTIFICATION_TYPES = {
 class NotificationService {
   constructor() {
     this.initialized = false;
+    this.initPromise = null;
   }
 
   /**
@@ -51,27 +52,45 @@ class NotificationService {
    */
   async init() {
     if (this.initialized) return;
-    
-    try {
-      const OneSignal = (await import('react-onesignal')).default;
-      await OneSignal.init({
-        appId: ONESIGNAL_APP_ID,
-        allowLocalhostAsSecureOrigin: true,
-        notifyButton: {
-          enable: true,
-        },
-        welcomeNotification: {
-          disable: false,
-          title: "ESGIS Campus",
-          message: "Merci de vous être abonné aux notifications !"
-        }
+    if (this.initPromise) return this.initPromise;
+
+    const startInitialization = async () => {
+      try {
+        const OneSignal = (await import('react-onesignal')).default;
+        await OneSignal.init({
+          appId: ONESIGNAL_APP_ID,
+          allowLocalhostAsSecureOrigin: true,
+          notifyButton: {
+            enable: true,
+          },
+          welcomeNotification: {
+            disable: false,
+            title: "ESGIS Campus",
+            message: "Merci de vous être abonné aux notifications !"
+          }
+        });
+        this.initialized = true;
+        this.oneSignalRef = OneSignal;
+        console.log('OneSignal initialisé avec succès');
+      } catch (error) {
+        console.error('Erreur initialisation OneSignal:', error);
+      } finally {
+        this.initPromise = null;
+      }
+    };
+
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      this.initPromise = new Promise((resolve) => {
+        window.requestIdleCallback(async () => {
+          await startInitialization();
+          resolve();
+        }, { timeout: 2000 });
       });
-      this.initialized = true;
-      this.oneSignalRef = OneSignal;
-      console.log('OneSignal initialisé avec succès');
-    } catch (error) {
-      console.error('Erreur initialisation OneSignal:', error);
+      return this.initPromise;
     }
+    
+    this.initPromise = startInitialization();
+    return this.initPromise;
   }
 
   /**

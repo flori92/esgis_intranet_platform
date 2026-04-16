@@ -562,6 +562,8 @@ export const saveBulletin = async (bulletinData) => {
         generated_by: bulletinData.generated_by || null,
         approved_by: bulletinData.approved_by || null,
         approval_date: bulletinData.approval_date || null,
+        manual_deposit: bulletinData.manual_deposit ?? true,
+        deposit_note: bulletinData.deposit_note || 'Bulletin de notes',
       })
       .select();
 
@@ -1976,4 +1978,3 @@ export const createPromotion = async (promotionData) => {
     return { data: null, error };
   }
 };
-
