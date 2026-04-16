@@ -7,28 +7,25 @@
       "esnext"
     ],
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
+    "types": [],
+    "skipLibCheck": true,
     "checkJs": false,
-    "maxNodeModuleJsDepth": 0,
-    "ignoreDeprecations": "5.0"
-  },
-  "typeAcquisition": {
-    "enable": false
+    "noEmit": true
   },
   "include": [
-    "src/**/*"
+    "src/**/*.js",
+    "src/**/*.jsx"
   ],
   "exclude": [
     "node_modules",
     "build",
-    "dist",
-    "**/node_modules/*"
+    "dist"
   ]
 }
