@@ -1,0 +1,122 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Quiz API – manifeste Kubernetes pour le namespace "gamecloud"
+# Déployer avec : kubectl apply -f k8s/quiz-api.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gamecloud
+
+---
+# Secret contenant les credentials Supabase
+# Les valeurs sont encodées en base64 :
+#   echo -n "valeur" | base64
+apiVersion: v1
+kind: Secret
+metadata:
+  name: quiz-api-supabase-secret
+  namespace: gamecloud
+type: Opaque
+stringData:
+  SUPABASE_URL: "https://zsuszjlgatsylleuopff.supabase.co"
+  SUPABASE_ANON_KEY: "sb_publishable_WhDH9xamIFx17hcjukOtuQ_L96ItmW0"
+
+---
+# ConfigMap pour les paramètres non-sensibles
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quiz-api-config
+  namespace: gamecloud
+data:
+  PORT: "3001"
+  NODE_ENV: "production"
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quiz-api
+  namespace: gamecloud
+  labels:
+    app: quiz-api
+    version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quiz-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: quiz-api
+    spec:
+      containers:
+        - name: quiz-api
+          image: quiz-api:latest
+          imagePullPolicy: Never          # image locale chargée via Kind
+          ports:
+            - containerPort: 3001
+              name: http
+          envFrom:
+            - configMapRef:
+                name: quiz-api-config
+          env:
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: quiz-api-supabase-secret
+                  key: SUPABASE_URL
+            - name: SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: quiz-api-supabase-secret
+                  key: SUPABASE_ANON_KEY
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+      restartPolicy: Always
+
+---
+# Service (ClusterIP + NodePort pour accès local Kind)
+apiVersion: v1
+kind: Service
+metadata:
+  name: quiz-api
+  namespace: gamecloud
+  labels:
+    app: quiz-api
+spec:
+  selector:
+    app: quiz-api
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 3001
+      nodePort: 30301
+  type: NodePort
