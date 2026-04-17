@@ -100,7 +100,7 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
   }
 
   return (
-    <Card elevation={3} sx={{ mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+    <Card elevation={3} sx={{ mb: 3, background: 'linear-gradient(135deg, #003366 0%, #004080 50%, #0055aa 100%)' }}>
       <CardContent sx={{ color: 'white' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Box>

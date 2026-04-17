@@ -104,13 +104,9 @@ export const getCourseAttendanceStats = async (courseId) => {
     const { data: attendances, error: attError } = await supabase
       .from('attendances')
       .select(`
+        session_id,
         student_id,
-        status,
-        students(
-          id,
-          student_number,
-          profiles(full_name)
-        )
+        status
       `)
       .in('session_id', sessionIds);
 
@@ -124,10 +120,11 @@ export const getCourseAttendanceStats = async (courseId) => {
       .from('student_courses')
       .select(`
         student_id,
-        students(
+        student_entity_id,
+        students!inner(
           id,
           student_number,
-          profiles(full_name)
+          profiles!inner(full_name)
         )
       `)
       .eq('course_id', courseId);
@@ -135,9 +132,10 @@ export const getCourseAttendanceStats = async (courseId) => {
     if (studentsError) throw studentsError;
 
     // Initialiser les statistiques pour chaque étudiant
-    enrolledStudents.forEach(({ student_id, students }) => {
-      studentStats[student_id] = {
+    enrolledStudents.forEach(({ student_id, student_entity_id, students }) => {
+      studentStats[student_entity_id] = {
         student_id,
+        student_entity_id,
         student_number: students.student_number,
         full_name: students.profiles.full_name,
         total_sessions: totalSessions,
