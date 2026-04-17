@@ -177,35 +177,47 @@ export const getCourseAttendanceStats = async (courseId) => {
 };
 
 /**
- * Récupère les statistiques de présence pour tous les cours de l'institution
+ * Récupère les statistiques de présence pour tous les cours du professeur authentifié
  * @returns {Promise<Array>} Statistiques globales par étudiant
  */
 export const getAllCoursesAttendanceStats = async () => {
   try {
-    // Récupérer tous les cours avec des sessions
+    // Récupérer l'ID du professeur authentifié
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    
+    if (!user) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    // Récupérer les cours du professeur avec des sessions
     const { data: coursesWithSessions, error: coursesError } = await supabase
-      .from('courses')
+      .from('professor_courses')
       .select(`
-        id,
-        name,
-        code,
-        course_sessions!inner(id, date)
+        course_id,
+        courses!inner(
+          id,
+          name,
+          code,
+          course_sessions!inner(id, date)
+        )
       `)
-      .not('course_sessions', 'is', null);
+      .eq('professor_id', user.id)
+      .not('courses.course_sessions', 'is', null');
 
     if (coursesError) throw coursesError;
 
     const allStats = [];
     
     // Pour chaque cours, calculer les statistiques
-    for (const course of coursesWithSessions) {
-      const { data: courseStats, error: statsError } = await getCourseAttendanceStats(course.id);
+    for (const courseData of coursesWithSessions) {
+      const { data: courseStats, error: statsError } = await getCourseAttendanceStats(courseData.course_id);
       
       if (!statsError && courseStats.length > 0) {
         allStats.push({
-          course_id: course.id,
-          course_name: course.name,
-          course_code: course.code,
+          course_id: courseData.course_id,
+          course_name: courseData.courses.name,
+          course_code: courseData.courses.code,
           students: courseStats
         });
       }
@@ -258,6 +270,42 @@ export const getAllCoursesAttendanceStats = async () => {
     return { data: finalStats, error: null };
   } catch (error) {
     console.error('getAllCoursesAttendanceStats:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Récupère les cours du professeur authentifié
+ * @returns {Promise<Array>} Liste des cours du professeur
+ */
+export const getProfessorCourses = async () => {
+  try {
+    // Récupérer l'ID du professeur authentifié
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    
+    if (!user) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    // Récupérer les cours du professeur
+    const { data: courses, error: coursesError } = await supabase
+      .from('professor_courses')
+      .select(`
+        course_id,
+        courses!inner(
+          id,
+          name,
+          code
+        )
+      `)
+      .eq('professor_id', user.id);
+
+    if (coursesError) throw coursesError;
+
+    return { data: courses || [], error: null };
+  } catch (error) {
+    console.error('getProfessorCourses:', error);
     return { data: [], error };
   }
 };

@@ -27,11 +27,12 @@ import {
   ChevronRight as ChevronRightIcon,
   School as SchoolIcon
 } from '@mui/icons-material';
-import { getCourseAttendanceStats, getAllCoursesAttendanceStats } from '@/api/attendances';
+import { getCourseAttendanceStats, getAllCoursesAttendanceStats, getProfessorCourses } from '@/api/attendances';
 
 const AttendanceStatsBanner = ({ courseId, courseName }) => {
   const [globalStats, setGlobalStats] = useState([]);
   const [courseStats, setCourseStats] = useState([]);
+  const [professorCourses, setProfessorCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentView, setCurrentView] = useState('global'); // 'global' or 'course'
@@ -39,6 +40,16 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
   // Carrousel state
   const [currentIndex, setCurrentIndex] = useState(0);
   const itemsPerPage = 6;
+
+  const loadProfessorCourses = async () => {
+    try {
+      const { data, error: apiError } = await getProfessorCourses();
+      if (apiError) throw apiError;
+      setProfessorCourses(data || []);
+    } catch (err) {
+      console.error('Erreur lors du chargement des cours du professeur:', err);
+    }
+  };
 
   const loadGlobalStats = async () => {
     setLoading(true);
@@ -50,7 +61,7 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
       setGlobalStats(data || []);
     } catch (err) {
       console.error('Erreur lors du chargement des statistiques globales:', err);
-      setError('Impossible de charger les statistiques globales');
+      setError('Impossible de charger les statistiques de vos cours');
     } finally {
       setLoading(false);
     }
@@ -75,6 +86,7 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
   };
 
   useEffect(() => {
+    loadProfessorCourses();
     loadGlobalStats();
   }, []);
 
@@ -259,7 +271,7 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
               Statistiques de Présence
             </Typography>
             <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>
-              {currentView === 'global' ? 'Vue Globale - Tous les cours' : (courseName || 'Cours')}
+              {currentView === 'global' ? 'Mes Cours - Tous mes cours' : (courseName || 'Cours')}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -305,7 +317,7 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
           <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
         ) : (currentView === 'global' ? globalStats : courseStats).length === 0 ? (
           <Alert severity="info" sx={{ mb: 2 }}>
-            {currentView === 'global' ? 'Aucune statistique globale disponible.' : 'Aucune statistique disponible pour ce cours.'}
+            {currentView === 'global' ? 'Aucune statistique disponible pour vos cours.' : 'Aucune statistique disponible pour ce cours.'}
           </Alert>
         ) : (
           <>
