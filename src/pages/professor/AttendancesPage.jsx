@@ -24,6 +24,7 @@ import { getSessionAttendances, bulkUpsertAttendances } from '@/api/attendances'
 import { getStudentsByCourse } from '@/api/grades'; // Reusing this to fetch enrolled students
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import AttendanceStatsBanner from '@/components/AttendanceStatsBanner';
 
 const STATUS_CONFIG = {
   present: { label: 'Présent', color: 'success', icon: <PresentIcon fontSize="small" /> },
@@ -188,11 +189,16 @@ const AttendancesPage = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Stack direction="row" alignItems="center" spacing={2} mb={4}>
-        <EventIcon color="primary" fontSize="large" />
-        <Typography variant="h4" fontWeight="bold">Fiche d'Émargement</Typography>
-      </Stack>
-
+      <Typography variant="h4" fontWeight="bold" gutterBottom>
+        Gestion des Présences
+      </Typography>
+      
+      {/* Hero Banner avec statistiques de présence */}
+      <AttendanceStatsBanner 
+        courseId={selectedSession?.course_id} 
+        courseName={selectedSession?.courses?.name}
+      />
+      
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>}
 
