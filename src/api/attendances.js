@@ -177,6 +177,92 @@ export const getCourseAttendanceStats = async (courseId) => {
 };
 
 /**
+ * Récupère les statistiques de présence pour tous les cours de l'institution
+ * @returns {Promise<Array>} Statistiques globales par étudiant
+ */
+export const getAllCoursesAttendanceStats = async () => {
+  try {
+    // Récupérer tous les cours avec des sessions
+    const { data: coursesWithSessions, error: coursesError } = await supabase
+      .from('courses')
+      .select(`
+        id,
+        name,
+        code,
+        course_sessions!inner(id, date)
+      `)
+      .not('course_sessions', 'is', null);
+
+    if (coursesError) throw coursesError;
+
+    const allStats = [];
+    
+    // Pour chaque cours, calculer les statistiques
+    for (const course of coursesWithSessions) {
+      const { data: courseStats, error: statsError } = await getCourseAttendanceStats(course.id);
+      
+      if (!statsError && courseStats.length > 0) {
+        allStats.push({
+          course_id: course.id,
+          course_name: course.name,
+          course_code: course.code,
+          students: courseStats
+        });
+      }
+    }
+
+    // Aplatir toutes les statistiques par étudiant
+    const studentGlobalStats = {};
+    
+    allStats.forEach(courseStat => {
+      courseStat.students.forEach(student => {
+        if (!studentGlobalStats[student.student_entity_id]) {
+          studentGlobalStats[student.student_entity_id] = {
+            student_id: student.student_id,
+            student_entity_id: student.student_entity_id,
+            student_number: student.student_number,
+            full_name: student.full_name,
+            courses: [],
+            total_sessions: 0,
+            total_present: 0,
+            global_attendance_rate: 0
+          };
+        }
+        
+        studentGlobalStats[student.student_entity_id].courses.push({
+          course_id: courseStat.course_id,
+          course_name: courseStat.course_name,
+          course_code: courseStat.course_code,
+          attendance_rate: student.attendance_rate,
+          attendance_summary: student.attendance_summary,
+          present_count: student.present_count,
+          total_sessions: student.total_sessions
+        });
+        
+        studentGlobalStats[student.student_entity_id].total_sessions += student.total_sessions;
+        studentGlobalStats[student.student_entity_id].total_present += student.present_count;
+      });
+    });
+
+    // Calculer le taux global de présence pour chaque étudiant
+    const finalStats = Object.values(studentGlobalStats).map(student => ({
+      ...student,
+      global_attendance_rate: student.total_sessions > 0 ? 
+        Math.round((student.total_present / student.total_sessions) * 100) : 0,
+      global_summary: `${student.total_present}/${student.total_sessions} séances`
+    }));
+
+    // Trier par taux de présence global décroissant
+    finalStats.sort((a, b) => b.global_attendance_rate - a.global_attendance_rate);
+
+    return { data: finalStats, error: null };
+  } catch (error) {
+    console.error('getAllCoursesAttendanceStats:', error);
+    return { data: [], error };
+  }
+};
+
+/**
  * Récupère le bilan des absences d'un étudiant (pour l'étudiant lui-même)
  * @param {number} studentId (integer ID de la table students)
  */
