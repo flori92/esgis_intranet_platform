@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -33,26 +33,36 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
   const [globalStats, setGlobalStats] = useState([]);
   const [courseStats, setCourseStats] = useState([]);
   const [professorCourses, setProfessorCourses] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingGlobal, setLoadingGlobal] = useState(false);
+  const [loadingCourse, setLoadingCourse] = useState(false);
+  const [loadingCourses, setLoadingCourses] = useState(false);
   const [error, setError] = useState(null);
   const [currentView, setCurrentView] = useState('global'); // 'global' or 'course'
+  const [initialized, setInitialized] = useState(false);
   
   // Carrousel state
   const [currentIndex, setCurrentIndex] = useState(0);
   const itemsPerPage = 6;
 
-  const loadProfessorCourses = async () => {
+  const loadProfessorCourses = useCallback(async () => {
+    if (loadingCourses) return; // Éviter les appels multiples
+    
+    setLoadingCourses(true);
     try {
       const { data, error: apiError } = await getProfessorCourses();
       if (apiError) throw apiError;
       setProfessorCourses(data || []);
     } catch (err) {
       console.error('Erreur lors du chargement des cours du professeur:', err);
+    } finally {
+      setLoadingCourses(false);
     }
-  };
+  }, [loadingCourses]);
 
-  const loadGlobalStats = async () => {
-    setLoading(true);
+  const loadGlobalStats = useCallback(async () => {
+    if (loadingGlobal) return; // Éviter les appels multiples
+    
+    setLoadingGlobal(true);
     setError(null);
     
     try {
@@ -63,14 +73,14 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
       console.error('Erreur lors du chargement des statistiques globales:', err);
       setError('Impossible de charger les statistiques de vos cours');
     } finally {
-      setLoading(false);
+      setLoadingGlobal(false);
     }
-  };
+  }, [loadingGlobal]);
 
-  const loadCourseStats = async () => {
-    if (!courseId) return;
+  const loadCourseStats = useCallback(async () => {
+    if (!courseId || loadingCourse) return; // Éviter les appels multiples
     
-    setLoading(true);
+    setLoadingCourse(true);
     setError(null);
     
     try {
@@ -81,14 +91,21 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
       console.error('Erreur lors du chargement des statistiques du cours:', err);
       setError('Impossible de charger les statistiques de présence');
     } finally {
-      setLoading(false);
+      setLoadingCourse(false);
     }
-  };
+  }, [courseId, loadingCourse]);
 
+  // Chargement initial optimisé
   useEffect(() => {
-    loadProfessorCourses();
-    loadGlobalStats();
-  }, []);
+    const initializeData = async () => {
+      setInitialized(false);
+      await loadProfessorCourses();
+      await loadGlobalStats();
+      setInitialized(true);
+    };
+    
+    initializeData();
+  }, [loadProfessorCourses, loadGlobalStats]);
 
   useEffect(() => {
     if (courseId) {
@@ -96,8 +113,9 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
       setCurrentView('course');
     } else {
       setCurrentView('global');
+      loadGlobalStats(); // Recharger les stats globales quand on déselectionne un cours
     }
-  }, [courseId]);
+  }, [courseId, loadCourseStats, loadGlobalStats]);
 
   // Carrousel navigation
   const handleNext = () => {
@@ -303,15 +321,18 @@ const AttendanceStatsBanner = ({ courseId, courseName }) => {
               <PersonIcon sx={{ mr: 1, fontSize: 16 }} />
               Global
             </Button>
-            <IconButton onClick={currentView === 'global' ? loadGlobalStats : loadCourseStats} sx={{ color: 'white' }} disabled={loading}>
+            <IconButton onClick={currentView === 'global' ? loadGlobalStats : loadCourseStats} sx={{ color: 'white' }} disabled={currentView === 'global' ? loadingGlobal : loadingCourse}>
               <RefreshIcon />
             </IconButton>
           </Box>
         </Box>
 
-        {loading ? (
+        {!initialized || (currentView === 'global' ? loadingGlobal : loadingCourse) ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress sx={{ color: 'white' }} />
+            <Typography variant="body2" sx={{ ml: 2, color: 'white' }}>
+              {!initialized ? 'Chargement initial...' : 'Chargement des statistiques...'}
+            </Typography>
           </Box>
         ) : error ? (
           <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
