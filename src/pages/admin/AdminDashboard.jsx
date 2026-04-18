@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Box,
   Paper,
@@ -17,432 +17,163 @@ import {
   TableHead,
   TableRow,
   Chip,
-  LinearProgress,
+  Stack,
+  alpha
 } from '@mui/material';
 import {
   People as PeopleIcon,
   School as SchoolIcon,
   BarChart as BarChartIcon,
   Warning as WarningIcon,
-  CheckCircle as CheckCircleIcon,
+  Refresh as RefreshIcon,
+  ArrowForward as ArrowForwardIcon,
   Settings as SettingsIcon,
-  Edit as EditIcon,
+  History as HistoryIcon,
+  Business as DeptIcon,
+  LibraryBooks as CoursesIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '@/supabase';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/context/AuthContext';
+import { getAdminDashboardData } from '@/api/adminDashboard';
 
-/**
- * Dashboard Admin - Vue d'ensemble du système
- */
+const NAVY = '#003366';
+const CARD_RADIUS = 3;
+
+const StatCard = ({ title, value, icon, color, link }) => (
+  <Card elevation={0} 
+    sx={{ 
+      height: '100%', borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider',
+      borderTop: `4px solid ${color}`, transition: 'all 0.2s ease',
+      '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 10px 20px rgba(0,0,0,0.05)' }
+    }}
+  >
+    <CardContent>
+      <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Box>
+          <Typography color="text.secondary" variant="overline" fontWeight="700">{title}</Typography>
+          <Typography variant="h4" fontWeight="900" sx={{ color: NAVY }}>{value}</Typography>
+        </Box>
+        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(color, 0.1), color: color }}>
+          {icon}
+        </Box>
+      </Stack>
+    </CardContent>
+    {link && (
+      <CardActions sx={{ px: 2, pb: 2 }}>
+        <Button size="small" component={Link} to={link} endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}>
+          Détails
+        </Button>
+      </CardActions>
+    )}
+  </Card>
+);
+
+const ManagementLink = ({ title, desc, link, icon }) => (
+  <Card elevation={0} sx={{ height: '100%', borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider' }}>
+    <CardContent>
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+        <Box sx={{ color: NAVY }}>{icon}</Box>
+        <Typography variant="h6" fontWeight="800">{title}</Typography>
+      </Stack>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, minHeight: 40 }}>{desc}</Typography>
+    </CardContent>
+    <CardActions sx={{ px: 2, pb: 2, mt: 'auto' }}>
+      <Button variant="outlined" size="small" component={Link} to={link} fullWidth sx={{ borderRadius: 2 }}>
+        Gérer
+      </Button>
+    </CardActions>
+  </Card>
+);
+
 const AdminDashboard = () => {
   const { authState } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [stats, setStats] = useState({
-    totalStudents: 0,
-    totalProfessors: 0,
-    totalDepartments: 0,
-    totalCourses: 0,
-    activeSessions: 0,
-    pendingCorrections: 0,
+  
+  const { data: dashboardRes, isLoading, error, refetch } = useQuery({
+    queryKey: ['adminDashboard'],
+    queryFn: getAdminDashboardData,
+    staleTime: 1000 * 60 * 5,
   });
-  const [recentActivity, setRecentActivity] = useState([]);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Estudiants
-      const { count: studentsCount } = await supabase
-        .from('students')
-        .select('id', { count: 'exact' })
-        .eq('status', 'actif');
-
-      // Professors
-      const { count: professorsCount } = await supabase
-        .from('professors')
-        .select('id', { count: 'exact' });
-
-      // Departments
-      const { count: departmentsCount } = await supabase
-        .from('departments')
-        .select('id', { count: 'exact' });
-
-      // Courses
-      const { count: coursesCount } = await supabase
-        .from('courses')
-        .select('id', { count: 'exact' });
-
-      // Active exam sessions
-      const { count: sessionsCount } = await supabase
-        .from('exam_sessions')
-        .select('id', { count: 'exact' })
-        .eq('status', 'in_progress');
-
-      // Pending corrections
-      const { count: correctionsCount } = await supabase
-        .from('demandes_correction_notes')
-        .select('id', { count: 'exact' })
-        .eq('status', 'pending');
-
-      setStats({
-        totalStudents: studentsCount || 0,
-        totalProfessors: professorsCount || 0,
-        totalDepartments: departmentsCount || 0,
-        totalCourses: coursesCount || 0,
-        activeSessions: sessionsCount || 0,
-        pendingCorrections: correctionsCount || 0,
-      });
-
-      // Activité récente
-      const { data: activityData } = await supabase
-        .from('audit_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      setRecentActivity(activityData || []);
-    } catch (err) {
-      console.error('Erreur chargement dashboard:', err);
-      setError('Impossible de charger le dashboard');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <CircularProgress />
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '70vh', gap: 2 }}>
+        <CircularProgress size={48} sx={{ color: NAVY }} />
+        <Typography variant="body2" color="text.secondary" fontWeight="500">Initialisation de la console...</Typography>
       </Box>
     );
   }
 
+  const { stats, recentActivity } = dashboardRes?.data || { stats: {}, recentActivity: [] };
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Tableau de Bord Admin
-      </Typography>
+    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1440, mx: 'auto' }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2} sx={{ mb: 4 }}>
+        <Box>
+          <Typography variant="h4" fontWeight="900" sx={{ letterSpacing: '-0.5px' }}>Console Admin</Typography>
+          <Typography variant="body1" color="text.secondary">Vue d'ensemble de la plateforme ESGIS Campus</Typography>
+        </Box>
+        <Button variant="contained" startIcon={<RefreshIcon />} onClick={() => refetch()} sx={{ borderRadius: 2, bgcolor: NAVY }}>
+          Actualiser
+        </Button>
+      </Stack>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 3 }}>Erreur de chargement des données</Alert>}
 
-      {/* Statistiques principales */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 6 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Étudiants Actifs
-                  </Typography>
-                  <Typography variant="h4">{stats.totalStudents}</Typography>
-                </Box>
-                <PeopleIcon sx={{ fontSize: 40, color: '#2196f3' }} />
-              </Box>
-            </CardContent>
-            <CardActions>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/students"
-              >
-                Voir Tous
-              </Button>
-            </CardActions>
-          </Card>
+          <StatCard title="Étudiants Actifs" value={stats.totalStudents} icon={<PeopleIcon />} color="#2196f3" link="/admin/students" />
         </Grid>
-
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Professeurs
-                  </Typography>
-                  <Typography variant="h4">{stats.totalProfessors}</Typography>
-                </Box>
-                <SchoolIcon sx={{ fontSize: 40, color: '#4caf50' }} />
-              </Box>
-            </CardContent>
-            <CardActions>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/professors"
-              >
-                Voir Tous
-              </Button>
-            </CardActions>
-          </Card>
+          <StatCard title="Professeurs" value={stats.totalProfessors} icon={<SchoolIcon />} color="#4caf50" link="/admin/professors" />
         </Grid>
-
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Cours
-                  </Typography>
-                  <Typography variant="h4">{stats.totalCourses}</Typography>
-                </Box>
-                <BarChartIcon sx={{ fontSize: 40, color: '#ff9800' }} />
-              </Box>
-            </CardContent>
-            <CardActions>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/courses"
-              >
-                Voir Tous
-              </Button>
-            </CardActions>
-          </Card>
+          <StatCard title="Cours" value={stats.totalCourses} icon={<CoursesIcon />} color="#ff9800" link="/admin/courses" />
         </Grid>
-
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Demandes Correction
-                  </Typography>
-                  <Typography variant="h4" sx={{ color: stats.pendingCorrections > 0 ? '#f44336' : '#4caf50' }}>
-                    {stats.pendingCorrections}
-                  </Typography>
-                </Box>
-                <WarningIcon sx={{ fontSize: 40, color: stats.pendingCorrections > 0 ? '#f44336' : '#4caf50' }} />
-              </Box>
-            </CardContent>
-            <CardActions>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/correction-requests"
-              >
-                Voir Tous
-              </Button>
-            </CardActions>
-          </Card>
+          <StatCard title="Corrections en attente" value={stats.pendingCorrections} icon={<WarningIcon />} color={stats.pendingCorrections > 0 ? '#f44336' : '#9e9e9e'} link="/admin/validation-queue" />
         </Grid>
       </Grid>
 
-      {/* Sections de gestion */}
-      <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-        Gestion
-      </Typography>
-
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Étudiants
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Créer, modifier, importer ou supprimer des étudiants
-              </Typography>
-            </CardContent>
-            <CardActions sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/students"
-              >
-                Liste
-              </Button>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/students/import"
-              >
-                Importer
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Professeurs
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Gérer les profils et assignations des professeurs
-              </Typography>
-            </CardContent>
-            <CardActions sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/professors"
-              >
-                Liste
-              </Button>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/professors/create"
-              >
-                Créer
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Cours
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Créer et configurer les cours
-              </Typography>
-            </CardContent>
-            <CardActions sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/courses"
-              >
-                Liste
-              </Button>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/courses/create"
-              >
-                Créer
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Départements
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Gérer les départements et leurs informations
-              </Typography>
-            </CardContent>
-            <CardActions sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/departments"
-              >
-                Liste
-              </Button>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/departments/create"
-              >
-                Créer
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Audit & Logs
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Consulter l'historique des actions et modifications
-              </Typography>
-            </CardContent>
-            <CardActions>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/audit"
-              >
-                Voir Logs
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Configuration
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Paramètres système et configuration globale
-              </Typography>
-            </CardContent>
-            <CardActions>
-              <Button
-                size="small"
-                component={Link}
-                to="/admin/settings"
-              >
-                Paramètres
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
+      <Typography variant="h5" fontWeight="900" gutterBottom sx={{ mb: 3 }}>Actions de Gestion</Typography>
+      <Grid container spacing={3} sx={{ mb: 6 }}>
+        <Grid item xs={12} sm={6} md={4}><ManagementLink title="Scolarité" desc="Gestion des inscriptions, départements et niveaux d'études." link="/admin/academic" icon={<DeptIcon />} /></Grid>
+        <Grid item xs={12} sm={6} md={4}><ManagementLink title="Utilisateurs" desc="Contrôle des accès, rôles et sécurité des comptes." link="/admin/users" icon={<PeopleIcon />} /></Grid>
+        <Grid item xs={12} sm={6} md={4}><ManagementLink title="Système" desc="Logs d'audit, configuration globale et outils avancés." link="/admin/settings" icon={<SettingsIcon />} /></Grid>
       </Grid>
 
-      {/* Activité récente */}
-      {recentActivity.length > 0 && (
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Activité Récente
-          </Typography>
+      <Paper elevation={0} sx={{ p: 3, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider' }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
+          <HistoryIcon color="action" />
+          <Typography variant="h6" fontWeight="800">Activité Récente du Système</Typography>
+        </Stack>
 
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                  <TableCell>Action</TableCell>
-                  <TableCell>Utilisateur</TableCell>
-                  <TableCell>Ressource</TableCell>
-                  <TableCell>Date</TableCell>
+        <TableContainer>
+          <Table size="small">
+            <TableHead sx={{ bgcolor: alpha(NAVY, 0.03) }}>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 800 }}>Action</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>Utilisateur</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>Ressource</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800 }}>Date</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {recentActivity.map(entry => (
+                <TableRow key={entry.id} hover>
+                  <TableCell><Chip label={entry.action} size="small" sx={{ fontWeight: 600, textTransform: 'capitalize' }} /></TableCell>
+                  <TableCell><Typography variant="body2">{entry.user_email || entry.user_id || 'Système'}</Typography></TableCell>
+                  <TableCell><Typography variant="body2" color="text.secondary">{entry.resource_type}</Typography></TableCell>
+                  <TableCell align="right"><Typography variant="caption">{format(new Date(entry.created_at), 'dd MMM yyyy HH:mm', { locale: fr })}</Typography></TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {recentActivity.map(entry => (
-                  <TableRow key={entry.id}>
-                    <TableCell>
-                      <Chip
-                        label={entry.action}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>{entry.user_id || 'System'}</TableCell>
-                    <TableCell>{entry.resource_type}</TableCell>
-                    <TableCell>
-                      {new Date(entry.created_at).toLocaleDateString('fr-FR')}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      )}
+              ))}
+              {recentActivity.length === 0 && (
+                <TableRow><TableCell colSpan={4} align="center" sx={{ py: 4 }}><Typography color="text.secondary">Aucune activité enregistrée</Typography></TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
     </Box>
   );
 };
