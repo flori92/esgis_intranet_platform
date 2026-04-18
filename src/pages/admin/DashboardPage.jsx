@@ -26,6 +26,12 @@ import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { getAdminDashboardData, getRecentAuditActivity } from '@/api/admin';
 import { getCMSBanners, getCMSNews, getCMSEvents } from '@/api/cms';
+import {
+  DASHBOARD_CARD_RADIUS,
+  getDashboardIconSx,
+  getDashboardInteractiveCardSx,
+  getDashboardPanelSx
+} from '@/components/dashboard/dashboardCardStyles';
 
 const fadeIn = keyframes`
   from { opacity: 0; transform: translateY(16px); }
@@ -36,6 +42,8 @@ const slideIn = keyframes`
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
 `;
+
+const NAVY = '#003366';
 
 const EMPTY_DASHBOARD = {
   stats: null, notifications: [], events: [], auditLogs: [], news: []
@@ -58,7 +66,7 @@ const HeroBanner = ({ banners }) => {
 
   return (
     <Paper elevation={6} sx={{
-      position: 'relative', mb: 4, borderRadius: 4, overflow: 'hidden',
+      position: 'relative', mb: 4, borderRadius: DASHBOARD_CARD_RADIUS, overflow: 'hidden',
       minHeight: { xs: 220, md: 300 }, display: 'flex', alignItems: 'center',
       backgroundImage: `url(${b.image_url})`, backgroundSize: 'cover', backgroundPosition: 'center',
       '&:hover .nav-btn': { opacity: 1 }
@@ -76,7 +84,7 @@ const HeroBanner = ({ banners }) => {
           <Button variant="contained" size="medium" endIcon={<ArrowForwardIcon />}
             component={b.cta_link.startsWith('/') ? Link : 'a'}
             {...(b.cta_link.startsWith('/') ? { to: b.cta_link } : { href: b.cta_link, target: '_blank' })}
-            sx={{ borderRadius: 3, px: 4, fontWeight: 800, bgcolor: '#CC0000', '&:hover': { bgcolor: '#aa0000' } }}
+            sx={{ borderRadius: DASHBOARD_CARD_RADIUS, px: 4, fontWeight: 800, bgcolor: '#CC0000', '&:hover': { bgcolor: '#aa0000' } }}
           >{b.cta_text}</Button>
         )}
       </Box>
@@ -100,23 +108,15 @@ const HeroBanner = ({ banners }) => {
 /* ── Stat Card ── */
 const StatCard = ({ icon, value, label, color, delay = 0 }) => (
   <Card sx={{
+    ...getDashboardInteractiveCardSx(color),
     height: '180px',
-    borderRadius: 3, 
-    boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-    border: `2px solid ${alpha(color, 0.5)}`,
     animation: `${fadeIn} 0.5s ease ${delay}s both`,
-    transition: 'all 0.25s', 
     display: 'flex',
-    flexDirection: 'column',
-    '&:hover': { 
-      transform: 'translateY(-4px)', 
-      boxShadow: `0 8px 24px ${alpha(color, 0.15)}`,
-      borderColor: color
-    }
+    flexDirection: 'column'
   }}>
     <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 2.5 }}>
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(color, 0.1), display: 'flex' }}>
+        <Box sx={getDashboardIconSx(color)}>
           {icon}
         </Box>
         <Typography variant="body2" color="text.secondary" fontWeight="700">{label}</Typography>
@@ -133,13 +133,11 @@ const EventCard = ({ event, index }) => {
   const d = formatShortDate(event.start_date);
   return (
     <Card sx={{
-      display: 'flex', borderRadius: 3, overflow: 'hidden',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+      ...getDashboardInteractiveCardSx('#003366'),
+      display: 'flex', overflow: 'hidden',
       animation: `${slideIn} 0.4s ease ${index * 0.08}s both`,
-      transition: 'all 0.25s',
-      '&:hover': { transform: 'translateX(6px)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', borderLeft: '3px solid #003366' }
     }}>
-      <Box sx={{ width: 70, minHeight: 75, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: alpha('#003366', 0.06), borderRight: '3px solid #003366' }}>
+      <Box sx={{ width: 70, minHeight: 75, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: alpha('#003366', 0.06), borderRight: `1px solid ${alpha('#003366', 0.14)}` }}>
         <Typography variant="h5" fontWeight="900" color="#003366">{d.day}</Typography>
         <Typography variant="caption" fontWeight="700" color="#003366">{d.month}</Typography>
       </Box>
@@ -213,7 +211,7 @@ const AdminDashboardPage = () => {
           </Typography>
           <Typography variant="h6" color="text.secondary" fontWeight="400">ESGIS Campus — Gestion Centrale</Typography>
         </Box>
-        <Paper elevation={0} sx={{ p: 2, borderRadius: 3, bgcolor: 'white', border: '1px solid', borderColor: 'divider' }}>
+        <Paper elevation={0} sx={{ ...getDashboardPanelSx(NAVY), p: 2 }}>
           <Stack direction="row" spacing={1} alignItems="center">
             <CalendarTodayIcon color="primary" />
             <Typography variant="subtitle1" fontWeight="bold">{format(new Date(), 'PPPP', { locale: fr })}</Typography>
@@ -226,8 +224,8 @@ const AdminDashboardPage = () => {
 
       {/* Action Rapide: Pending Requests */}
       {(dashboardData.stats?.pendingRequests || 0) > 0 && (
-        <Alert severity="warning" variant="outlined" sx={{ mb: 3, borderRadius: 3, border: '2px solid #f59e0b', bgcolor: alpha('#f59e0b', 0.04) }}
-          action={<Button variant="contained" color="warning" size="small" component={Link} to="/admin/requests" sx={{ borderRadius: 2, fontWeight: 'bold' }}>Valider</Button>}
+        <Alert severity="warning" variant="outlined" sx={{ mb: 3, borderRadius: DASHBOARD_CARD_RADIUS, border: '2px solid #f59e0b', bgcolor: alpha('#f59e0b', 0.04) }}
+          action={<Button variant="contained" color="warning" size="small" component={Link} to="/admin/requests" sx={{ borderRadius: DASHBOARD_CARD_RADIUS, fontWeight: 'bold' }}>Valider</Button>}
         >
           <Typography variant="subtitle1" fontWeight="bold">{dashboardData.stats.pendingRequests} demande(s) en attente de validation</Typography>
         </Alert>
@@ -248,10 +246,10 @@ const AdminDashboardPage = () => {
         <Grid item xs={12} md={8}>
           <Stack spacing={3}>
             {/* Audit Logs */}
-            <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+            <Card sx={getDashboardPanelSx(NAVY)}>
               <CardHeader title="Activité système récente" avatar={<AuditIcon sx={{ color: '#003366' }} />}
                 titleTypographyProps={{ fontWeight: 'bold' }}
-                action={<Button size="small" variant="outlined" component={Link} to="/admin/audit" endIcon={<ArrowForwardIcon />} sx={{ borderRadius: 2 }}>Journal complet</Button>}
+                action={<Button size="small" variant="outlined" component={Link} to="/admin/audit" endIcon={<ArrowForwardIcon />} sx={{ borderRadius: DASHBOARD_CARD_RADIUS }}>Journal complet</Button>}
               />
               <CardContent sx={{ pt: 0 }}>
                 {dashboardData.auditLogs.length > 0 ? (
@@ -281,13 +279,13 @@ const AdminDashboardPage = () => {
             {/* Quick Access Grid */}
             <Grid container spacing={2}>
               <Grid item xs={12} sm={4}>
-                <Button fullWidth variant="contained" component={Link} to="/admin/users" startIcon={<PeopleIcon />} sx={{ py: 2, borderRadius: 3, bgcolor: '#003366' }}>Utilisateurs</Button>
+                <Button fullWidth variant="contained" component={Link} to="/admin/users" startIcon={<PeopleIcon />} sx={{ py: 2, borderRadius: DASHBOARD_CARD_RADIUS, bgcolor: '#003366' }}>Utilisateurs</Button>
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Button fullWidth variant="contained" component={Link} to="/admin/departments" startIcon={<SettingsIcon />} sx={{ py: 2, borderRadius: 3, bgcolor: '#2e7d32' }}>Départements</Button>
+                <Button fullWidth variant="contained" component={Link} to="/admin/departments" startIcon={<SettingsIcon />} sx={{ py: 2, borderRadius: DASHBOARD_CARD_RADIUS, bgcolor: '#2e7d32' }}>Départements</Button>
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Button fullWidth variant="contained" component={Link} to="/admin/config" startIcon={<SecurityIcon />} sx={{ py: 2, borderRadius: 3, bgcolor: '#CC0000' }}>Sécurité</Button>
+                <Button fullWidth variant="contained" component={Link} to="/admin/config" startIcon={<SecurityIcon />} sx={{ py: 2, borderRadius: DASHBOARD_CARD_RADIUS, bgcolor: '#CC0000' }}>Sécurité</Button>
               </Grid>
             </Grid>
           </Stack>
@@ -297,7 +295,7 @@ const AdminDashboardPage = () => {
         <Grid item xs={12} md={4}>
           <Stack spacing={3}>
             {/* Events */}
-            <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+            <Card sx={getDashboardPanelSx(NAVY)}>
               <CardHeader title="Événements" avatar={<EventIcon sx={{ color: '#003366' }} />} titleTypographyProps={{ fontWeight: 'bold' }} />
               <CardContent sx={{ pt: 0 }}>
                 {cmsEvents.length > 0 ? (
@@ -310,7 +308,7 @@ const AdminDashboardPage = () => {
 
             {/* News */}
             {cmsNews.length > 0 && (
-              <Card sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <Card sx={getDashboardPanelSx('#CC0000')}>
                 <CardHeader title="Actualités" avatar={<CampaignIcon sx={{ color: '#CC0000' }} />} titleTypographyProps={{ fontWeight: 'bold' }} />
                 <CardContent sx={{ pt: 0 }}>
                   <List disablePadding>

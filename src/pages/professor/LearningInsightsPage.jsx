@@ -40,6 +40,12 @@ import {
   resetProfessorCourseCompletionSettings,
   upsertProfessorCourseCompletionSettings
 } from '@/api/professorLearningInsights';
+import {
+  DASHBOARD_CARD_RADIUS,
+  getDashboardInsetSx,
+  getDashboardInteractiveCardSx,
+  getDashboardPanelSx
+} from '@/components/dashboard/dashboardCardStyles';
 import { mergeCourseCompletionSettings } from '@/utils/courseCompletion';
 
 const NAVY = '#003366';
@@ -88,21 +94,12 @@ const SummaryCard = ({ title, value, subtitle, accent }) => (
   <Paper
     elevation={0}
     sx={{
+      ...getDashboardInteractiveCardSx(accent),
       p: { xs: 2, md: 3 },
-      borderRadius: 2,
-      border: `2px solid ${alpha(accent, 0.3)}`,
-      bgcolor: alpha(accent, 0.02),
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      justifyContent: 'center',
-      transition: 'all 0.3s ease',
-      '&:hover': {
-        transform: 'translateY(-5px)',
-        boxShadow: `0 12px 24px ${alpha(accent, 0.15)}`,
-        borderColor: accent,
-        bgcolor: alpha(accent, 0.05)
-      }
+      justifyContent: 'center'
     }}
   >
     <Typography variant="body2" color="text.secondary" fontWeight={700} sx={{ mb: 1, textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: 1 }}>
@@ -231,10 +228,10 @@ const LearningInsightsPage = () => {
         <Grid item xs={12} xl={8}>
           <Stack spacing={3}>
             {/* Table par cours */}
-            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, borderRadius: 2, border: '1px solid #E5E7EB' }}>
+            <Paper elevation={0} sx={{ ...getDashboardPanelSx(NAVY), p: { xs: 2, md: 3 } }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
                 <Typography variant="h6" fontWeight={800}>Vue par cours</Typography>
-                <Button variant="outlined" size="small" startIcon={<AutorenewIcon />} onClick={() => refetch()}>Actualiser</Button>
+                <Button variant="outlined" size="small" startIcon={<AutorenewIcon />} onClick={() => refetch()} sx={{ borderRadius: DASHBOARD_CARD_RADIUS }}>Actualiser</Button>
               </Stack>
               <TableContainer sx={{ maxHeight: 440 }}>
                 <Table size="small" stickyHeader>
@@ -269,7 +266,7 @@ const LearningInsightsPage = () => {
             </Paper>
 
             {/* Vigilance */}
-            <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #E5E7EB' }}>
+            <Paper elevation={0} sx={{ ...getDashboardPanelSx('#CC0000'), p: 3 }}>
               <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 2 }}>
                 <WarningAmberIcon sx={{ color: '#CC0000' }} />
                 <Typography variant="h6" fontWeight={800}>Étudiants à surveiller</Typography>
@@ -310,7 +307,7 @@ const LearningInsightsPage = () => {
         </Grid>
 
         <Grid item xs={12} xl={4}>
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #E5E7EB', height: '100%' }}>
+          <Paper elevation={0} sx={{ ...getDashboardPanelSx(NAVY), p: 3, height: '100%' }}>
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
               <SettingsSuggestIcon sx={{ color: NAVY }} />
               <Typography variant="h6" fontWeight="800">Règles de complétion</Typography>
@@ -318,7 +315,7 @@ const LearningInsightsPage = () => {
 
             {selectedCourse ? (
               <Stack spacing={3}>
-                <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#F8FAFC', border: '1px solid #E5E7EB' }}>
+                <Box sx={{ ...getDashboardInsetSx(NAVY), p: 2 }}>
                   <Typography variant="subtitle2" fontWeight="800">{selectedCourse.course.name}</Typography>
                   <Typography variant="caption" color="text.secondary">Dernier recalcul : {formatDate(selectedCourse.updatedAt)}</Typography>
                 </Box>
@@ -354,8 +351,8 @@ const LearningInsightsPage = () => {
                 </Box>
 
                 <Stack spacing={1}>
-                  <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saveMutation.isPending} sx={{ bgcolor: NAVY }}>Enregistrer</Button>
-                  <Button variant="outlined" startIcon={<AutorenewIcon />} onClick={handleReset} disabled={resetMutation.isPending}>Restaurer ESGIS</Button>
+                  <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saveMutation.isPending} sx={{ bgcolor: NAVY, borderRadius: DASHBOARD_CARD_RADIUS }}>Enregistrer</Button>
+                  <Button variant="outlined" startIcon={<AutorenewIcon />} onClick={handleReset} disabled={resetMutation.isPending} sx={{ borderRadius: DASHBOARD_CARD_RADIUS }}>Restaurer ESGIS</Button>
                 </Stack>
               </Stack>
             ) : <Alert severity="info">Sélectionnez un cours pour ajuster les règles.</Alert>}

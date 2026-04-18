@@ -29,6 +29,12 @@ import { fr } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { getStudentDashboardData } from '@/api/studentDashboard';
+import {
+  DASHBOARD_CARD_RADIUS,
+  getDashboardIconSx,
+  getDashboardInteractiveCardSx,
+  getDashboardPanelSx
+} from '@/components/dashboard/dashboardCardStyles';
 
 /* ─── Animations ─── */
 const fadeIn = keyframes`
@@ -65,7 +71,6 @@ const formatShortDate = (dateString) => {
 /* ─── Theme constants ─── */
 const NAVY = '#003366';
 const RED = '#CC0000';
-const CARD_RADIUS = 3;
 
 // ... HeroBanner and other subcomponents ...
 const HeroBanner = ({ banners }) => {
@@ -90,7 +95,7 @@ const HeroBanner = ({ banners }) => {
       <Paper
         elevation={0}
         sx={{
-          position: 'relative', mb: 4, borderRadius: 4, overflow: 'hidden',
+          position: 'relative', mb: 4, borderRadius: DASHBOARD_CARD_RADIUS, overflow: 'hidden',
           minHeight: { xs: 220, md: 320 },
           background: `linear-gradient(135deg, ${NAVY} 0%, #0a4d8c 50%, #1565c0 100%)`,
           display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -125,7 +130,7 @@ const HeroBanner = ({ banners }) => {
     <Paper
       elevation={0}
       sx={{
-        position: 'relative', mb: 4, borderRadius: 4, overflow: 'hidden',
+        position: 'relative', mb: 4, borderRadius: DASHBOARD_CARD_RADIUS, overflow: 'hidden',
         minHeight: { xs: 240, md: 360 },
         display: 'flex', alignItems: 'center',
         '&:hover .hero-nav': { opacity: 1 }
@@ -167,7 +172,7 @@ const HeroBanner = ({ banners }) => {
           <Button variant="contained" size="large" endIcon={<ArrowForwardIcon />}
             component={banner.cta_link.startsWith('/') ? Link : 'a'}
             {...(banner.cta_link.startsWith('/') ? { to: banner.cta_link } : { href: banner.cta_link, target: '_blank' })}
-            sx={{ borderRadius: 3, px: 4, py: 1.3, fontWeight: 700, bgcolor: RED, color: 'white', textTransform: 'none' }}>
+            sx={{ borderRadius: DASHBOARD_CARD_RADIUS, px: 4, py: 1.3, fontWeight: 700, bgcolor: RED, color: 'white', textTransform: 'none' }}>
             {banner.cta_text}
           </Button>
         )}
@@ -187,8 +192,8 @@ const EventCard = ({ event, index }) => {
   const color = NAVY;
   return (
     <Paper elevation={0}
-      sx={{ display: 'flex', borderRadius: CARD_RADIUS, overflow: 'hidden', border: '1px solid', borderColor: 'divider', transition: 'all 0.25s ease', '&:hover': { transform: 'translateY(-2px)' } }}>
-      <Box sx={{ width: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: alpha(color, 0.05), borderRight: `3px solid ${color}`, py: 1.5 }}>
+      sx={{ ...getDashboardInteractiveCardSx(color), display: 'flex', overflow: 'hidden' }}>
+      <Box sx={{ width: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: alpha(color, 0.05), borderRight: `1px solid ${alpha(color, 0.14)}`, py: 1.5 }}>
         <Typography variant="h5" fontWeight="900" color={color}>{dateParts.day}</Typography>
         <Typography variant="caption" fontWeight="700" color={color}>{dateParts.month}</Typography>
       </Box>
@@ -201,7 +206,7 @@ const EventCard = ({ event, index }) => {
 };
 
 const NewsCard = ({ item, index }) => (
-  <Card elevation={0} sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider', transition: 'all 0.3s ease', '&:hover': { transform: 'translateY(-6px)', boxShadow: '0 12px 32px rgba(0,0,0,0.1)' } }}>
+  <Card elevation={0} sx={{ ...getDashboardInteractiveCardSx(NAVY), height: '100%', display: 'flex', flexDirection: 'column' }}>
     <CardMedia component="img" height="160" image={item.image_url || 'https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=800&q=80'} alt={item.title} />
     <CardContent sx={{ flexGrow: 1, p: 2.5, display: 'flex', flexDirection: 'column' }}>
       <Typography variant="subtitle1" fontWeight="bold" gutterBottom noWrap>{item.title}</Typography>
@@ -228,29 +233,17 @@ const StatCard = ({ icon, label, value, color, link }) => (
   <Card 
     elevation={0} 
     component={link ? Link : 'div'} 
-    to={link}
+    {...(link ? { to: link } : {})}
     sx={{ 
+      ...getDashboardInteractiveCardSx(color),
       height: '100%', 
-      borderRadius: CARD_RADIUS, 
-      textDecoration: 'none', 
-      border: `2px solid ${alpha(color, 0.3)}`, 
-      bgcolor: alpha(color, 0.02),
-      transition: 'all 0.3s ease', 
-      '&:hover': link ? { 
-        transform: 'translateY(-5px)', 
-        boxShadow: `0 12px 24px ${alpha(color, 0.15)}`,
-        borderColor: color,
-        bgcolor: alpha(color, 0.05)
-      } : {} 
+      textDecoration: 'none',
+      '&:hover': link ? getDashboardInteractiveCardSx(color)['&:hover'] : {}
     }}
   >
     <CardContent sx={{ p: 2.5 }}>
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
-        <Box sx={{ 
-          width: 40, height: 40, borderRadius: 2, 
-          display: 'flex', alignItems: 'center', justifyContent: 'center', 
-          bgcolor: alpha(color, 0.1), color: color 
-        }}>
+        <Box sx={getDashboardIconSx(color)}>
           {icon}
         </Box>
         <Typography variant="body2" color="text.secondary" fontWeight="700">{label}</Typography>
@@ -298,7 +291,7 @@ const DashboardPage = () => {
           <Typography variant="h4" fontWeight="900" color="text.primary">Bonjour, {firstName}</Typography>
           <Typography variant="body1" color="text.secondary">Bienvenue sur votre espace ESGIS Campus</Typography>
         </Box>
-        <Paper elevation={0} sx={{ py: 1, px: 2, borderRadius: 2, bgcolor: alpha(NAVY, 0.04), border: '1px solid', borderColor: 'divider' }}>
+        <Paper elevation={0} sx={{ ...getDashboardPanelSx(NAVY), py: 1, px: 2 }}>
           <Stack direction="row" spacing={1} alignItems="center">
             <CalendarTodayIcon sx={{ fontSize: 18, color: NAVY }} />
             <Typography variant="body2" fontWeight="600" color={NAVY}>{format(new Date(), 'EEEE d MMMM yyyy', { locale: fr })}</Typography>
@@ -343,7 +336,7 @@ const DashboardPage = () => {
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={5}>
-          <Paper elevation={0} sx={{ p: 3, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider', height: '100%' }}>
+          <Paper elevation={0} sx={{ ...getDashboardPanelSx(NAVY), p: 3, height: '100%' }}>
             <SectionHeader icon={<EventIcon sx={{ color: NAVY }} />} title="Événements" action={<Button size="small" onClick={() => refetch()}>Actualiser</Button>} />
             <Stack spacing={2}>
               {dashboardData.events.slice(0, 4).map((event, idx) => <EventCard key={event.id} event={event} index={idx} />)}
@@ -354,7 +347,7 @@ const DashboardPage = () => {
 
         <Grid item xs={12} md={7}>
           <Stack spacing={3}>
-            <Paper elevation={0} sx={{ p: 3, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider' }}>
+            <Paper elevation={0} sx={{ ...getDashboardPanelSx('#2e7d32'), p: 3 }}>
               <SectionHeader icon={<WorkIcon sx={{ color: NAVY }} />} title="Carrière & Stages" action={<Button component={Link} to="/student/stages" size="small">Voir tout</Button>} />
               <List disablePadding>
                 {dashboardData.career_opportunities?.slice(0, 3).map((opp, idx) => (
@@ -362,7 +355,7 @@ const DashboardPage = () => {
                 ))}
               </List>
             </Paper>
-            <Paper elevation={0} sx={{ p: 3, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider' }}>
+            <Paper elevation={0} sx={{ ...getDashboardPanelSx(RED), p: 3 }}>
               <SectionHeader icon={<TrendingUpIcon sx={{ color: RED }} />} title="Résultats Récents" action={<Button component={Link} to="/student/grades" size="small">Tout voir</Button>} />
               <List disablePadding>
                 {dashboardData.recent_grades.slice(0, 3).map((grade, idx) => (
