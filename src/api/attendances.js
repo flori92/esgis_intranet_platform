@@ -117,18 +117,20 @@ export const getAllCoursesAttendanceStats = async () => {
     
     if (!user) throw new Error('Utilisateur non authentifié');
 
-    // Use the global view for performance
+    // Use the global view for performance, filtered by current professor
     const { data: globalStats, error: statsError } = await supabase
       .from('v_student_global_attendance_stats')
       .select('*')
+      .eq('professor_id', user.id)
       .order('global_attendance_rate', { ascending: false });
 
     if (statsError) throw statsError;
 
-    // Fetch details from Dynamic View for course breakdown
+    // Fetch details from Dynamic View for course breakdown, filtered by professor
     const { data: details, error: detailsError } = await supabase
       .from('v_student_attendance_stats')
-      .select('*');
+      .select('*')
+      .eq('professor_id', user.id);
 
     if (detailsError) throw detailsError;
 
