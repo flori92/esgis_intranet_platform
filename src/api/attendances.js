@@ -86,7 +86,7 @@ export const bulkUpsertAttendances = async (attendancesList) => {
 export const getCourseAttendanceStats = async (courseId) => {
   try {
     const { data, error } = await supabase
-      .from('mv_student_attendance_stats')
+      .from('v_student_attendance_stats')
       .select('*')
       .eq('course_id', Number(courseId))
       .order('attendance_rate', { ascending: false });
@@ -125,9 +125,9 @@ export const getAllCoursesAttendanceStats = async () => {
 
     if (statsError) throw statsError;
 
-    // Fetch details from MV for course breakdown
+    // Fetch details from Dynamic View for course breakdown
     const { data: details, error: detailsError } = await supabase
-      .from('mv_student_attendance_stats')
+      .from('v_student_attendance_stats')
       .select('*');
 
     if (detailsError) throw detailsError;

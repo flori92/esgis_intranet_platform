@@ -165,20 +165,20 @@ export const getProfessorLearningInsights = async ({ profileId, courseId = null 
       return { data: null, error: new Error('Professeur non identifie') };
     }
 
-    // 1. Fetch data from Materialized View for performance (Summary and Course list)
-    let mvQuery = supabase
-      .from('mv_professor_course_stats')
+    // 1. Fetch data from Dynamic View for real-time performance
+    let viewQuery = supabase
+      .from('v_professor_course_stats')
       .select('*')
       .eq('professor_id', profileId);
 
     if (courseId) {
-      mvQuery = mvQuery.eq('course_id', Number(courseId));
+      viewQuery = viewQuery.eq('course_id', Number(courseId));
     }
 
-    const { data: mvData, error: mvError } = await mvQuery;
+    const { data: viewData, error: viewError } = await viewQuery;
 
-    if (mvError) {
-      console.error('Error fetching from mv_professor_course_stats:', mvError);
+    if (viewError) {
+      console.error('Error fetching from v_professor_course_stats:', viewError);
       // Fallback or handle error
     }
 
@@ -273,8 +273,8 @@ export const getProfessorLearningInsights = async ({ profileId, courseId = null 
           settingsMap.get(Number(managedCourse.id)) || DEFAULT_COMPLETION_SETTINGS
         );
         
-        // Use Materialized View data if available for this course
-        const mvCourseData = (mvData || []).find(mv => Number(mv.course_id) === Number(managedCourse.id));
+        // Use Dynamic View data if available for this course
+        const courseViewData = (viewData || []).find(v => Number(v.course_id) === Number(managedCourse.id));
         
         const courseActivityRows = (activityRows || []).filter(
           (row) => Number(row.course_id) === Number(managedCourse.id)
@@ -295,21 +295,21 @@ export const getProfessorLearningInsights = async ({ profileId, courseId = null 
           course: managedCourse,
           settings: mergedSettings,
           hasCustomSettings: customSettingsCourseIds.has(Number(managedCourse.id)),
-          studentCount: mvCourseData?.student_count ?? enrolledStudentIds.length,
-          averageProgress: mvCourseData?.avg_progress ?? average(enrolledStudentIds.map(id => studentProgressMap.get(id)?.progress)),
+          studentCount: courseViewData?.student_count ?? enrolledStudentIds.length,
+          averageProgress: courseViewData?.avg_progress ?? average(enrolledStudentIds.map(id => studentProgressMap.get(id)?.progress)),
           completedActivities: courseActivityRows.filter((row) => row.status === 'completed').length,
           totalActivities: courseActivityRows.length,
           overdueActivities: courseActivityRows.filter((row) => row.status === 'overdue').length,
-          atRiskStudents: mvCourseData?.at_risk_count ?? enrolledStudentIds.filter((studentId) => {
+          atRiskStudents: courseViewData?.at_risk_count ?? enrolledStudentIds.filter((studentId) => {
             const analytics = analyticsByStudent.get(studentId);
             const progress = studentProgressMap.get(studentId);
             return Boolean(analytics?.risk_flag) || Number(progress?.overdueActivities || 0) > 0;
           }).length,
-          averageAttendance: mvCourseData?.avg_attendance ?? average(courseAnalyticsRows.map((row) => row.attendance_percentage)),
-          averagePredictedGrade: mvCourseData?.avg_predicted_grade ?? average(
+          averageAttendance: courseViewData?.avg_attendance ?? average(courseAnalyticsRows.map((row) => row.attendance_percentage)),
+          averagePredictedGrade: courseViewData?.avg_predicted_grade ?? average(
             courseAnalyticsRows.map((row) => row.predicted_grade || row.final_grade)
           ),
-          updatedAt: mvCourseData?.last_updated ?? null
+          updatedAt: courseViewData?.last_updated ?? null
         };
       })
       .sort((left, right) => {
