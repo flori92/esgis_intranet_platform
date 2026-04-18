@@ -265,6 +265,7 @@ const MainLayout = () => {
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/professor' },
         { text: 'Mes Cours', icon: <BookIcon />, path: '/professor/courses' },
         { text: 'Devoirs & Remises', icon: <AssignmentIcon />, path: '/professor/assignments' },
+        { text: 'Progression & Analytics', icon: <TrendingUpIcon />, path: '/professor/learning-insights' },
         { text: 'Mes Promotions', icon: <PeopleIcon />, path: '/professor/students' },
         { text: 'Emploi du temps', icon: <EventIcon />, path: '/schedule' },
         { text: 'EDT Hebdomadaire', icon: <EventNoteIcon />, path: '/professor/weekly-schedules' },
@@ -512,6 +513,7 @@ const MainLayout = () => {
                     {(isProfessor ? [
                       { label: 'EDT Hebdomadaire', icon: <EventNoteIcon fontSize="small" />, path: '/professor/weekly-schedules' },
                       { label: 'Devoirs & remises', icon: <AssignmentIcon fontSize="small" />, path: '/professor/assignments' },
+                      { label: 'Progression & analytics', icon: <TrendingUpIcon fontSize="small" />, path: '/professor/learning-insights' },
                       { label: 'Gestion des notes', icon: <GradingIcon fontSize="small" />, path: '/professor/grades' },
                       { label: 'Banque de questions', icon: <SchoolIcon fontSize="small" />, path: '/professor/question-bank' },
                       { label: 'Mes examens', icon: <AssignmentIcon fontSize="small" />, path: '/professor/exams' }

@@ -18,6 +18,7 @@ const GradeCorrectionPage = lazy(() => import('../pages/professor/grades/GradeCo
 const QuestionBankPage = lazy(() => import('../pages/professor/questions/QuestionBankPage'));
 const AttendancesPage = lazy(() => import('../pages/professor/AttendancesPage'));
 const AssignmentsPage = lazy(() => import('../pages/professor/AssignmentsPage'));
+const LearningInsightsPage = lazy(() => import('../pages/professor/LearningInsightsPage'));
 const WeeklySchedulesPage = lazy(() => import('../pages/admin/WeeklySchedulesPage'));
 
 /**
@@ -58,6 +59,8 @@ const ProfessorRoutes = () => {
         <Route path="attendances" element={<AttendancesPage />} />
         {/* Devoirs & remises */}
         <Route path="assignments" element={<AssignmentsPage />} />
+        {/* Progression & analytics */}
+        <Route path="learning-insights" element={<LearningInsightsPage />} />
         {/* Banque de questions */}
         <Route path="question-bank" element={<QuestionBankPage />} />
         {/* Emplois du temps PDF */}

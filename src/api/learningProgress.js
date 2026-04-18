@@ -1,4 +1,8 @@
 import { supabase } from '../supabase';
+import {
+  calculateWeightedCourseProgress,
+  mergeCourseCompletionSettings
+} from '../utils/courseCompletion';
 
 const LEVEL_WEIGHTS = {
   beginner: 25,
@@ -272,7 +276,7 @@ const ACTIVITY_LABELS = {
   forum: 'Forum'
 };
 
-const normalizeCourseActivity = (rows = [], coursesMap) => {
+const normalizeCourseActivity = (rows = [], coursesMap, settingsByCourse = new Map()) => {
   const grouped = new Map();
 
   (rows || []).forEach((row) => {
@@ -320,7 +324,8 @@ const normalizeCourseActivity = (rows = [], coursesMap) => {
       const totalActivities = sortedItems.length;
       const completedActivities = sortedItems.filter((item) => item.status === 'completed').length;
       const overdueActivities = sortedItems.filter((item) => item.status === 'overdue').length;
-      const averageProgress = average(sortedItems.map((item) => item.progress));
+      const settings = mergeCourseCompletionSettings(settingsByCourse.get(courseId));
+      const averageProgress = calculateWeightedCourseProgress(sortedItems, settings);
       const lastActivityAt = sortedItems.reduce((latest, item) => {
         return getDateValue(item) > getDateValue({ last_activity_at: latest }) ? item.lastActivityAt : latest;
       }, null);
@@ -334,6 +339,7 @@ const normalizeCourseActivity = (rows = [], coursesMap) => {
         overdueActivities,
         averageProgress,
         lastActivityAt,
+        settings,
         items: sortedItems,
         breakdown: {
           resources: sortedItems.filter((item) => item.type === 'resource').length,
@@ -409,7 +415,8 @@ export const getStudentLearningProgress = async ({ profileId, studentId }) => {
       analyticsRows,
       alertRows,
       progressRows,
-      activityRows
+      activityRows,
+      settingsRows
     ] = await Promise.all([
       fetchStudentCourseIds({ profileId, studentId: numericStudentId }),
       fetchLearningPaths({ profileId, studentId: numericStudentId }),
@@ -445,7 +452,10 @@ export const getStudentLearningProgress = async ({ profileId, studentId }) => {
               .select('*, courses(id, code, name, credits, level, semester)')
               .eq('student_id', numericStudentId)
           )
-        : []
+        : [],
+      safeSelect(() =>
+        supabase.from('course_completion_settings').select('*')
+      )
     ]);
 
     const fallbackCourseIds = [
@@ -474,6 +484,12 @@ export const getStudentLearningProgress = async ({ profileId, studentId }) => {
     const filteredActivityRows = activityRows.filter(
       (row) => !scopedCourseIdSet.size || scopedCourseIdSet.has(Number(row?.course_id))
     );
+    const filteredSettingsRows = settingsRows.filter(
+      (row) => !scopedCourseIdSet.size || scopedCourseIdSet.has(Number(row?.course_id))
+    );
+    const settingsByCourse = new Map(
+      filteredSettingsRows.map((row) => [Number(row.course_id), mergeCourseCompletionSettings(row)])
+    );
 
     const coursesMap = await fetchCoursesMap([
       ...scopedCourseIds,
@@ -487,7 +503,7 @@ export const getStudentLearningProgress = async ({ profileId, studentId }) => {
     const competencies = normalizeCompetencies(competenciesRows);
     const analytics = normalizeAnalytics(filteredAnalyticsRows, coursesMap);
     const alerts = normalizeAlerts(filteredAlertRows, coursesMap);
-    const courseActivity = normalizeCourseActivity(filteredActivityRows, coursesMap);
+    const courseActivity = normalizeCourseActivity(filteredActivityRows, coursesMap, settingsByCourse);
 
     const overdueActivities = courseActivity
       .flatMap((course) =>

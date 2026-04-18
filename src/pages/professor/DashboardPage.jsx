@@ -21,12 +21,14 @@ import {
   ChevronRight as ChevronRightIcon,
   LocationOn as LocationOnIcon,
   Newspaper as NewspaperIcon,
-  MenuBook as MenuBookIcon
+  MenuBook as MenuBookIcon,
+  WarningAmber as WarningAmberIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/context/AuthContext';
 import { getProfessorDashboardData } from '@/api/professorDashboard';
+import { getProfessorLearningInsights } from '@/api/professorLearningInsights';
 import { getCMSBanners, getCMSNews, getCMSEvents } from '@/api/cms';
 
 /* ─── Animations ─── */
@@ -48,6 +50,21 @@ const CARD_RADIUS = 3;
 /* ─── Helpers ─── */
 const EMPTY_DASHBOARD = {
   stats: null, courses: [], exams: [], pendingGrades: [], news: [], events: []
+};
+
+const EMPTY_LEARNING_INSIGHTS = {
+  summary: {
+    totalCourses: 0,
+    totalTrackedStudents: 0,
+    atRiskStudents: 0,
+    overdueActivities: 0,
+    averageProgress: 0,
+    averageAttendance: 0,
+    averagePredictedGrade: 0,
+    configuredCourses: 0
+  },
+  courses: [],
+  studentsNeedingAttention: []
 };
 
 const formatDate = (v) => {
@@ -420,6 +437,7 @@ const NewsCard = ({ item, index }) => (
 const ProfessorDashboardPage = () => {
   const { authState } = useAuth();
   const [dashboardData, setDashboardData] = useState(EMPTY_DASHBOARD);
+  const [learningInsights, setLearningInsights] = useState(EMPTY_LEARNING_INSIGHTS);
   const [cmsBanners, setCmsBanners] = useState([]);
   const [cmsNews, setCmsNews] = useState([]);
   const [cmsEvents, setCmsEvents] = useState([]);
@@ -434,20 +452,26 @@ const ProfessorDashboardPage = () => {
       try {
         if (!authState.isProfessor || !authState.profile?.id) throw new Error('Profil professeur non disponible');
 
-        const [dashRes, bannersRes, newsRes, eventsRes] = await Promise.all([
+        const [dashRes, bannersRes, newsRes, eventsRes, insightsRes] = await Promise.all([
           getProfessorDashboardData({ profileId: authState.profile.id, professorId: authState.professor?.id }),
-          getCMSBanners(), getCMSNews(4), getCMSEvents(5)
+          getCMSBanners(), getCMSNews(4), getCMSEvents(5),
+          getProfessorLearningInsights({ profileId: authState.profile.id })
         ]);
 
         if (dashRes.error) throw dashRes.error;
         if (active) {
           setDashboardData(dashRes.data || EMPTY_DASHBOARD);
+          setLearningInsights(insightsRes.data || EMPTY_LEARNING_INSIGHTS);
           setCmsBanners(bannersRes.data || []);
           setCmsNews(newsRes.data || []);
           setCmsEvents(eventsRes.data || []);
         }
       } catch (e) {
-        if (active) { setError(e.message || 'Erreur de chargement'); setDashboardData(EMPTY_DASHBOARD); }
+        if (active) {
+          setError(e.message || 'Erreur de chargement');
+          setDashboardData(EMPTY_DASHBOARD);
+          setLearningInsights(EMPTY_LEARNING_INSIGHTS);
+        }
       } finally { if (active) setLoading(false); }
     };
     if (authState.isProfessor) load(); else setLoading(false);
@@ -530,6 +554,121 @@ const ProfessorDashboardPage = () => {
             <StatCard icon={<GradingIcon sx={{ fontSize: 28, color: '#ed6c02' }} />} value={dashboardData.stats.pendingGrades} label="Notes en attente" color="#ed6c02" delay={0.3} link="/professor/grades" />
           </Grid>
         </Grid>
+      )}
+
+      {learningInsights.courses.length > 0 && (
+        <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider' }}>
+          <SectionHeader
+            icon={<TrendingUpIcon sx={{ color: NAVY }} />}
+            title="Pilotage pedagogique ESGIS"
+            action={
+              <Button
+                size="small"
+                variant="text"
+                component={Link}
+                to="/professor/learning-insights"
+                endIcon={<ArrowForwardIcon />}
+                sx={{ fontWeight: 600, color: NAVY }}
+              >
+                Configurer
+              </Button>
+            }
+          />
+
+          <Grid container spacing={2} sx={{ mb: learningInsights.studentsNeedingAttention.length ? 2.5 : 0 }}>
+            {[
+              {
+                label: 'Progression moyenne',
+                value: `${Math.round(learningInsights.summary.averageProgress)}%`,
+                subtitle: `${learningInsights.summary.totalTrackedStudents} etudiants traces`,
+                color: NAVY
+              },
+              {
+                label: 'Cours personnalises',
+                value: learningInsights.summary.configuredCourses,
+                subtitle: `${learningInsights.summary.totalCourses} cours suivis`,
+                color: '#2e7d32'
+              },
+              {
+                label: 'Etudiants a risque',
+                value: learningInsights.summary.atRiskStudents,
+                subtitle: `${learningInsights.summary.overdueActivities} activite(s) en retard`,
+                color: RED
+              },
+              {
+                label: 'Projection moyenne',
+                value: `${learningInsights.summary.averagePredictedGrade.toFixed(1)}/20`,
+                subtitle: `${Math.round(learningInsights.summary.averageAttendance)}% de presence moyenne`,
+                color: '#ed6c02'
+              }
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.label}>
+                <Box
+                  sx={{
+                    p: 2.5,
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: alpha(item.color, 0.25),
+                    backgroundColor: alpha(item.color, 0.04),
+                    height: '100%'
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary" fontWeight="700" sx={{ mb: 1 }}>
+                    {item.label}
+                  </Typography>
+                  <Typography variant="h4" fontWeight="900" sx={{ color: item.color, mb: 0.5 }}>
+                    {item.value}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {item.subtitle}
+                  </Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+
+          {learningInsights.studentsNeedingAttention.length > 0 && (
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: alpha(RED, 0.2),
+                backgroundColor: alpha(RED, 0.03)
+              }}
+            >
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                <WarningAmberIcon sx={{ color: RED, fontSize: 20 }} />
+                <Typography variant="subtitle2" fontWeight="800">
+                  Vigilance immediate
+                </Typography>
+              </Stack>
+              <Stack spacing={1}>
+                {learningInsights.studentsNeedingAttention.slice(0, 3).map((studentItem) => (
+                  <Stack
+                    key={studentItem.id}
+                    direction={{ xs: 'column', sm: 'row' }}
+                    justifyContent="space-between"
+                    spacing={1}
+                  >
+                    <Box>
+                      <Typography variant="body2" fontWeight="700">
+                        {studentItem.studentName} · {studentItem.courseName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {(studentItem.reasons || []).slice(0, 2).join(' · ') || 'Aucun detail'}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip size="small" color="warning" label={`${Math.round(studentItem.progress)}%`} />
+                      <Chip size="small" color="error" label={studentItem.severity} />
+                    </Stack>
+                  </Stack>
+                ))}
+              </Stack>
+            </Box>
+          )}
+        </Paper>
       )}
 
       {/* ─── Main Content Grid ─── */}
