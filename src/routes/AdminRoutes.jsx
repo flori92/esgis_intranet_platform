@@ -48,6 +48,7 @@ const WeeklySchedulesPage = lazy(() => import('../pages/admin/WeeklySchedulesPag
 // CMS Pages
 const CMSAdminPage = lazy(() => import('../pages/admin/CMSAdminPage'));
 const CMSPermissionsPage = lazy(() => import('../pages/admin/CMSPermissionsPage'));
+const LMSBridgePage = lazy(() => import('../pages/admin/LMSBridgePage'));
 
 const AdminRoutes = () => {
   const { authState } = useAuth();
@@ -107,6 +108,7 @@ const AdminRoutes = () => {
         {/* CMS Routes */}
         <Route path="cms" element={<CMSAdminPage />} />
         <Route path="cms-permissions" element={<CMSPermissionsPage />} />
+        <Route path="lms-bridge" element={<LMSBridgePage />} />
 
         {/* Default Route */}
         <Route path="*" element={<AdminDashboardPage />} />

@@ -890,6 +890,7 @@ ALTER TABLE announcement_acknowledgements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE communication_campaigns ENABLE ROW LEVEL SECURITY;
 
 -- Basic RLS Policies (example for student_groups)
+DROP POLICY IF EXISTS "students_see_own_groups" ON student_groups;
 CREATE POLICY "students_see_own_groups" ON student_groups
   FOR SELECT USING (
     EXISTS(
@@ -901,6 +902,7 @@ CREATE POLICY "students_see_own_groups" ON student_groups
     )
   );
 
+DROP POLICY IF EXISTS "professors_manage_own_groups" ON student_groups;
 CREATE POLICY "professors_manage_own_groups" ON student_groups
   FOR ALL USING (
     professor_id IN (
@@ -910,6 +912,7 @@ CREATE POLICY "professors_manage_own_groups" ON student_groups
     )
   );
 
+DROP POLICY IF EXISTS "admins_manage_all" ON student_groups;
 CREATE POLICY "admins_manage_all" ON student_groups
   FOR ALL USING (
     EXISTS(
@@ -947,15 +950,26 @@ WHERE table_name IN (
 COMMIT;
 
 -- Log successful completion
-INSERT INTO system_monitoring (metric_type, metric_value, metadata)
-VALUES (
-  'database_migration',
-  1,
-  jsonb_build_object(
-    'migration_name', 'New Relations (Phase 1-6)',
-    'tables_created', 39,
-    'timestamp', NOW()
-  )
-);
+DO $$
+BEGIN
+  INSERT INTO system_monitoring (metric_type, metric_value, metadata)
+  VALUES (
+    'requests',
+    1,
+    jsonb_build_object(
+      'migration_name', 'New Relations (Phase 1-6)',
+      'tables_created', 39,
+      'timestamp', NOW()
+    )
+  );
+EXCEPTION
+  WHEN undefined_table OR check_violation THEN
+    NULL;
+END;
+$$;
 
-RAISE NOTICE 'Migration completed: 39 new tables created with 18 new rich relationships';
+DO $$
+BEGIN
+  RAISE NOTICE 'Migration completed: 39 new tables created with 18 new rich relationships';
+END;
+$$;

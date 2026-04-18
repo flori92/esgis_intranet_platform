@@ -48,6 +48,7 @@ import {
   EventNote as EventNoteIcon,
   Campaign as CampaignIcon,
   TrendingUp as TrendingUpIcon,
+  SyncAlt as SyncAltIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { announcementsService } from '@/services/cmsService';
@@ -253,6 +254,7 @@ const MainLayout = () => {
         { text: 'Annonces', icon: <ChatIcon />, path: '/admin/announcements' },
         { text: 'CMS éditorial', icon: <CampaignIcon />, path: '/admin/cms' },
         { text: 'Permissions CMS', icon: <SettingsIcon />, path: '/admin/cms-permissions' },
+        { text: 'Intégrations LMS', icon: <SyncAltIcon />, path: '/admin/lms-bridge' },
         { text: 'Statistiques', icon: <BarChartIcon />, path: '/admin/reports' },
         { text: 'Rôles & Permissions', icon: <PersonIcon />, path: '/admin/roles' },
         { text: 'Journal d\'audit', icon: <BarChartIcon />, path: '/admin/audit-log-new' },
@@ -262,6 +264,7 @@ const MainLayout = () => {
       return [
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/professor' },
         { text: 'Mes Cours', icon: <BookIcon />, path: '/professor/courses' },
+        { text: 'Devoirs & Remises', icon: <AssignmentIcon />, path: '/professor/assignments' },
         { text: 'Mes Promotions', icon: <PeopleIcon />, path: '/professor/students' },
         { text: 'Emploi du temps', icon: <EventIcon />, path: '/schedule' },
         { text: 'EDT Hebdomadaire', icon: <EventNoteIcon />, path: '/professor/weekly-schedules' },
@@ -280,11 +283,13 @@ const MainLayout = () => {
       return [
         { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/student' },
         { text: 'Mes Cours', icon: <BookIcon />, path: '/student/courses' },
+        { text: 'Devoirs & Remises', icon: <AssignmentIcon />, path: '/student/assignments' },
         { text: 'Mes examens', icon: <AssignmentIcon />, path: '/student/exams' },
         { text: 'Quiz entraînement', icon: <SchoolIcon />, path: '/student/practice' },
         { text: 'Emploi du temps', icon: <CalendarMonthIcon />, path: '/student/schedule' },
         { text: 'EDT Hebdomadaire', icon: <EventNoteIcon />, path: '/student/weekly-schedules' },
         { text: 'Notes', icon: <GradingIcon />, path: '/student/grades' },
+        { text: 'Parcours & Progression', icon: <TrendingUpIcon />, path: '/student/progress' },
         { text: 'Bibliothèque', icon: <BookIcon />, path: '/student/library' },
         { text: 'Documents officiels', icon: <AssignmentIcon />, path: '/student/requests' },
         { text: 'Soutenances', icon: <SchoolIcon />, path: '/student/theses' },
@@ -506,12 +511,15 @@ const MainLayout = () => {
                     <Divider sx={{ mb: 1 }} />
                     {(isProfessor ? [
                       { label: 'EDT Hebdomadaire', icon: <EventNoteIcon fontSize="small" />, path: '/professor/weekly-schedules' },
+                      { label: 'Devoirs & remises', icon: <AssignmentIcon fontSize="small" />, path: '/professor/assignments' },
                       { label: 'Gestion des notes', icon: <GradingIcon fontSize="small" />, path: '/professor/grades' },
                       { label: 'Banque de questions', icon: <SchoolIcon fontSize="small" />, path: '/professor/question-bank' },
                       { label: 'Mes examens', icon: <AssignmentIcon fontSize="small" />, path: '/professor/exams' }
                     ] : [
                       { label: 'EDT Hebdomadaire', icon: <EventNoteIcon fontSize="small" />, path: '/student/weekly-schedules' },
+                      { label: 'Mes devoirs', icon: <AssignmentIcon fontSize="small" />, path: '/student/assignments' },
                       { label: 'Mes notes', icon: <GradeIcon fontSize="small" />, path: '/student/grades' },
+                      { label: 'Ma progression', icon: <TrendingUpIcon fontSize="small" />, path: '/student/progress' },
                       { label: 'Mes examens', icon: <SchoolIcon fontSize="small" />, path: '/student/exams' },
                       { label: 'Mes démarches', icon: <AssignmentIcon fontSize="small" />, path: '/student/requests' }
                     ]).map((item) => (

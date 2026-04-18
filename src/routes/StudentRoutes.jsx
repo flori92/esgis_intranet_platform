@@ -24,6 +24,8 @@ const TranscriptPage = lazy(() => import('../pages/student/TranscriptPage'));
 const ReportCardPage = lazy(() => import('../pages/student/ReportCardPage'));
 const ProfileSettingsPage = lazy(() => import('../pages/student/ProfileSettingsPage'));
 const WeeklySchedulesPage = lazy(() => import('../pages/student/WeeklySchedulesPage'));
+const LearningProgressPage = lazy(() => import('../pages/student/LearningProgressPage'));
+const StudentAssignmentsPage = lazy(() => import('../pages/student/AssignmentsPage'));
 
 /**
  * Routes pour les étudiants
@@ -56,6 +58,12 @@ const StudentRoutes = () => {
         
         {/* Routes pour les notes */}
         <Route path="grades" element={<StudentGradesPage />} />
+
+        {/* Route pour le suivi de progression */}
+        <Route path="progress" element={<LearningProgressPage />} />
+
+        {/* Route pour les devoirs et remises */}
+        <Route path="assignments" element={<StudentAssignmentsPage />} />
         
         {/* Routes pour les documents */}
         <Route path="documents" element={<StudentDocumentsPage />} />

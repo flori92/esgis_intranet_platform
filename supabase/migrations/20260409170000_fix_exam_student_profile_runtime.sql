@@ -19,13 +19,12 @@ SELECT
   se.joined_via_link,
   c.name AS course_name,
   c.code AS course_code,
-  p.first_name || ' ' || p.last_name AS professor_name
+  COALESCE(NULLIF(trim(concat_ws(' ', p.first_name, p.last_name)), ''), p.full_name, p.email) AS professor_name
 FROM public.student_exams se
-JOIN public.exams e ON se.exam_id::text = e.id::text
-JOIN public.courses c ON e.course_id::text = c.id::text
+JOIN public.exams e ON se.exam_id = e.id
+JOIN public.courses c ON e.course_id = c.id
 JOIN public.students s ON se.student_id = s.profile_id
-JOIN public.professors prof ON e.professor_id::text = prof.id::text
-JOIN public.profiles p ON prof.profile_id::text = p.id::text;
+JOIN public.profiles p ON e.professor_id = p.id;
 
 CREATE OR REPLACE FUNCTION public.verify_exam_access_code(
   p_exam_id INTEGER,

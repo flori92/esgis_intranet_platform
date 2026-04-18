@@ -98,58 +98,70 @@ ALTER TABLE cms_announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cms_banners ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Public read access to published events
+DROP POLICY IF EXISTS "Published events are viewable by everyone" ON cms_events;
 CREATE POLICY "Published events are viewable by everyone"
   ON cms_events FOR SELECT
   USING (is_published = TRUE);
 
 -- Policy: Admin read/write access to all events
+DROP POLICY IF EXISTS "Admins can manage all events" ON cms_events;
 CREATE POLICY "Admins can manage all events"
   ON cms_events FOR ALL
   USING (
-    auth.uid() IN (
-      SELECT user_id FROM user_roles WHERE role = 'admin'
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
     )
   );
 
 -- Policy: Public read access to published news
+DROP POLICY IF EXISTS "Published news are viewable by everyone" ON cms_news;
 CREATE POLICY "Published news are viewable by everyone"
   ON cms_news FOR SELECT
   USING (is_published = TRUE);
 
 -- Policy: Admin read/write access to all news
+DROP POLICY IF EXISTS "Admins can manage all news" ON cms_news;
 CREATE POLICY "Admins can manage all news"
   ON cms_news FOR ALL
   USING (
-    auth.uid() IN (
-      SELECT user_id FROM user_roles WHERE role = 'admin'
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
     )
   );
 
 -- Policy: Public read access to published announcements
+DROP POLICY IF EXISTS "Published announcements are viewable by everyone" ON cms_announcements;
 CREATE POLICY "Published announcements are viewable by everyone"
   ON cms_announcements FOR SELECT
   USING (is_published = TRUE);
 
 -- Policy: Admin read/write access to all announcements
+DROP POLICY IF EXISTS "Admins can manage all announcements" ON cms_announcements;
 CREATE POLICY "Admins can manage all announcements"
   ON cms_announcements FOR ALL
   USING (
-    auth.uid() IN (
-      SELECT user_id FROM user_roles WHERE role = 'admin'
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
     )
   );
 
 -- Policy: Public read access to active banners
+DROP POLICY IF EXISTS "Active banners are viewable by everyone" ON cms_banners;
 CREATE POLICY "Active banners are viewable by everyone"
   ON cms_banners FOR SELECT
   USING (is_active = TRUE);
 
 -- Policy: Admin read/write access to all banners
+DROP POLICY IF EXISTS "Admins can manage all banners" ON cms_banners;
 CREATE POLICY "Admins can manage all banners"
   ON cms_banners FOR ALL
   USING (
-    auth.uid() IN (
-      SELECT user_id FROM user_roles WHERE role = 'admin'
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
     )
   );
 

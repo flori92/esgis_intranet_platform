@@ -203,7 +203,7 @@ export const getAllCoursesAttendanceStats = async () => {
         )
       `)
       .eq('professor_id', user.id)
-      .not('courses.course_sessions', 'is', null');
+      .not('courses.course_sessions', 'is', null);
 
     if (coursesError) throw coursesError;
 

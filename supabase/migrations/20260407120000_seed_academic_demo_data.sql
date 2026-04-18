@@ -7,25 +7,28 @@
 INSERT INTO professors (profile_id, employee_number, hire_date, specialties, status, department_id)
 SELECT '04540b2a-27cf-44a9-bcd5-c97e3465c0c8', 'PROF-001', '2020-09-01',
        ARRAY['Informatique','Algorithmique'], 'active', 1
-WHERE NOT EXISTS (SELECT 1 FROM professors WHERE profile_id = '04540b2a-27cf-44a9-bcd5-c97e3465c0c8');
+WHERE NOT EXISTS (SELECT 1 FROM professors WHERE profile_id = '04540b2a-27cf-44a9-bcd5-c97e3465c0c8')
+  AND EXISTS (SELECT 1 FROM profiles WHERE id = '04540b2a-27cf-44a9-bcd5-c97e3465c0c8')
+  AND EXISTS (SELECT 1 FROM departments WHERE id = 1);
 
 -- 2. Student entities already existed (auto-created by auth hook)
 
 -- 3. Courses (8 L2 Informatique courses)
-INSERT INTO courses (name, code, description, department_id, credits, semester, level, is_active) SELECT 'Algorithmique et Structures de Données', 'INFO201', 'Algorithmique', 1, 4, 1, 'L2', true WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO201');
-INSERT INTO courses (name, code, description, department_id, credits, semester, level, is_active) SELECT 'Programmation Orientée Objet', 'INFO202', 'Java et POO', 1, 4, 1, 'L2', true WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO202');
-INSERT INTO courses (name, code, description, department_id, credits, semester, level, is_active) SELECT 'Bases de Données', 'INFO203', 'SQL et modélisation', 1, 3, 1, 'L2', true WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO203');
-INSERT INTO courses (name, code, description, department_id, credits, semester, level, is_active) SELECT 'Réseaux Informatiques', 'INFO204', 'Protocoles réseau', 1, 3, 1, 'L2', true WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO204');
-INSERT INTO courses (name, code, description, department_id, credits, semester, level, is_active) SELECT 'Développement Web', 'INFO205', 'HTML CSS JS', 1, 3, 2, 'L2', true WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO205');
-INSERT INTO courses (name, code, description, department_id, credits, semester, level, is_active) SELECT 'Mathématiques Discrètes', 'MATH201', 'Logique et combinatoire', 1, 3, 1, 'L2', true WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='MATH201');
-INSERT INTO courses (name, code, description, department_id, credits, semester, level, is_active) SELECT 'Anglais Professionnel', 'LANG201', 'Anglais technique', 1, 2, 1, 'L2', true WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='LANG201');
-INSERT INTO courses (name, code, description, department_id, credits, semester, level, is_active) SELECT 'Gestion de Projets IT', 'INFO206', 'Agile et gestion de projet', 1, 2, 2, 'L2', true WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO206');
+INSERT INTO courses (name, code, description, department_id, credits, semester, level) SELECT 'Algorithmique et Structures de Données', 'INFO201', 'Algorithmique', 1, 4, 1, 'L2' WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO201') AND EXISTS (SELECT 1 FROM departments WHERE id = 1);
+INSERT INTO courses (name, code, description, department_id, credits, semester, level) SELECT 'Programmation Orientée Objet', 'INFO202', 'Java et POO', 1, 4, 1, 'L2' WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO202') AND EXISTS (SELECT 1 FROM departments WHERE id = 1);
+INSERT INTO courses (name, code, description, department_id, credits, semester, level) SELECT 'Bases de Données', 'INFO203', 'SQL et modélisation', 1, 3, 1, 'L2' WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO203') AND EXISTS (SELECT 1 FROM departments WHERE id = 1);
+INSERT INTO courses (name, code, description, department_id, credits, semester, level) SELECT 'Réseaux Informatiques', 'INFO204', 'Protocoles réseau', 1, 3, 1, 'L2' WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO204') AND EXISTS (SELECT 1 FROM departments WHERE id = 1);
+INSERT INTO courses (name, code, description, department_id, credits, semester, level) SELECT 'Développement Web', 'INFO205', 'HTML CSS JS', 1, 3, 2, 'L2' WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO205') AND EXISTS (SELECT 1 FROM departments WHERE id = 1);
+INSERT INTO courses (name, code, description, department_id, credits, semester, level) SELECT 'Mathématiques Discrètes', 'MATH201', 'Logique et combinatoire', 1, 3, 1, 'L2' WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='MATH201') AND EXISTS (SELECT 1 FROM departments WHERE id = 1);
+INSERT INTO courses (name, code, description, department_id, credits, semester, level) SELECT 'Anglais Professionnel', 'LANG201', 'Anglais technique', 1, 2, 1, 'L2' WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='LANG201') AND EXISTS (SELECT 1 FROM departments WHERE id = 1);
+INSERT INTO courses (name, code, description, department_id, credits, semester, level) SELECT 'Gestion de Projets IT', 'INFO206', 'Agile et gestion de projet', 1, 2, 2, 'L2' WHERE NOT EXISTS (SELECT 1 FROM courses WHERE code='INFO206') AND EXISTS (SELECT 1 FROM departments WHERE id = 1);
 
 -- 4. Professor-course assignments (professor_id is UUID = profile_id)
 INSERT INTO professor_courses (professor_id, course_id, academic_year)
 SELECT '04540b2a-27cf-44a9-bcd5-c97e3465c0c8'::uuid, c.id, '2025-2026'
 FROM courses c
 WHERE c.code IN ('INFO201','INFO202','INFO203','INFO204','INFO205','MATH201','LANG201','INFO206')
+  AND EXISTS (SELECT 1 FROM profiles WHERE id = '04540b2a-27cf-44a9-bcd5-c97e3465c0c8')
   AND NOT EXISTS (SELECT 1 FROM professor_courses pc WHERE pc.professor_id = '04540b2a-27cf-44a9-bcd5-c97e3465c0c8' AND pc.course_id = c.id);
 
 -- 5. Student enrollments (student_id is UUID = profile_id)

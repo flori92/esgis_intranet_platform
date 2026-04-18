@@ -120,50 +120,55 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 ALTER TABLE "public"."cms_permissions" ENABLE ROW LEVEL SECURITY;
 
 -- Admin (users avec column is_admin = true) peut voir toutes les permissions
+DROP POLICY IF EXISTS "cms_permissions_admin_view" ON "public"."cms_permissions";
 CREATE POLICY "cms_permissions_admin_view" ON "public"."cms_permissions"
   FOR SELECT
   USING (
     EXISTS(
       SELECT 1 FROM public.profiles
       WHERE id = auth.uid()
-        AND is_admin = TRUE
+        AND role = 'admin'
     )
   );
 
 -- Admin peut créer des permissions
+DROP POLICY IF EXISTS "cms_permissions_admin_create" ON "public"."cms_permissions";
 CREATE POLICY "cms_permissions_admin_create" ON "public"."cms_permissions"
   FOR INSERT
   WITH CHECK (
     EXISTS(
       SELECT 1 FROM public.profiles
       WHERE id = auth.uid()
-        AND is_admin = TRUE
+        AND role = 'admin'
     )
   );
 
 -- Admin peut mettre à jour les permissions
+DROP POLICY IF EXISTS "cms_permissions_admin_update" ON "public"."cms_permissions";
 CREATE POLICY "cms_permissions_admin_update" ON "public"."cms_permissions"
   FOR UPDATE
   USING (
     EXISTS(
       SELECT 1 FROM public.profiles
       WHERE id = auth.uid()
-        AND is_admin = TRUE
+        AND role = 'admin'
     )
   );
 
 -- Admin peut supprimer les permissions
+DROP POLICY IF EXISTS "cms_permissions_admin_delete" ON "public"."cms_permissions";
 CREATE POLICY "cms_permissions_admin_delete" ON "public"."cms_permissions"
   FOR DELETE
   USING (
     EXISTS(
       SELECT 1 FROM public.profiles
       WHERE id = auth.uid()
-        AND is_admin = TRUE
+        AND role = 'admin'
     )
   );
 
 -- Utilisateurs peuvent voir leurs propres permissions
+DROP POLICY IF EXISTS "cms_permissions_user_view_own" ON "public"."cms_permissions";
 CREATE POLICY "cms_permissions_user_view_own" ON "public"."cms_permissions"
   FOR SELECT
   USING (user_id = auth.uid());
@@ -172,22 +177,25 @@ CREATE POLICY "cms_permissions_user_view_own" ON "public"."cms_permissions"
 ALTER TABLE "public"."cms_access_logs" ENABLE ROW LEVEL SECURITY;
 
 -- Admin peut voir tous les logs
+DROP POLICY IF EXISTS "cms_access_logs_admin_view" ON "public"."cms_access_logs";
 CREATE POLICY "cms_access_logs_admin_view" ON "public"."cms_access_logs"
   FOR SELECT
   USING (
     EXISTS(
       SELECT 1 FROM public.profiles
       WHERE id = auth.uid()
-        AND is_admin = TRUE
+        AND role = 'admin'
     )
   );
 
 -- Utilisateurs peuvent voir leurs propres logs
+DROP POLICY IF EXISTS "cms_access_logs_user_view_own" ON "public"."cms_access_logs";
 CREATE POLICY "cms_access_logs_user_view_own" ON "public"."cms_access_logs"
   FOR SELECT
   USING (user_id = auth.uid());
 
 -- Tous les utilisateurs authentifiés peuvent insérer leurs propres logs
+DROP POLICY IF EXISTS "cms_access_logs_insert" ON "public"."cms_access_logs";
 CREATE POLICY "cms_access_logs_insert" ON "public"."cms_access_logs"
   FOR INSERT
   WITH CHECK (user_id = auth.uid());

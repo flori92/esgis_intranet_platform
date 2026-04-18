@@ -14,19 +14,23 @@ RETURNS VOID AS $$
 DECLARE
     v_filiere_id INTEGER;
     v_group_id UUID;
+    v_course_id INTEGER;
     v_student_record RECORD;
 BEGIN
     -- Get exam assignment info
-    SELECT filiere_id, student_group_id INTO v_filiere_id, v_group_id 
+    SELECT filiere_id, student_group_id, course_id INTO v_filiere_id, v_group_id, v_course_id
     FROM public.exams WHERE id = p_exam_id;
 
     -- If assigned to a Filiere
     IF v_filiere_id IS NOT NULL THEN
         FOR v_student_record IN 
-            SELECT id FROM public.students WHERE filiere_id = v_filiere_id
+            SELECT profile_id
+            FROM public.students
+            WHERE filiere_id = v_filiere_id
+              AND profile_id IS NOT NULL
         LOOP
-            INSERT INTO public.student_exams (student_id, exam_id, status)
-            VALUES (v_student_record.id, p_exam_id, 'scheduled')
+            INSERT INTO public.student_exams (student_id, exam_id, course_id, status)
+            VALUES (v_student_record.profile_id, p_exam_id, v_course_id, 'scheduled')
             ON CONFLICT (student_id, exam_id) DO NOTHING;
         END LOOP;
     END IF;
@@ -34,10 +38,14 @@ BEGIN
     -- If assigned to a Group
     IF v_group_id IS NOT NULL THEN
         FOR v_student_record IN 
-            SELECT student_id FROM public.group_memberships WHERE group_id = v_group_id
+            SELECT s.profile_id
+            FROM public.group_memberships gm
+            JOIN public.students s ON s.id = gm.student_id
+            WHERE gm.group_id = v_group_id
+              AND s.profile_id IS NOT NULL
         LOOP
-            INSERT INTO public.student_exams (student_id, exam_id, status)
-            VALUES (v_student_record.student_id, p_exam_id, 'scheduled')
+            INSERT INTO public.student_exams (student_id, exam_id, course_id, status)
+            VALUES (v_student_record.profile_id, p_exam_id, v_course_id, 'scheduled')
             ON CONFLICT (student_id, exam_id) DO NOTHING;
         END LOOP;
     END IF;
