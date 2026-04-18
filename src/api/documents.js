@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 
 const getRelation = (value) => (Array.isArray(value) ? value[0] : value);
+const getDocumentVisibility = (document) => (document.is_public ? 'public' : (document.visibility || 'public'));
 
 const normalizeUploadedDocument = (document, tagsByDocumentId = {}) => {
   const course = getRelation(document.courses);
@@ -145,6 +146,29 @@ const normalizeLegacyDocument = (document) => ({
   is_public: document.is_public === true || document.visibility === 'public',
   visibility: document.visibility || (document.is_public ? 'public' : 'course')
 });
+
+const filterDocumentsForStudent = (documents = [], courses = []) => {
+  const courseIds = new Set((courses || []).map((course) => course.id).filter(Boolean));
+  const departmentIds = new Set((courses || []).map((course) => course.department_id).filter(Boolean));
+
+  return documents.filter((document) => {
+    const visibility = getDocumentVisibility(document);
+
+    if (visibility === 'public') {
+      return true;
+    }
+
+    if (visibility === 'course') {
+      return Boolean(document.course_id) && courseIds.has(document.course_id);
+    }
+
+    if (visibility === 'department') {
+      return Boolean(document.department_id) && departmentIds.has(document.department_id);
+    }
+
+    return false;
+  });
+};
 
 export const getCoursesForDocuments = async ({
   isAdmin = false,
@@ -420,10 +444,14 @@ export const getDocumentsPageData = async (options) => {
       return [...accumulator, course];
     }, []);
 
+    const visibleUploadedDocuments = options?.isStudent
+      ? filterDocumentsForStudent(uploadedResult.documents || [], uniqueCourses)
+      : (uploadedResult.documents || []);
+
     return {
       courses: uniqueCourses,
       departments: departmentsResult.departments || [],
-      documents: uploadedResult.documents || [],
+      documents: visibleUploadedDocuments,
       generatedDocuments: generatedResult.documents || [],
       error: null
     };

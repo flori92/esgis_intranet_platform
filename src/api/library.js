@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import { getStudentCourses } from './courses';
 
 const getRelation = (value) => (Array.isArray(value) ? value[0] : value);
+const getDocumentVisibility = (document) => (document.is_public ? 'public' : (document.visibility || 'public'));
 
 const normalizeFileType = (value) => {
   const normalized = `${value || ''}`.trim().toLowerCase();
@@ -149,6 +150,7 @@ export const getStudentLibraryContent = async (profileId) => {
     }
 
     const courseIds = [...new Set((courses || []).map((course) => course.id).filter(Boolean))];
+    const departmentIds = [...new Set((courses || []).map((course) => course.department_id).filter(Boolean))];
     const now = new Date().toISOString();
 
     const courseResourcesPromise = courseIds.length
@@ -186,11 +188,12 @@ export const getStudentLibraryContent = async (profileId) => {
         file_path,
         file_size,
         file_type,
+        department_id,
         visibility,
         is_public,
         created_at,
         course_id,
-        course:courses(id, name, code),
+        course:courses(id, name, code, department_id),
         uploaded_by_profile:profiles!uploaded_by(id, full_name)
       `)
       .order('created_at', { ascending: false });
@@ -208,11 +211,31 @@ export const getStudentLibraryContent = async (profileId) => {
       throw documentsError;
     }
 
-    const tagsByDocumentId = await buildDocumentTagsMap((documents || []).map((document) => document.id));
+    const visibleDocuments = (documents || []).filter((document) => {
+      const visibility = getDocumentVisibility(document);
+      const course = getRelation(document.course);
+      const documentDepartmentId = document.department_id || course?.department_id || null;
+
+      if (visibility === 'public') {
+        return true;
+      }
+
+      if (visibility === 'course') {
+        return Boolean(document.course_id) && courseIds.includes(document.course_id);
+      }
+
+      if (visibility === 'department') {
+        return Boolean(documentDepartmentId) && departmentIds.includes(documentDepartmentId);
+      }
+
+      return false;
+    });
+
+    const tagsByDocumentId = await buildDocumentTagsMap(visibleDocuments.map((document) => document.id));
 
     const items = [
       ...(courseResources || []).map(normalizeCourseResource),
-      ...(documents || []).map((document) => normalizeSharedDocument(document, tagsByDocumentId))
+      ...visibleDocuments.map((document) => normalizeSharedDocument(document, tagsByDocumentId))
     ].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
 
     return { items, error: null };
