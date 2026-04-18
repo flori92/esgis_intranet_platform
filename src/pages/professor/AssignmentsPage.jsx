@@ -211,6 +211,8 @@ const ProfessorAssignmentsPage = () => {
   });
   const [reviewForm, setReviewForm] = useState(initialReviewForm);
 
+  const NAVY = '#003366';
+
   const loadData = async (selectedCourseId = courseFilter) => {
     if (!authState.profile?.id) {
       return;
@@ -524,7 +526,7 @@ const ProfessorAssignmentsPage = () => {
     <Box sx={{ p: { xs: 2, md: 4 }, backgroundColor: '#F8FAFC', minHeight: '100vh' }}>
       <Stack spacing={1} sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <AssignmentIcon color="primary" sx={{ fontSize: 38 }} />
+          <AssignmentIcon sx={{ color: NAVY, fontSize: 38 }} />
           Devoirs & Remises
         </Typography>
         <Typography variant="body1" color="text.secondary">
@@ -540,9 +542,9 @@ const ProfessorAssignmentsPage = () => {
 
       <Grid container spacing={3}>
         <Grid item xs={12} lg={4}>
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #E5E7EB' }}>
+          <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: `2px solid ${alpha(NAVY, 0.3)}`, bgcolor: alpha(NAVY, 0.01) }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Typography variant="h6" fontWeight={800}>
+              <Typography variant="h6" fontWeight={800} color={NAVY}>
                 {editingAssignmentId ? 'Modifier le devoir' : 'Nouveau devoir'}
               </Typography>
               {editingAssignmentId && (
@@ -553,7 +555,7 @@ const ProfessorAssignmentsPage = () => {
             </Stack>
 
             <Stack spacing={2}>
-              <FormControl fullWidth>
+              <FormControl fullWidth size="small">
                 <InputLabel id="assignment-course-label">Cours</InputLabel>
                 <Select
                   labelId="assignment-course-label"
@@ -570,6 +572,7 @@ const ProfessorAssignmentsPage = () => {
               </FormControl>
 
               <TextField
+                size="small"
                 label="Titre du devoir"
                 value={assignmentForm.title}
                 onChange={(event) => handleAssignmentFormChange('title', event.target.value)}
@@ -577,6 +580,7 @@ const ProfessorAssignmentsPage = () => {
               />
 
               <TextField
+                size="small"
                 label="Description"
                 value={assignmentForm.description}
                 onChange={(event) => handleAssignmentFormChange('description', event.target.value)}
@@ -586,6 +590,7 @@ const ProfessorAssignmentsPage = () => {
               />
 
               <TextField
+                size="small"
                 label="Consignes"
                 value={assignmentForm.instructions}
                 onChange={(event) => handleAssignmentFormChange('instructions', event.target.value)}
@@ -597,6 +602,7 @@ const ProfessorAssignmentsPage = () => {
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <TextField
+                    size="small"
                     label="Disponible a partir de"
                     type="datetime-local"
                     value={assignmentForm.availableFrom}
@@ -607,6 +613,7 @@ const ProfessorAssignmentsPage = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
+                    size="small"
                     label="Date limite"
                     type="datetime-local"
                     value={assignmentForm.dueAt}
@@ -624,10 +631,11 @@ const ProfessorAssignmentsPage = () => {
                     onChange={(event) => handleAssignmentFormChange('allowLateSubmission', event.target.checked)}
                   />
                 }
-                label="Autoriser les remises tardives"
+                label={<Typography variant="body2">Autoriser les remises tardives</Typography>}
               />
 
               <TextField
+                size="small"
                 label="Cloture remises tardives"
                 type="datetime-local"
                 value={assignmentForm.lateUntil}
@@ -639,7 +647,7 @@ const ProfessorAssignmentsPage = () => {
 
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
+                  <FormControl fullWidth size="small">
                     <InputLabel id="assignment-mode-label">Mode de remise</InputLabel>
                     <Select
                       labelId="assignment-mode-label"
@@ -657,6 +665,7 @@ const ProfessorAssignmentsPage = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
+                    size="small"
                     label="Bareme / points max"
                     type="number"
                     value={assignmentForm.maxPoints}
@@ -667,7 +676,7 @@ const ProfessorAssignmentsPage = () => {
                 </Grid>
               </Grid>
 
-              <FormControl fullWidth>
+              <FormControl fullWidth size="small">
                 <InputLabel id="assignment-status-label">Statut</InputLabel>
                 <Select
                   labelId="assignment-status-label"
@@ -686,17 +695,17 @@ const ProfessorAssignmentsPage = () => {
               <Stack spacing={1}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="subtitle2" fontWeight={700}>
-                    Rubric / bareme reutilisable
+                    Rubric / bareme
                   </Typography>
                   <Button
                     size="small"
                     startIcon={<PlaylistAddIcon />}
                     onClick={() => setRubricDialogOpen(true)}
                   >
-                    Nouvelle rubric
+                    Nouvelle
                   </Button>
                 </Stack>
-                <FormControl fullWidth>
+                <FormControl fullWidth size="small">
                   <InputLabel id="assignment-rubric-label">Rubric</InputLabel>
                   <Select
                     labelId="assignment-rubric-label"
@@ -714,28 +723,6 @@ const ProfessorAssignmentsPage = () => {
                     ))}
                   </Select>
                 </FormControl>
-                {selectedRubric && (
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="subtitle2" fontWeight={800}>
-                      {selectedRubric.title}
-                    </Typography>
-                    {selectedRubric.description && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        {selectedRubric.description}
-                      </Typography>
-                    )}
-                    <List dense disablePadding>
-                      {selectedRubric.criteria.map((criterion) => (
-                        <ListItem key={criterion.id} disableGutters sx={{ py: 0.5 }}>
-                          <ListItemText
-                            primary={`${criterion.title} (${formatPoints(criterion.max_points)} pts)`}
-                            secondary={criterion.description || null}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Paper>
-                )}
               </Stack>
 
               <Button
@@ -743,6 +730,7 @@ const ProfessorAssignmentsPage = () => {
                 startIcon={<CheckCircleOutlineIcon />}
                 onClick={handleSaveAssignment}
                 disabled={saving}
+                sx={{ bgcolor: NAVY, borderRadius: 2 }}
               >
                 {editingAssignmentId ? 'Mettre a jour' : 'Creer le devoir'}
               </Button>
@@ -762,7 +750,7 @@ const ProfessorAssignmentsPage = () => {
               <Typography variant="h6" fontWeight={800}>
                 Devoirs publies et brouillons
               </Typography>
-              <FormControl sx={{ minWidth: 240 }}>
+              <FormControl sx={{ minWidth: 240 }} size="small">
                 <InputLabel id="assignment-filter-course-label">Filtrer par cours</InputLabel>
                 <Select
                   labelId="assignment-filter-course-label"
@@ -780,116 +768,73 @@ const ProfessorAssignmentsPage = () => {
               </FormControl>
             </Stack>
 
-            <Stack spacing={2}>
+            <Stack spacing={2.5}>
               {filteredAssignments.length ? (
                 filteredAssignments.map((assignment) => (
-                  <Card key={assignment.id} variant="outlined" sx={{ borderRadius: 2 }}>
-                    <CardContent>
-                      <Stack spacing={1.5}>
+                  <Card key={assignment.id} elevation={0} sx={{ 
+                    borderRadius: 2, 
+                    border: `2px solid ${alpha(NAVY, 0.2)}`,
+                    bgcolor: alpha(NAVY, 0.005),
+                    transition: 'all 0.3s ease',
+                    '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 24px rgba(0,0,0,0.05)', borderColor: alpha(NAVY, 0.4) }
+                  }}>
+                    <CardContent sx={{ p: 3 }}>
+                      <Stack spacing={2.5}>
                         <Stack
-                          direction={{ xs: 'column', md: 'row' }}
+                          direction={{ xs: 'column', sm: 'row' }}
                           justifyContent="space-between"
-                          alignItems={{ xs: 'flex-start', md: 'center' }}
+                          alignItems={{ xs: 'flex-start', sm: 'center' }}
                           spacing={1}
                         >
                           <Box>
-                            <Typography variant="h6" fontWeight={800}>
+                            <Typography variant="h6" fontWeight={800} color={NAVY}>
                               {assignment.title}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {assignment.course?.code} - {assignment.course?.name}
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                              {assignment.course?.code} · {assignment.course?.name}
                             </Typography>
                           </Box>
                           <Chip
                             size="small"
                             color={getStatusColor(assignment.status)}
                             label={statusOptions.find((option) => option.value === assignment.status)?.label || assignment.status}
+                            sx={{ fontWeight: 'bold' }}
                           />
                         </Stack>
 
-                        {assignment.description && (
-                          <Typography variant="body2" color="text.secondary">
-                            {assignment.description}
-                          </Typography>
-                        )}
-
                         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                          <Chip
-                            size="small"
-                            icon={<SendTimeExtensionIcon />}
-                            label={`Disponibilite: ${formatDateTime(assignment.available_from)}`}
-                          />
-                          <Chip
-                            size="small"
-                            icon={<AssignmentIcon />}
-                            label={`Echeance: ${formatDateTime(assignment.due_at)}`}
-                          />
-                          <Chip
-                            size="small"
-                            icon={<GradingIcon />}
-                            label={`${formatPoints(assignment.max_points)} pts`}
-                          />
-                          <Chip
-                            size="small"
-                            icon={<RuleIcon />}
-                            label={submissionModeOptions.find((option) => option.value === assignment.submission_mode)?.label || assignment.submission_mode}
-                          />
+                          <Chip size="small" icon={<SendTimeExtensionIcon />} label={`Le: ${formatDateTime(assignment.available_from)}`} variant="outlined" />
+                          <Chip size="small" icon={<AssignmentIcon />} label={`Deadline: ${formatDateTime(assignment.due_at)}`} variant="outlined" />
+                          <Chip size="small" icon={<GradingIcon />} label={`${formatPoints(assignment.max_points)} pts`} variant="outlined" />
                         </Stack>
 
                         <Grid container spacing={2}>
-                          <Grid item xs={12} md={4}>
-                            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                Remises attendues
-                              </Typography>
-                              <Typography variant="h5" fontWeight={800}>
-                                {assignment.stats.expected_count}
-                              </Typography>
-                            </Paper>
-                          </Grid>
-                          <Grid item xs={12} md={4}>
-                            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                Remises recues
-                              </Typography>
-                              <Typography variant="h5" fontWeight={800}>
-                                {assignment.stats.submitted_count}
-                              </Typography>
-                            </Paper>
-                          </Grid>
-                          <Grid item xs={12} md={4}>
-                            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                Evaluations faites
-                              </Typography>
-                              <Typography variant="h5" fontWeight={800}>
-                                {assignment.stats.graded_count}
-                              </Typography>
-                            </Paper>
-                          </Grid>
+                          {[
+                            { label: 'Attendues', value: assignment.stats.expected_count, color: '#455a64' },
+                            { label: 'Recues', value: assignment.stats.submitted_count, color: NAVY },
+                            { label: 'Notees', value: assignment.stats.graded_count, color: '#2e7d32' }
+                          ].map((stat) => (
+                            <Grid item xs={4} key={stat.label}>
+                              <Box sx={{ 
+                                p: 1.5, textAlign: 'center', borderRadius: 2, 
+                                border: `1px solid ${alpha(stat.color, 0.2)}`,
+                                bgcolor: alpha(stat.color, 0.03)
+                              }}>
+                                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase' }}>{stat.label}</Typography>
+                                <Typography variant="h5" fontWeight={900} color={stat.color}>{stat.value}</Typography>
+                              </Box>
+                            </Grid>
+                          ))}
                         </Grid>
 
-                        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                          <Button
-                            variant="outlined"
-                            startIcon={<VisibilityIcon />}
-                            onClick={() => openSubmissions(assignment)}
-                          >
-                            Voir les remises
+                        <Stack direction="row" spacing={1.5}>
+                          <Button variant="contained" size="small" startIcon={<VisibilityIcon />} onClick={() => openSubmissions(assignment)} sx={{ borderRadius: 2, bgcolor: NAVY }}>
+                            Remises
                           </Button>
-                          <Button
-                            variant="outlined"
-                            startIcon={<EditOutlinedIcon />}
-                            onClick={() => handleEditAssignment(assignment)}
-                          >
+                          <Button variant="outlined" size="small" startIcon={<EditOutlinedIcon />} onClick={() => handleEditAssignment(assignment)} sx={{ borderRadius: 2 }}>
                             Modifier
                           </Button>
-                          <Button
-                            color="error"
-                            variant="outlined"
-                            startIcon={<DeleteOutlineIcon />}
-                            onClick={() => handleDeleteAssignment(assignment.id)}
-                          >
+                          <Button color="error" variant="text" size="small" startIcon={<DeleteOutlineIcon />} onClick={() => handleDeleteAssignment(assignment.id)} sx={{ fontWeight: 'bold' }}>
                             Supprimer
                           </Button>
                         </Stack>
@@ -906,6 +851,7 @@ const ProfessorAssignmentsPage = () => {
           </Paper>
         </Grid>
       </Grid>
+
 
       <Dialog open={rubricDialogOpen} onClose={() => setRubricDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Nouvelle rubric</DialogTitle>

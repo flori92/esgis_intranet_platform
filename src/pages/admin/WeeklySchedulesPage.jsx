@@ -307,63 +307,68 @@ const WeeklySchedulesPage = () => {
   };
 
   return (
-    <Box sx={{ py: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
+    <Box sx={{ p: { xs: 2, md: 4 }, backgroundColor: '#F8FAFC', minHeight: '100vh' }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2} sx={{ mb: 4 }}>
         <Box>
-          <Typography variant="h4" fontFamily="Montserrat" fontWeight="bold" color="#003366">
+          <Typography variant="h4" fontWeight="900" sx={{ letterSpacing: '-0.5px', color: '#003366' }}>
             Emplois du temps PDF
           </Typography>
-          <Typography variant="body2" color="text.secondary" fontFamily="Montserrat">
-            Publiez les emplois du temps hebdomadaires pour chaque filière
+          <Typography variant="body1" color="text.secondary">
+            Publiez et gerez les emplois du temps hebdomadaires par filiere.
           </Typography>
         </Box>
         <Button
           variant="contained"
           startIcon={<UploadIcon />}
           onClick={() => { setDialogOpen(true); setError(null); setSuccess(null); }}
-          sx={{ bgcolor: '#003366', fontFamily: 'Montserrat', '&:hover': { bgcolor: '#002244' } }}
+          sx={{ bgcolor: '#003366', borderRadius: 2, px: 3 }}
         >
           Publier un EDT
         </Button>
       </Stack>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>{success}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setSuccess(null)}>{success}</Alert>}
 
       {loading ? (
-        <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
       ) : schedules.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <EventNoteIcon sx={{ fontSize: 64, color: '#ccc', mb: 2 }} />
-          <Typography color="text.secondary" fontFamily="Montserrat">
-            Aucun emploi du temps publié pour le moment
-          </Typography>
+        <Paper elevation={0} sx={{ p: 8, textAlign: 'center', borderRadius: 3, border: '1px dashed #E5E7EB' }}>
+          <EventNoteIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2, opacity: 0.5 }} />
+          <Typography color="text.secondary" fontWeight={500}>Aucun emploi du temps publie pour le moment.</Typography>
         </Paper>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead sx={{ bgcolor: '#003366' }}>
+        <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid #E5E7EB' }}>
+          <Table size="small">
+            <TableHead sx={{ bgcolor: '#F8FAFC' }}>
               <TableRow>
-                {['Titre', 'Département', 'Parcours', 'Niveau', 'Semaine du', 'Statut', 'Publié par', 'Actions'].map((h) => (
-                  <TableCell key={h} sx={{ color: 'white', fontFamily: 'Montserrat', fontWeight: 'bold' }}>{h}</TableCell>
+                {['Titre', 'Filiere & Niveau', 'Semaine', 'Statut', 'Actions'].map((h) => (
+                  <TableCell key={h} sx={{ fontWeight: 800 }}>{h}</TableCell>
                 ))}
               </TableRow>
             </TableHead>
             <TableBody>
               {schedules.map((s) => (
                 <TableRow key={s.id} hover>
-                  <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.title}</TableCell>
-                  <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.departments?.name || '-'}</TableCell>
-                  <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.filieres?.name || 'Toutes filières'}</TableCell>
-                  <TableCell><Chip label={s.level_code} size="small" color="primary" /></TableCell>
-                  <TableCell sx={{ fontFamily: 'Montserrat' }}>{formatWeekRange(s.week_start_date)}</TableCell>
-                  <TableCell><Chip label={s.status} size="small" color={statusColor(s.status)} /></TableCell>
-                  <TableCell sx={{ fontFamily: 'Montserrat' }}>{s.profiles?.full_name || '-'}</TableCell>
                   <TableCell>
-                    <Tooltip title="Prévisualiser"><IconButton onClick={() => handlePreview(s)} color="primary"><PreviewIcon /></IconButton></Tooltip>
-                    <Tooltip title="Télécharger"><IconButton onClick={() => handleDownload(s)} color="info"><DownloadIcon /></IconButton></Tooltip>
-                    <Tooltip title="Archiver"><IconButton onClick={() => handleArchive(s)} color="warning"><ArchiveIcon /></IconButton></Tooltip>
-                    <Tooltip title="Supprimer"><IconButton onClick={() => handleDelete(s)} color="error"><DeleteIcon /></IconButton></Tooltip>
+                    <Typography variant="body2" fontWeight={700} color="primary">{s.title}</Typography>
+                    <Typography variant="caption" color="text.secondary">{s.departments?.name}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip label={s.level_code} size="small" sx={{ fontWeight: 800, bgcolor: alpha('#003366', 0.1), color: '#003366' }} />
+                      <Typography variant="body2">{s.filieres?.name || 'Toutes filieres'}</Typography>
+                    </Stack>
+                  </TableCell>
+                  <TableCell><Typography variant="body2" fontWeight={500}>{formatWeekRange(s.week_start_date)}</Typography></TableCell>
+                  <TableCell><Chip label={s.status} size="small" color={statusColor(s.status)} sx={{ fontWeight: 700, textTransform: 'capitalize' }} /></TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={0.5}>
+                      <Tooltip title="Apercu"><IconButton size="small" onClick={() => handlePreview(s)} color="primary"><PreviewIcon fontSize="small" /></IconButton></Tooltip>
+                      <Tooltip title="Telecharger"><IconButton size="small" onClick={() => handleDownload(s)} color="info"><DownloadIcon fontSize="small" /></IconButton></Tooltip>
+                      <Tooltip title="Archiver"><IconButton size="small" onClick={() => handleArchive(s)} color="warning"><ArchiveIcon fontSize="small" /></IconButton></Tooltip>
+                      <Tooltip title="Supprimer"><IconButton size="small" onClick={() => handleDelete(s)} color="error"><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                    </Stack>
                   </TableCell>
                 </TableRow>
               ))}

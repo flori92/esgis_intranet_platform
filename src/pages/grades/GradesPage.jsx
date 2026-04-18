@@ -429,233 +429,150 @@ export default function GradesPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Mes notes et moyennes
-      </Typography>
+    <Box sx={{ p: { xs: 2, md: 4 }, backgroundColor: '#F8FAFC', minHeight: '100vh' }}>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, letterSpacing: '-0.5px' }}>
+          <SchoolIcon color="primary" sx={{ fontSize: 38 }} />
+          Mes notes et moyennes
+        </Typography>
+        <Typography variant="body1" color="text.secondary">Consultez vos resultats et suivez votre progression academique.</Typography>
+      </Box>
       
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
       
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-          <CircularProgress />
-        </Box>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
       ) : (
         <>
-          {/* Filtres */}
-          <Paper sx={{ p: 2, mb: 3 }}>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <FormControl variant="outlined" sx={{ minWidth: 200 }}>
-                <InputLabel id="academic-year-label">Année académique</InputLabel>
-                <Select
-                  labelId="academic-year-label"
-                  value={selectedAcademicYear}
-                  onChange={handleYearChange}
-                  label="Année académique"
-                >
-                  {academicYears.map(year => (
-                    <MenuItem key={year} value={year}>{year}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              <FormControl variant="outlined" sx={{ minWidth: 150 }}>
-                <InputLabel id="semester-label">Semestre</InputLabel>
-                <Select
-                  labelId="semester-label"
-                  value={selectedSemester}
-                  onChange={handleSemesterChange}
-                  label="Semestre"
-                >
-                  <MenuItem value="all">Tous</MenuItem>
-                  <MenuItem value="1">Semestre 1</MenuItem>
-                  <MenuItem value="2">Semestre 2</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+          <Paper elevation={0} sx={{ p: 2.5, mb: 4, borderRadius: 2, border: '1px solid #E5E7EB' }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="academic-year-label">Annee academique</InputLabel>
+                  <Select labelId="academic-year-label" value={selectedAcademicYear} onChange={handleYearChange} label="Annee academique">
+                    {academicYears.map(year => <MenuItem key={year} value={year}>{year}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="semester-label">Semestre</InputLabel>
+                  <Select labelId="semester-label" value={selectedSemester} onChange={handleSemesterChange} label="Semestre">
+                    <MenuItem value="all">Tous les semestres</MenuItem>
+                    <MenuItem value="1">Semestre 1</MenuItem>
+                    <MenuItem value="2">Semestre 2</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
           </Paper>
           
-          {/* Onglets */}
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
             <Tabs value={tabValue} onChange={handleTabChange}>
-              <Tab label="Résultats détaillés" icon={<AssignmentIcon />} iconPosition="start" />
-              <Tab label="Moyennes" icon={<SchoolIcon />} iconPosition="start" />
+              <Tab label="Resultats detailles" icon={<AssignmentIcon />} iconPosition="start" sx={{ fontWeight: 700 }} />
+              <Tab label="Moyennes & Validation" icon={<SchoolIcon />} iconPosition="start" sx={{ fontWeight: 700 }} />
             </Tabs>
           </Box>
           
-          {/* Contenu des onglets */}
           {tabValue === 0 ? (
-            <TableContainer component={Paper}>
+            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid #E5E7EB' }}>
               <Table>
-                {renderTableHeader()}
+                <TableHead sx={{ bgcolor: '#F8FAFC' }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 800 }}>Date</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Cours</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Examen</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Type</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Note</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800 }}>Statut</TableCell>
+                  </TableRow>
+                </TableHead>
                 <TableBody>
                   {current().length > 0 ? (
                     current().map((result) => (
-                      <TableRow key={result.id}>
+                      <TableRow key={result.id} hover>
+                        <TableCell>{new Date(result.date).toLocaleDateString('fr-FR')}</TableCell>
                         <TableCell>
-                          {new Date(result.date).toLocaleDateString('fr-FR')}
+                          <Typography variant="body2" fontWeight={700} color="primary">{result.course_name}</Typography>
+                          <Typography variant="caption" color="text.secondary">{result.course_code}</Typography>
+                        </TableCell>
+                        <TableCell>{result.exam_title}</TableCell>
+                        <TableCell>
+                          <Chip label={result.type} size="small" variant="outlined" sx={{ fontWeight: 600, fontSize: '0.65rem', textTransform: 'uppercase' }} />
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {result.course_code}
-                          </Typography>
-                          {result.course_name || 'Cours inconnu'}
+                          <Typography fontWeight={800}>{result.grade}/{result.max_grade}</Typography>
+                          <Typography variant="caption" color="text.secondary">({((result.grade / result.max_grade) * 20).toFixed(2)}/20)</Typography>
                         </TableCell>
-                        <TableCell>{result.exam_title || 'Examen inconnu'}</TableCell>
-                        <TableCell>
+                        <TableCell align="right">
                           <Chip 
-                            label={result.type === 'midterm' ? 'Partiel' : 
-                                  result.type === 'final' ? 'Final' : 
-                                  result.type === 'quiz' ? 'Quiz' : 
-                                  result.type === 'project' ? 'Projet' : 
-                                  result.type === 'practical' ? 'TP' : 
-                                  result.type}
-                            size="small"
-                            color={result.type === 'midterm' ? 'primary' : 
-                                  result.type === 'final' ? 'secondary' : 
-                                  'default'}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {result.grade !== null ? (
-                            <Typography>
-                              {result.grade}/{result.max_grade}
-                              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                ({((result.grade / result.max_grade) * 20).toFixed(2)}/20)
-                              </Typography>
-                            </Typography>
-                          ) : (
-                            <Typography color="text.secondary">
-                              Non noté
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={result.status === 'graded' ? 'Noté' : 
-                                  result.status === 'pending' ? 'En attente' : 
-                                  result.status === 'absent' ? 'Absent' : 
-                                  result.status}
-                            color={result.status === 'graded' ? 'success' : 
-                                  result.status === 'pending' ? 'warning' : 
-                                  result.status === 'absent' ? 'error' : 
-                                  'default'}
-                            size="small"
+                            label={result.status === 'graded' ? 'Note' : 'En attente'} 
+                            color={result.status === 'graded' ? 'success' : 'warning'}
+                            size="small" sx={{ fontWeight: 700 }}
                           />
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                        <Typography variant="body1" color="text.secondary">
-                          Aucun résultat trouvé pour les critères sélectionnés.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
+                    <TableRow><TableCell colSpan={6} align="center" sx={{ py: 6 }}><Typography color="text.secondary">Aucun resultat trouve.</Typography></TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
             </TableContainer>
           ) : (
             <Box>
-              {/* Moyennes par Semestre */}
-              <Typography variant="h6" gutterBottom>
-                Moyennes par semestre
-              </Typography>
-              
-              <Grid container spacing={3} sx={{ mb: 4 }}>
-                {semesterAverages.length > 0 ? (
-                  semesterAverages
-                    // Filtrer par semestre si nécessaire
-                    .filter(semester => selectedSemester === 'all' || semester.semester.toString() === selectedSemester)
-                    .map((semester) => (
+              <Typography variant="h6" fontWeight={800} gutterBottom sx={{ mb: 3 }}>Moyennes par semestre</Typography>
+              <Grid container spacing={3} sx={{ mb: 6 }}>
+                {semesterAverages.filter(s => selectedSemester === 'all' || s.semester.toString() === selectedSemester).map((semester) => (
                     <Grid item xs={12} md={6} lg={4} key={semester.semester}>
-                      <Card>
-                        <CardContent>
-                          <Typography variant="h6" gutterBottom>
-                            Semestre {semester.semester}
-                          </Typography>
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="body2" color="text.secondary">
-                              Moyenne générale
-                            </Typography>
-                            <Typography variant="h5">
-                              {formatGrade(semester.average)}
-                            </Typography>
-                            {renderProgressBar(semester.average)}
+                      <Card elevation={0} sx={{ 
+                        borderRadius: 2, border: `2px solid ${alpha('#003366', 0.2)}`, bgcolor: alpha('#003366', 0.01),
+                        transition: 'all 0.3s ease', '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 24px rgba(0,0,0,0.05)', borderColor: '#003366' }
+                      }}>
+                        <CardContent sx={{ p: 3 }}>
+                          <Typography variant="overline" fontWeight={800} color="text.secondary">Semestre {semester.semester}</Typography>
+                          <Box sx={{ my: 2 }}>
+                            <Typography variant="h4" fontWeight={900} color="#003366">{formatGrade(semester.average)}</Typography>
+                            <Box sx={{ mt: 1 }}>{renderProgressBar(semester.average)}</Box>
                           </Box>
                           <Divider sx={{ my: 2 }} />
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography>
-                              Crédits validés: {semester.validated_credits}/{semester.total_credits}
-                            </Typography>
-                            <Chip 
-                              label={semester.status === 'passed' ? 'Validé' : 'En cours'} 
-                              color={semester.status === 'passed' ? 'success' : 'warning'}
-                            />
-                          </Box>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center">
+                            <Typography variant="body2" fontWeight={600}>Credits: {semester.validated_credits}/{semester.total_credits}</Typography>
+                            <Chip label={semester.status === 'passed' ? 'Valide' : 'En cours'} color={semester.status === 'passed' ? 'success' : 'warning'} size="small" sx={{ fontWeight: 700 }} />
+                          </Stack>
                         </CardContent>
                       </Card>
                     </Grid>
-                  ))
-                ) : (
-                  <Grid item xs={12}>
-                    <Alert severity="info">
-                      Aucune donnée disponible pour ce semestre.
-                    </Alert>
-                  </Grid>
-                )}
+                  ))}
               </Grid>
 
-              {/* Moyennes par Cours */}
-              <Typography variant="h6" gutterBottom>
-                Moyennes par cours
-              </Typography>
-              
-              <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
+              <Typography variant="h6" fontWeight={800} gutterBottom sx={{ mb: 3 }}>Detail par cours</Typography>
+              <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid #E5E7EB' }}>
+                <Table size="small">
+                  <TableHead sx={{ bgcolor: '#F8FAFC' }}>
                     <TableRow>
-                      <TableCell>Code</TableCell>
-                      <TableCell>Cours</TableCell>
-                      <TableCell>Semestre</TableCell>
-                      <TableCell>Moyenne</TableCell>
-                      <TableCell>Progression</TableCell>
-                      <TableCell>Statut</TableCell>
+                      <TableCell sx={{ fontWeight: 800 }}>Cours</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 800 }}>Sem.</TableCell>
+                      <TableCell sx={{ fontWeight: 800 }}>Moyenne</TableCell>
+                      <TableCell sx={{ minWidth: 200, fontWeight: 800 }}>Validation</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 800 }}>Statut</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {courseAverages.length > 0 ? (
-                      courseAverages
-                        // Filtrer par semestre si nécessaire
-                        .filter(course => selectedSemester === 'all' || course.semester.toString() === selectedSemester)
-                        .map((course) => (
-                        <TableRow key={course.course_id}>
-                          <TableCell>{course.course_code}</TableCell>
-                          <TableCell>{course.course_name}</TableCell>
-                          <TableCell>{course.semester}</TableCell>
-                          <TableCell>{formatGrade(course.average)}</TableCell>
-                          <TableCell sx={{ width: '30%' }}>{renderProgressBar(course.average)}</TableCell>
+                    {courseAverages.filter(c => selectedSemester === 'all' || c.semester.toString() === selectedSemester).map((course) => (
+                        <TableRow key={course.course_id} hover>
                           <TableCell>
-                            <Chip 
-                              label={course.status === 'passed' ? 'Validé' : 'En cours'} 
-                              color={course.status === 'passed' ? 'success' : 'warning'}
-                            />
+                            <Typography variant="body2" fontWeight={700}>{course.course_name}</Typography>
+                            <Typography variant="caption" color="text.secondary">{course.course_code}</Typography>
+                          </TableCell>
+                          <TableCell align="center">{course.semester}</TableCell>
+                          <TableCell><Typography fontWeight={800}>{formatGrade(course.average)}</Typography></TableCell>
+                          <TableCell>{renderProgressBar(course.average)}</TableCell>
+                          <TableCell align="right">
+                            <Chip label={course.status === 'passed' ? 'Valide' : 'A suivre'} color={course.status === 'passed' ? 'success' : 'default'} size="small" sx={{ fontWeight: 700 }} />
                           </TableCell>
                         </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ padding: 3 }}>
-                          Aucune donnée disponible pour ce semestre.
-                        </TableCell>
-                      </TableRow>
-                    )}
+                      ))}
                   </TableBody>
                 </Table>
               </TableContainer>

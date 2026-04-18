@@ -184,25 +184,36 @@ export default function ValidationQueuePage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Card>
-        <CardHeader
-          title="File d'attente de validation"
-          subheader="Traiter les demandes documentaires et institutionnelles en attente"
-        />
-        <CardContent>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 3 }}>
-            <Chip icon={<InfoIcon />} label={`Reçues: ${stats.received}`} color={stats.received ? 'info' : 'default'} variant="outlined" />
-            <Chip icon={<InfoIcon />} label={`En cours: ${stats.processing}`} color={stats.processing ? 'warning' : 'default'} variant="outlined" />
-            <Chip icon={<InfoIcon />} label={`Prêtes: ${stats.ready}`} color={stats.ready ? 'secondary' : 'default'} variant="outlined" />
-            <Chip icon={<CheckIcon />} label={`Approuvées: ${stats.approved}`} color="success" variant="outlined" />
-            <Chip icon={<CloseIcon />} label={`Rejetées: ${stats.rejected}`} color="error" variant="outlined" />
+    <Box sx={{ p: { xs: 2, md: 4 }, backgroundColor: '#F8FAFC', minHeight: '100vh' }}>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={900} sx={{ letterSpacing: '-0.5px' }}>File de Validation</Typography>
+        <Typography variant="body1" color="text.secondary">Traitez les demandes documentaires et institutionnelles du campus.</Typography>
+      </Box>
+
+      <Card elevation={0} sx={{ borderRadius: 2, border: '1px solid #E5E7EB' }}>
+        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 4 }}>
+            {[
+              { label: 'Reçues', value: stats.received, color: 'info' },
+              { label: 'En cours', value: stats.processing, color: 'warning' },
+              { label: 'Prêtes', value: stats.ready, color: 'secondary' },
+              { label: 'Approuvées', value: stats.approved, color: 'success' },
+              { label: 'Rejetées', value: stats.rejected, color: 'error' }
+            ].map(s => (
+              <Chip 
+                key={s.label}
+                label={`${s.label}: ${s.value}`} 
+                color={s.value > 0 ? s.color : 'default'} 
+                variant={s.value > 0 ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 700, borderRadius: 1.5 }}
+              />
+            ))}
           </Stack>
 
-          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+          {success && <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
 
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 4 }}>
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <InputLabel>Statut</InputLabel>
               <Select value={filterStatus} label="Statut" onChange={(event) => setFilterStatus(event.target.value)}>
@@ -214,7 +225,7 @@ export default function ValidationQueuePage() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel>Type de demande</InputLabel>
+              <InputLabel>Type</InputLabel>
               <Select value={filterType} label="Type de demande" onChange={(event) => setFilterType(event.target.value)}>
                 <MenuItem value="">Tous les types</MenuItem>
                 {REQUEST_TYPES.map((type) => (
@@ -226,88 +237,45 @@ export default function ValidationQueuePage() {
             <TextField
               size="small"
               fullWidth
-              placeholder="Rechercher par demandeur, type ou objet..."
+              placeholder="Rechercher par demandeur, type..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchQueue} sx={{ borderRadius: 2 }}>Actualiser</Button>
           </Stack>
 
           {loading && !queue.length ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-              <CircularProgress />
-            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
           ) : (
-            <TableContainer component={Paper}>
+            <TableContainer sx={{ border: '1px solid #E5E7EB', borderRadius: 2 }}>
               <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                    <TableCell><strong>Date</strong></TableCell>
-                    <TableCell><strong>Demandeur</strong></TableCell>
-                    <TableCell><strong>Type</strong></TableCell>
-                    <TableCell><strong>Objet</strong></TableCell>
-                    <TableCell><strong>Priorité</strong></TableCell>
-                    <TableCell align="center"><strong>Statut</strong></TableCell>
-                    <TableCell align="center"><strong>En attente</strong></TableCell>
-                    <TableCell align="right"><strong>Actions</strong></TableCell>
+                <TableHead sx={{ bgcolor: '#F8FAFC' }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 800 }}>Date</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Demandeur</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Type</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Objet</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 800 }}>Statut</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 800 }}>Attente</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800 }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredQueue.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                        <Typography color="text.secondary">Aucune demande à afficher.</Typography>
-                      </TableCell>
-                    </TableRow>
+                    <TableRow><TableCell colSpan={7} align="center" sx={{ py: 6 }}><Typography color="text.secondary">Aucune demande.</Typography></TableCell></TableRow>
                   ) : filteredQueue.map((item) => (
                     <TableRow key={item.id} hover>
+                      <TableCell><Typography variant="body2">{format(new Date(item.created_at), 'dd MMM yyyy', { locale: fr })}</Typography></TableCell>
                       <TableCell>
-                        {new Date(item.created_at).toLocaleDateString('fr-FR', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        <Typography variant="body2" fontWeight={700} color="primary">{getRequesterName(item.requester)}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.requester?.email || '-'}</Typography>
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {getRequesterName(item.requester)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {item.requester?.email || '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={getRequestLabel(item.request_type)} variant="outlined" size="small" />
-                      </TableCell>
-                      <TableCell sx={{ maxWidth: 260 }}>
-                        <Typography variant="body2" noWrap title={item.details?.title || item.details?.document_name || item.request_type}>
-                          {item.details?.title || item.details?.document_name || item.request_type}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={item.priority || 'normal'}
-                          size="small"
-                          color={item.priority === 'urgent' ? 'error' : item.priority === 'high' ? 'warning' : 'default'}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Chip label={getStatusLabel(item.status)} color={getStatusColor(item.status)} size="small" />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Typography variant="body2" color={getWaitingDays(item.created_at) > 7 ? 'error.main' : 'text.secondary'}>
-                          {getWaitingDays(item.created_at)}j
-                        </Typography>
-                      </TableCell>
+                      <TableCell><Chip label={getRequestLabel(item.request_type)} variant="outlined" size="small" sx={{ fontWeight: 600, fontSize: '0.7rem' }} /></TableCell>
+                      <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" noWrap>{item.details?.title || item.request_type}</Typography></TableCell>
+                      <TableCell align="center"><Chip label={getStatusLabel(item.status)} color={getStatusColor(item.status)} size="small" sx={{ fontWeight: 700 }} /></TableCell>
+                      <TableCell align="center"><Typography variant="body2" fontWeight={700} color={getWaitingDays(item.created_at) > 3 ? 'error.main' : 'text.secondary'}>{getWaitingDays(item.created_at)}j</Typography></TableCell>
                       <TableCell align="right">
-                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          <Tooltip title="Détails & Actions">
-                            <IconButton size="small" color="primary" onClick={() => openDetails(item)}>
-                              <VisibilityIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
+                        <IconButton size="small" color="primary" onClick={() => openDetails(item)}><VisibilityIcon fontSize="small" /></IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
