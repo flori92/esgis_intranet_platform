@@ -113,8 +113,6 @@ const SummaryCard = ({ title, value, subtitle, accent }) => (
   </Paper>
 );
 
-const NAVY = '#003366';
-
 // ... other constants ...
 
 const LearningInsightsPage = () => {
