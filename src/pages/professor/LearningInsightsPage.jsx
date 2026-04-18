@@ -89,14 +89,19 @@ const SummaryCard = ({ title, value, subtitle, accent }) => (
     sx={{
       p: { xs: 2, md: 3 },
       borderRadius: 2,
-      border: '1px solid #E5E7EB',
-      borderTop: `4px solid ${accent}`,
+      border: `2px solid ${alpha(accent, 0.3)}`,
+      bgcolor: alpha(accent, 0.02),
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
-      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-      '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }
+      transition: 'all 0.3s ease',
+      '&:hover': {
+        transform: 'translateY(-5px)',
+        boxShadow: `0 12px 24px ${alpha(accent, 0.15)}`,
+        borderColor: accent,
+        bgcolor: alpha(accent, 0.05)
+      }
     }}
   >
     <Typography variant="body2" color="text.secondary" fontWeight={700} sx={{ mb: 1, textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: 1 }}>

@@ -41,11 +41,20 @@ const NAVY = '#003366';
 const CARD_RADIUS = 3;
 
 const StatCard = ({ title, value, icon, color, link }) => (
-  <Card elevation={0} 
+  <Card 
+    elevation={0} 
     sx={{ 
-      height: '100%', borderRadius: CARD_RADIUS, border: '1px solid', borderColor: 'divider',
-      borderTop: `4px solid ${color}`, transition: 'all 0.2s ease',
-      '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 10px 20px rgba(0,0,0,0.05)' }
+      height: '100%', 
+      borderRadius: CARD_RADIUS, 
+      border: `2px solid ${alpha(color, 0.3)}`, 
+      bgcolor: alpha(color, 0.02),
+      transition: 'all 0.3s ease',
+      '&:hover': { 
+        transform: 'translateY(-5px)', 
+        boxShadow: `0 12px 24px ${alpha(color, 0.15)}`,
+        borderColor: color,
+        bgcolor: alpha(color, 0.05)
+      }
     }}
   >
     <CardContent>
@@ -54,7 +63,10 @@ const StatCard = ({ title, value, icon, color, link }) => (
           <Typography color="text.secondary" variant="overline" fontWeight="700">{title}</Typography>
           <Typography variant="h4" fontWeight="900" sx={{ color: NAVY }}>{value}</Typography>
         </Box>
-        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(color, 0.1), color: color }}>
+        <Box sx={{ 
+          p: 1.5, borderRadius: 2, 
+          bgcolor: alpha(color, 0.1), color: color 
+        }}>
           {icon}
         </Box>
       </Stack>

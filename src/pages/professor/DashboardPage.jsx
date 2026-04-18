@@ -121,11 +121,34 @@ const HeroBanner = ({ banners }) => {
 };
 
 const StatCard = ({ icon, value, label, color, link }) => (
-  <Card elevation={0} component={link ? Link : 'div'} to={link}
-    sx={{ height: '100%', borderRadius: CARD_RADIUS, textDecoration: 'none', border: `1px solid ${alpha(color, 0.2)}`, borderLeft: `4px solid ${color}`, transition: 'all 0.25s', '&:hover': link ? { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(0,0,0,0.05)' } : {} }}>
+  <Card 
+    elevation={0} 
+    component={link ? Link : 'div'} 
+    to={link}
+    sx={{ 
+      height: '100%', 
+      borderRadius: CARD_RADIUS, 
+      textDecoration: 'none', 
+      border: `2px solid ${alpha(color, 0.3)}`, 
+      bgcolor: alpha(color, 0.02),
+      transition: 'all 0.3s ease', 
+      '&:hover': link ? { 
+        transform: 'translateY(-5px)', 
+        boxShadow: `0 12px 24px ${alpha(color, 0.15)}`,
+        borderColor: color,
+        bgcolor: alpha(color, 0.05)
+      } : {} 
+    }}
+  >
     <CardContent sx={{ p: 2.5 }}>
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1.5 }}>
-        <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: alpha(color, 0.08), display: 'flex' }}>{icon}</Box>
+        <Box sx={{ 
+          p: 1.2, borderRadius: 2, 
+          bgcolor: alpha(color, 0.1), color: color,
+          display: 'flex' 
+        }}>
+          {icon}
+        </Box>
         <Typography variant="body2" color="text.secondary" fontWeight="700">{label}</Typography>
       </Stack>
       <Typography variant="h3" fontWeight="900" color={color} align="center">{value ?? 0}</Typography>
