@@ -31,6 +31,7 @@ import {
   WarningAmber as WarningAmberIcon
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -112,90 +113,45 @@ const SummaryCard = ({ title, value, subtitle, accent }) => (
   </Paper>
 );
 
+const NAVY = '#003366';
+
+// ... other constants ...
+
 const LearningInsightsPage = () => {
   const { authState } = useAuth();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
-  const [insights, setInsights] = useState({
+  
+  const profileId = authState.profile?.id;
+
+  // React Query for insights
+  const { 
+    data: insightsData, 
+    isLoading: loading, 
+    refetch 
+  } = useQuery({
+    queryKey: ['professorLearningInsights', profileId],
+    queryFn: () => getProfessorLearningInsights({ profileId }),
+    enabled: !!profileId && authState.isProfessor,
+    staleTime: 1000 * 60 * 10, // 10 minutes cache for stats
+  });
+
+  const insights = insightsData?.data || {
     summary: {
-      totalCourses: 0,
-      totalTrackedStudents: 0,
-      atRiskStudents: 0,
-      overdueActivities: 0,
-      averageProgress: 0,
-      averageAttendance: 0,
-      averagePredictedGrade: 0,
-      configuredCourses: 0
+      totalCourses: 0, totalTrackedStudents: 0, atRiskStudents: 0,
+      overdueActivities: 0, averageProgress: 0, averageAttendance: 0,
+      averagePredictedGrade: 0, configuredCourses: 0
     },
     courses: [],
     studentsNeedingAttention: []
-  });
-  const [selectedCourseId, setSelectedCourseId] = useState('');
-  const [formValues, setFormValues] = useState(mergeCourseCompletionSettings());
-
-  const loadInsights = async (preferredCourseId = null) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      if (!authState.isProfessor || !authState.profile?.id) {
-        throw new Error('Profil professeur non disponible');
-      }
-
-      const { data, error: insightsError } = await getProfessorLearningInsights({
-        profileId: authState.profile.id
-      });
-
-      if (insightsError) {
-        throw insightsError;
-      }
-
-      const nextInsights = data || {
-        summary: {},
-        courses: [],
-        studentsNeedingAttention: []
-      };
-
-      setInsights(nextInsights);
-
-      const requestedCourseId = Number(preferredCourseId || searchParams.get('course'));
-      const nextCourse =
-        nextInsights.courses.find((courseItem) => Number(courseItem.course.id) === requestedCourseId) ||
-        nextInsights.courses[0] ||
-        null;
-
-      setSelectedCourseId(nextCourse?.course?.id ? String(nextCourse.course.id) : '');
-      setFormValues(mergeCourseCompletionSettings(nextCourse?.settings));
-    } catch (loadError) {
-      console.error('Erreur chargement learning insights professeur:', loadError);
-      setInsights({
-        summary: {
-          totalCourses: 0,
-          totalTrackedStudents: 0,
-          atRiskStudents: 0,
-          overdueActivities: 0,
-          averageProgress: 0,
-          averageAttendance: 0,
-          averagePredictedGrade: 0,
-          configuredCourses: 0
-        },
-        courses: [],
-        studentsNeedingAttention: []
-      });
-      setError(loadError.message || 'Impossible de charger les indicateurs pedagogiques.');
-    } finally {
-      setLoading(false);
-    }
   };
 
-  useEffect(() => {
-    loadInsights();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState.isProfessor, authState.profile?.id]);
+  const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [formValues, setFormValues] = useState(mergeCourseCompletionSettings());
 
   const selectedCourse = useMemo(
     () =>
@@ -212,83 +168,50 @@ const LearningInsightsPage = () => {
         nextParams.set('course', String(selectedCourse.course.id));
         setSearchParams(nextParams, { replace: true });
       }
+    } else if (insights.courses.length > 0 && !selectedCourseId) {
+        const firstCourseId = String(insights.courses[0].course.id);
+        setSelectedCourseId(firstCourseId);
     }
-  }, [searchParams, selectedCourse, setSearchParams]);
+  }, [insights.courses, selectedCourse, selectedCourseId, searchParams, setSearchParams]);
 
-  const handleScalarFieldChange = (field) => (event) => {
-    const nextValue = event.target.value;
-    setFormValues((current) => ({
-      ...current,
-      [field]: nextValue
-    }));
-  };
+  // Mutations
+  const saveMutation = useMutation({
+    mutationFn: (values) => upsertProfessorCourseCompletionSettings({
+      profileId,
+      courseId: Number(selectedCourseId),
+      settings: values
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['professorLearningInsights'] });
+      setSuccessMessage('Regles de completion mises a jour.');
+    },
+    onError: (err) => {
+      setError(err.message || 'Erreur lors de la sauvegarde');
+    }
+  });
 
-  const handleWeightChange = (field) => (event) => {
-    const nextValue = event.target.value;
-    setFormValues((current) => ({
-      ...current,
-      course_progress_weights: {
-        ...current.course_progress_weights,
-        [field]: nextValue
-      }
-    }));
-  };
+  const resetMutation = useMutation({
+    mutationFn: () => resetProfessorCourseCompletionSettings({
+      profileId,
+      courseId: Number(selectedCourseId)
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['professorLearningInsights'] });
+      setSuccessMessage('Regles ESGIS par defaut restaurees.');
+    },
+    onError: (err) => {
+      setError(err.message || 'Erreur lors de la restauration');
+    }
+  });
 
   const handleSave = async () => {
-    if (!selectedCourseId) {
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      const { error: saveError } = await upsertProfessorCourseCompletionSettings({
-        profileId: authState.profile.id,
-        courseId: Number(selectedCourseId),
-        settings: formValues
-      });
-
-      if (saveError) {
-        throw saveError;
-      }
-
-      await loadInsights(selectedCourseId);
-      setSuccessMessage('Regles de completion mises a jour.');
-    } catch (saveError) {
-      console.error('Erreur sauvegarde settings completion:', saveError);
-      setError(saveError.message || 'Impossible de sauvegarder les regles de completion.');
-    } finally {
-      setSaving(false);
-    }
+    if (!selectedCourseId) return;
+    saveMutation.mutate(formValues);
   };
 
   const handleReset = async () => {
-    if (!selectedCourseId) {
-      return;
-    }
-
-    setResetting(true);
-    setError(null);
-
-    try {
-      const { error: resetError } = await resetProfessorCourseCompletionSettings({
-        profileId: authState.profile.id,
-        courseId: Number(selectedCourseId)
-      });
-
-      if (resetError) {
-        throw resetError;
-      }
-
-      await loadInsights(selectedCourseId);
-      setSuccessMessage('Regles ESGIS par defaut restaurees.');
-    } catch (resetError) {
-      console.error('Erreur reset settings completion:', resetError);
-      setError(resetError.message || 'Impossible de restaurer les regles par defaut.');
-    } finally {
-      setResetting(false);
-    }
+    if (!selectedCourseId) return;
+    resetMutation.mutate();
   };
 
   if (loading) {

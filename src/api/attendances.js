@@ -85,91 +85,21 @@ export const bulkUpsertAttendances = async (attendancesList) => {
  */
 export const getCourseAttendanceStats = async (courseId) => {
   try {
-    // Récupérer toutes les sessions du cours
-    const { data: sessions, error: sessionsError } = await supabase
-      .from('course_sessions')
-      .select('id, date')
-      .eq('course_id', courseId)
-      .order('date', { ascending: true });
+    const { data, error } = await supabase
+      .from('mv_student_attendance_stats')
+      .select('*')
+      .eq('course_id', Number(courseId))
+      .order('attendance_rate', { ascending: false });
 
-    if (sessionsError) throw sessionsError;
+    if (error) throw error;
 
-    const totalSessions = sessions.length;
-    if (totalSessions === 0) {
-      return { data: [], error: null };
-    }
-
-    // Récupérer toutes les présences pour toutes les sessions de ce cours
-    const sessionIds = sessions.map(s => s.id);
-    const { data: attendances, error: attError } = await supabase
-      .from('attendances')
-      .select(`
-        session_id,
-        student_id,
-        status
-      `)
-      .in('session_id', sessionIds);
-
-    if (attError) throw attError;
-
-    // Grouper par étudiant et calculer les statistiques
-    const studentStats = {};
-    
-    // Initialiser tous les étudiants inscrits au cours
-    const { data: enrolledStudents, error: studentsError } = await supabase
-      .from('student_courses')
-      .select(`
-        student_id,
-        student_entity_id,
-        students!inner(
-          id,
-          student_number,
-          profiles!inner(full_name)
-        )
-      `)
-      .eq('course_id', courseId);
-
-    if (studentsError) throw studentsError;
-
-    // Initialiser les statistiques pour chaque étudiant
-    enrolledStudents.forEach(({ student_id, student_entity_id, students }) => {
-      studentStats[student_entity_id] = {
-        student_id,
-        student_entity_id,
-        student_number: students.student_number,
-        full_name: students.profiles.full_name,
-        total_sessions: totalSessions,
-        present_count: 0,
-        absent_count: 0,
-        late_count: 0,
-        excused_count: 0,
-        attendance_rate: 0,
-        sessions: []
-      };
-    });
-
-    // Compter les présences par statut
-    attendances.forEach(att => {
-      if (studentStats[att.student_id]) {
-        studentStats[att.student_id][`${att.status}_count`]++;
-        studentStats[att.student_id].sessions.push({
-          session_id: att.session_id,
-          status: att.status
-        });
-      }
-    });
-
-    // Calculer le taux de présence et convertir en tableau
-    const statsArray = Object.values(studentStats).map(stat => ({
-      ...stat,
-      attendance_rate: totalSessions > 0 ? Math.round((stat.present_count / totalSessions) * 100) : 0,
-      attendance_summary: `${stat.present_count}/${totalSessions} séances`
-    }));
-
-    // Trier par taux de présence décroissant
-    statsArray.sort((a, b) => b.attendance_rate - a.attendance_rate);
-
-    return { data: statsArray, error: null };
+    return { 
+      data: (data || []).map(stat => ({
+        ...stat,
+        attendance_summary: `${stat.present_count}/${stat.total_sessions} séances`
+      })), 
+      error: null 
+    };
   } catch (error) {
     console.error('getCourseAttendanceStats:', error);
     return { data: [], error };
@@ -182,90 +112,42 @@ export const getCourseAttendanceStats = async (courseId) => {
  */
 export const getAllCoursesAttendanceStats = async () => {
   try {
-    // Récupérer l'ID du professeur authentifié
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) throw authError;
     
-    if (!user) {
-      throw new Error('Utilisateur non authentifié');
-    }
+    if (!user) throw new Error('Utilisateur non authentifié');
 
-    // Récupérer les cours du professeur avec des sessions
-    const { data: coursesWithSessions, error: coursesError } = await supabase
-      .from('professor_courses')
-      .select(`
-        course_id,
-        courses!inner(
-          id,
-          name,
-          code,
-          course_sessions!inner(id, date)
-        )
-      `)
-      .eq('professor_id', user.id)
-      .not('courses.course_sessions', 'is', null);
+    // Use the global view for performance
+    const { data: globalStats, error: statsError } = await supabase
+      .from('v_student_global_attendance_stats')
+      .select('*')
+      .order('global_attendance_rate', { ascending: false });
 
-    if (coursesError) throw coursesError;
+    if (statsError) throw statsError;
 
-    const allStats = [];
-    
-    // Pour chaque cours, calculer les statistiques
-    for (const courseData of coursesWithSessions) {
-      const { data: courseStats, error: statsError } = await getCourseAttendanceStats(courseData.course_id);
-      
-      if (!statsError && courseStats.length > 0) {
-        allStats.push({
-          course_id: courseData.course_id,
-          course_name: courseData.courses.name,
-          course_code: courseData.courses.code,
-          students: courseStats
-        });
-      }
-    }
+    // Fetch details from MV for course breakdown
+    const { data: details, error: detailsError } = await supabase
+      .from('mv_student_attendance_stats')
+      .select('*');
 
-    // Aplatir toutes les statistiques par étudiant
-    const studentGlobalStats = {};
-    
-    allStats.forEach(courseStat => {
-      courseStat.students.forEach(student => {
-        if (!studentGlobalStats[student.student_entity_id]) {
-          studentGlobalStats[student.student_entity_id] = {
-            student_id: student.student_id,
-            student_entity_id: student.student_entity_id,
-            student_number: student.student_number,
-            full_name: student.full_name,
-            courses: [],
-            total_sessions: 0,
-            total_present: 0,
-            global_attendance_rate: 0
-          };
-        }
-        
-        studentGlobalStats[student.student_entity_id].courses.push({
-          course_id: courseStat.course_id,
-          course_name: courseStat.course_name,
-          course_code: courseStat.course_code,
-          attendance_rate: student.attendance_rate,
-          attendance_summary: student.attendance_summary,
-          present_count: student.present_count,
-          total_sessions: student.total_sessions
-        });
-        
-        studentGlobalStats[student.student_entity_id].total_sessions += student.total_sessions;
-        studentGlobalStats[student.student_entity_id].total_present += student.present_count;
-      });
+    if (detailsError) throw detailsError;
+
+    const finalStats = (globalStats || []).map(student => {
+      const studentDetails = (details || []).filter(d => d.student_id === student.student_id);
+      return {
+        ...student,
+        courses: studentDetails.map(d => ({
+          course_id: d.course_id,
+          course_name: d.course_name,
+          course_code: d.course_code,
+          attendance_rate: d.attendance_rate,
+          attendance_summary: `${d.present_count}/${d.total_sessions} séances`,
+          present_count: d.present_count,
+          total_sessions: d.total_sessions
+        })),
+        global_summary: `${student.total_present}/${student.total_sessions} séances`
+      };
     });
-
-    // Calculer le taux global de présence pour chaque étudiant
-    const finalStats = Object.values(studentGlobalStats).map(student => ({
-      ...student,
-      global_attendance_rate: student.total_sessions > 0 ? 
-        Math.round((student.total_present / student.total_sessions) * 100) : 0,
-      global_summary: `${student.total_present}/${student.total_sessions} séances`
-    }));
-
-    // Trier par taux de présence global décroissant
-    finalStats.sort((a, b) => b.global_attendance_rate - a.global_attendance_rate);
 
     return { data: finalStats, error: null };
   } catch (error) {

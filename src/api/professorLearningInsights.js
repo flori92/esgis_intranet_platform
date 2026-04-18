@@ -165,6 +165,23 @@ export const getProfessorLearningInsights = async ({ profileId, courseId = null 
       return { data: null, error: new Error('Professeur non identifie') };
     }
 
+    // 1. Fetch data from Materialized View for performance (Summary and Course list)
+    let mvQuery = supabase
+      .from('mv_professor_course_stats')
+      .select('*')
+      .eq('professor_id', profileId);
+
+    if (courseId) {
+      mvQuery = mvQuery.eq('course_id', Number(courseId));
+    }
+
+    const { data: mvData, error: mvError } = await mvQuery;
+
+    if (mvError) {
+      console.error('Error fetching from mv_professor_course_stats:', mvError);
+      // Fallback or handle error
+    }
+
     const { data: managedCourses, error: managedCoursesError } = await getProfessorManagedCourses(profileId);
 
     if (managedCoursesError) {
@@ -196,17 +213,16 @@ export const getProfessorLearningInsights = async ({ profileId, courseId = null 
       };
     }
 
+    // Attempt to refresh metrics in background (don't wait if it's slow, but here we keep it for consistency)
     try {
-      const { error: refreshError } = await supabase.rpc('refresh_professor_learning_metrics', {
+      supabase.rpc('refresh_professor_learning_metrics', {
         p_professor_profile_id: profileId,
         p_course_id: courseId ? Number(courseId) : null
+      }).then(({ error }) => {
+        if (error) console.warn('Background refresh_professor_learning_metrics failed:', error.message);
       });
-
-      if (refreshError) {
-        throw refreshError;
-      }
-    } catch (refreshError) {
-      console.warn('refresh_professor_learning_metrics failed:', refreshError?.message || refreshError);
+    } catch (e) {
+      // Ignore
     }
 
     const [{ data: settingsRows, error: settingsError }, { data: enrollmentRows, error: enrollmentError }, { data: analyticsRows, error: analyticsError }, { data: activityRows, error: activityError }] =
@@ -226,39 +242,24 @@ export const getProfessorLearningInsights = async ({ profileId, courseId = null 
           .in('course_id', scopedCourseIds)
       ]);
 
-    if (settingsError) {
-      throw settingsError;
-    }
-
-    if (enrollmentError) {
-      throw enrollmentError;
-    }
-
-    if (analyticsError) {
-      throw analyticsError;
-    }
-
-    if (activityError) {
-      throw activityError;
-    }
+    if (settingsError) throw settingsError;
+    if (enrollmentError) throw enrollmentError;
+    if (analyticsError) throw analyticsError;
+    if (activityError) throw activityError;
 
     const studentIds = unique((enrollmentRows || []).map((row) => row.student_entity_id).map(Number));
     const { data: studentsRows, error: studentsError } = studentIds.length
       ? await supabase.from('students').select('id, student_number, profile_id').in('id', studentIds)
       : { data: [], error: null };
 
-    if (studentsError) {
-      throw studentsError;
-    }
+    if (studentsError) throw studentsError;
 
     const profileIds = unique((studentsRows || []).map((student) => student.profile_id));
     const { data: profilesRows, error: profilesError } = profileIds.length
       ? await supabase.from('profiles').select('id, full_name').in('id', profileIds)
       : { data: [], error: null };
 
-    if (profilesError) {
-      throw profilesError;
-    }
+    if (profilesError) throw profilesError;
 
     const studentDirectory = buildStudentDirectory(studentsRows || [], profilesRows || []);
     const settingsMap = new Map(
@@ -271,60 +272,51 @@ export const getProfessorLearningInsights = async ({ profileId, courseId = null 
         const mergedSettings = mergeCourseCompletionSettings(
           settingsMap.get(Number(managedCourse.id)) || DEFAULT_COMPLETION_SETTINGS
         );
-        const courseEnrollments = (enrollmentRows || []).filter(
+        
+        // Use Materialized View data if available for this course
+        const mvCourseData = (mvData || []).find(mv => Number(mv.course_id) === Number(managedCourse.id));
+        
+        const courseActivityRows = (activityRows || []).filter(
           (row) => Number(row.course_id) === Number(managedCourse.id)
         );
         const courseAnalyticsRows = (analyticsRows || []).filter(
           (row) => Number(row.course_id) === Number(managedCourse.id)
         );
-        const courseActivityRows = (activityRows || []).filter(
-          (row) => Number(row.course_id) === Number(managedCourse.id)
-        );
+        
         const studentProgressMap = buildStudentProgressMap(courseActivityRows, mergedSettings);
         const analyticsByStudent = buildAnalyticsByStudentMap(courseAnalyticsRows);
-        const latestCourseAnalyticsRows = Array.from(analyticsByStudent.values());
-        const enrolledStudentIds = unique(courseEnrollments.map((row) => Number(row.student_entity_id)));
-        const studentProgressValues = enrolledStudentIds
-          .map((studentId) => studentProgressMap.get(studentId)?.progress)
-          .filter((value) => Number.isFinite(value));
-
-        const latestTimestamp = Math.max(
-          ...courseAnalyticsRows.map((row) => getDateValue(row.updated_at || row.created_at)),
-          ...courseActivityRows.map((row) => getDateValue(row.updated_at || row.created_at)),
-          0
+        const enrolledStudentIds = unique(
+          (enrollmentRows || [])
+            .filter(row => Number(row.course_id) === Number(managedCourse.id))
+            .map((row) => Number(row.student_entity_id))
         );
 
         return {
           course: managedCourse,
           settings: mergedSettings,
           hasCustomSettings: customSettingsCourseIds.has(Number(managedCourse.id)),
-          studentCount: enrolledStudentIds.length,
-          averageProgress: average(studentProgressValues),
+          studentCount: mvCourseData?.student_count ?? enrolledStudentIds.length,
+          averageProgress: mvCourseData?.avg_progress ?? average(enrolledStudentIds.map(id => studentProgressMap.get(id)?.progress)),
           completedActivities: courseActivityRows.filter((row) => row.status === 'completed').length,
           totalActivities: courseActivityRows.length,
           overdueActivities: courseActivityRows.filter((row) => row.status === 'overdue').length,
-          atRiskStudents: enrolledStudentIds.filter((studentId) => {
+          atRiskStudents: mvCourseData?.at_risk_count ?? enrolledStudentIds.filter((studentId) => {
             const analytics = analyticsByStudent.get(studentId);
             const progress = studentProgressMap.get(studentId);
             return Boolean(analytics?.risk_flag) || Number(progress?.overdueActivities || 0) > 0;
           }).length,
-          averageAttendance: average(latestCourseAnalyticsRows.map((row) => row.attendance_percentage)),
-          averagePredictedGrade: average(
-            latestCourseAnalyticsRows.map((row) => row.predicted_grade || row.final_grade)
+          averageAttendance: mvCourseData?.avg_attendance ?? average(courseAnalyticsRows.map((row) => row.attendance_percentage)),
+          averagePredictedGrade: mvCourseData?.avg_predicted_grade ?? average(
+            courseAnalyticsRows.map((row) => row.predicted_grade || row.final_grade)
           ),
-          updatedAt: latestTimestamp ? new Date(latestTimestamp).toISOString() : null
+          updatedAt: mvCourseData?.last_updated ?? null
         };
       })
       .sort((left, right) => {
         if (left.atRiskStudents !== right.atRiskStudents) {
           return right.atRiskStudents - left.atRiskStudents;
         }
-
-        if (left.overdueActivities !== right.overdueActivities) {
-          return right.overdueActivities - left.overdueActivities;
-        }
-
-        return right.updatedAt - left.updatedAt;
+        return right.overdueActivities - left.overdueActivities;
       });
 
     const studentsNeedingAttention = courseInsights
@@ -356,14 +348,15 @@ export const getProfessorLearningInsights = async ({ profileId, courseId = null 
               fullName: 'Etudiant',
               studentNumber: '-'
             };
+            
+            if (!analytics?.risk_flag && progress.overdueActivities === 0) {
+              return null;
+            }
+
             const reasons = unique([
               ...(analytics?.risk_reasons || []).map(toRiskLabel),
               ...(progress.overdueActivities > 0 ? ['Devoirs en retard'] : [])
             ]);
-
-            if (!analytics?.risk_flag && progress.overdueActivities === 0) {
-              return null;
-            }
 
             const severity = computeSeverity({
               attendance: Number(analytics?.attendance_percentage),
@@ -390,44 +383,21 @@ export const getProfessorLearningInsights = async ({ profileId, courseId = null 
           })
           .filter(Boolean);
       })
-      .sort((left, right) => {
-        if (left.severityScore !== right.severityScore) {
-          return right.severityScore - left.severityScore;
-        }
-
-        if (left.overdueActivities !== right.overdueActivities) {
-          return right.overdueActivities - left.overdueActivities;
-        }
-
-        if (left.predictedGrade !== right.predictedGrade) {
-          return left.predictedGrade - right.predictedGrade;
-        }
-
-        return left.studentName.localeCompare(right.studentName, 'fr');
-      });
+      .sort((left, right) => right.severityScore - left.severityScore);
 
     const summary = {
       totalCourses: courseInsights.length,
       totalTrackedStudents: unique((enrollmentRows || []).map((row) => Number(row.student_entity_id))).length,
       atRiskStudents: studentsNeedingAttention.length,
-      overdueActivities: courseInsights.reduce(
-        (sum, courseInsight) => sum + Number(courseInsight.overdueActivities || 0),
-        0
-      ),
-      averageProgress: average(courseInsights.map((courseInsight) => courseInsight.averageProgress)),
-      averageAttendance: average(courseInsights.map((courseInsight) => courseInsight.averageAttendance)),
-      averagePredictedGrade: average(
-        courseInsights.map((courseInsight) => courseInsight.averagePredictedGrade)
-      ),
-      configuredCourses: courseInsights.filter((courseInsight) => courseInsight.hasCustomSettings).length
+      overdueActivities: courseInsights.reduce((sum, ci) => sum + Number(ci.overdueActivities || 0), 0),
+      averageProgress: average(courseInsights.map((ci) => ci.averageProgress)),
+      averageAttendance: average(courseInsights.map((ci) => ci.averageAttendance)),
+      averagePredictedGrade: average(courseInsights.map((ci) => ci.averagePredictedGrade)),
+      configuredCourses: courseInsights.filter((ci) => ci.hasCustomSettings).length
     };
 
     return {
-      data: {
-        summary,
-        courses: courseInsights,
-        studentsNeedingAttention
-      },
+      data: { summary, courses: courseInsights, studentsNeedingAttention },
       error: null
     };
   } catch (error) {
