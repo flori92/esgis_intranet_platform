@@ -31,7 +31,11 @@ const clampPercent = (value) => {
 
 const getDateValue = (row) => {
   const source =
+    row?.lastActivityAt ||
+    row?.last_activity_at ||
+    row?.completed_at ||
     row?.updated_at ||
+    row?.updatedAt ||
     row?.triggered_at ||
     row?.acquired_at ||
     row?.created_at ||
@@ -124,6 +128,31 @@ const fetchStudentAlerts = async ({ profileId, studentId }) => {
   return mergeById(...results).sort((left, right) => getDateValue(right) - getDateValue(left));
 };
 
+const fetchStudentCourseIds = async ({ profileId, studentId }) => {
+  const queries = [];
+
+  if (profileId) {
+    queries.push(
+      safeSelect(() => supabase.from('student_courses').select('course_id').eq('student_id', profileId))
+    );
+  }
+
+  if (studentId) {
+    queries.push(
+      safeSelect(() =>
+        supabase.from('student_courses').select('course_id').eq('student_entity_id', studentId)
+      )
+    );
+  }
+
+  if (!queries.length) {
+    return [];
+  }
+
+  const results = await Promise.all(queries);
+  return [...new Set(results.flat().map((row) => Number(row?.course_id)).filter(Boolean))];
+};
+
 const fetchCoursesMap = async (courseIds) => {
   const normalizedIds = [...new Set((courseIds || []).map((value) => Number(value)).filter(Boolean))];
 
@@ -132,7 +161,7 @@ const fetchCoursesMap = async (courseIds) => {
   }
 
   const rows = await safeSelect(() =>
-    supabase.from('courses').select('id, code, name, credits').in('id', normalizedIds)
+    supabase.from('courses').select('id, code, name, credits, level, semester').in('id', normalizedIds)
   );
 
   return new Map(rows.map((course) => [Number(course.id), course]));
@@ -235,6 +264,96 @@ const normalizeAnalytics = (rows = [], coursesMap) =>
     }))
     .sort((left, right) => getDateValue(right) - getDateValue(left));
 
+const ACTIVITY_LABELS = {
+  resource: 'Ressource',
+  assignment: 'Devoir',
+  practice_quiz: 'Quiz',
+  interactive_resource: 'Activite interactive',
+  forum: 'Forum'
+};
+
+const normalizeCourseActivity = (rows = [], coursesMap) => {
+  const grouped = new Map();
+
+  (rows || []).forEach((row) => {
+    const courseId = Number(row?.course_id);
+
+    if (!courseId) {
+      return;
+    }
+
+    if (!grouped.has(courseId)) {
+      grouped.set(courseId, []);
+    }
+
+    const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+
+    grouped.get(courseId).push({
+      id: `${row.activity_type}:${row.activity_id}`,
+      type: row.activity_type,
+      typeLabel: ACTIVITY_LABELS[row.activity_type] || row.activity_type,
+      title: row.activity_title || ACTIVITY_LABELS[row.activity_type] || 'Activite',
+      status: row.status || 'not_started',
+      progress: clampPercent(row.progress_percentage),
+      metricValue: row.metric_value != null ? Number(row.metric_value) : null,
+      lastActivityAt: row.last_activity_at || null,
+      completedAt: row.completed_at || null,
+      dueAt: metadata?.due_at || null,
+      metadata
+    });
+  });
+
+  return Array.from(grouped.entries())
+    .map(([courseId, items]) => {
+      const sortedItems = items.sort((left, right) => {
+        if (left.status === 'overdue' && right.status !== 'overdue') {
+          return -1;
+        }
+
+        if (right.status === 'overdue' && left.status !== 'overdue') {
+          return 1;
+        }
+
+        return getDateValue(right) - getDateValue(left);
+      });
+
+      const totalActivities = sortedItems.length;
+      const completedActivities = sortedItems.filter((item) => item.status === 'completed').length;
+      const overdueActivities = sortedItems.filter((item) => item.status === 'overdue').length;
+      const averageProgress = average(sortedItems.map((item) => item.progress));
+      const lastActivityAt = sortedItems.reduce((latest, item) => {
+        return getDateValue(item) > getDateValue({ last_activity_at: latest }) ? item.lastActivityAt : latest;
+      }, null);
+
+      return {
+        id: `course-${courseId}`,
+        courseId,
+        course: coursesMap.get(courseId) || null,
+        totalActivities,
+        completedActivities,
+        overdueActivities,
+        averageProgress,
+        lastActivityAt,
+        items: sortedItems,
+        breakdown: {
+          resources: sortedItems.filter((item) => item.type === 'resource').length,
+          assignments: sortedItems.filter((item) => item.type === 'assignment').length,
+          quizzes: sortedItems.filter((item) => item.type === 'practice_quiz').length,
+          interactive: sortedItems.filter((item) => item.type === 'interactive_resource').length,
+          forums: sortedItems.filter((item) => item.type === 'forum').length
+        }
+      };
+    })
+    .sort((left, right) => {
+      if (left.overdueActivities !== right.overdueActivities) {
+        return right.overdueActivities - left.overdueActivities;
+      }
+
+      return getDateValue({ last_activity_at: right.lastActivityAt }) -
+        getDateValue({ last_activity_at: left.lastActivityAt });
+    });
+};
+
 const ALERT_TITLES = {
   low_attendance: 'Presence faible',
   grade_drop: 'Baisse des resultats',
@@ -268,7 +387,31 @@ export const getStudentLearningProgress = async ({ profileId, studentId }) => {
   }
 
   try {
-    const [paths, competenciesRows, analyticsRows, alertRows, progressRows] = await Promise.all([
+    if (numericStudentId) {
+      try {
+        const { error: refreshError } = await supabase.rpc('refresh_student_learning_metrics', {
+          p_student_id: numericStudentId,
+          p_course_id: null
+        });
+
+        if (refreshError) {
+          throw refreshError;
+        }
+      } catch (refreshError) {
+        console.warn('learningProgress refresh failed:', refreshError?.message || refreshError);
+      }
+    }
+
+    const [
+      enrolledCourseIds,
+      paths,
+      competenciesRows,
+      analyticsRows,
+      alertRows,
+      progressRows,
+      activityRows
+    ] = await Promise.all([
+      fetchStudentCourseIds({ profileId, studentId: numericStudentId }),
       fetchLearningPaths({ profileId, studentId: numericStudentId }),
       numericStudentId
         ? safeSelect(() =>
@@ -294,23 +437,88 @@ export const getStudentLearningProgress = async ({ profileId, studentId }) => {
               .select('*')
               .eq('student_id', numericStudentId)
           )
+        : [],
+      numericStudentId
+        ? safeSelect(() =>
+            supabase
+              .from('course_activity_progress')
+              .select('*, courses(id, code, name, credits, level, semester)')
+              .eq('student_id', numericStudentId)
+          )
         : []
     ]);
 
-    const coursesMap = await fetchCoursesMap([
+    const fallbackCourseIds = [
       ...paths.map((path) => path?.course_id),
       ...analyticsRows.map((row) => row?.course_id),
-      ...alertRows.map((row) => row?.related_course_id)
+      ...alertRows.map((row) => row?.related_course_id),
+      ...activityRows.map((row) => row?.course_id)
+    ]
+      .map((value) => Number(value))
+      .filter(Boolean);
+
+    const scopedCourseIds = enrolledCourseIds.length
+      ? enrolledCourseIds
+      : [...new Set(fallbackCourseIds)];
+    const scopedCourseIdSet = new Set(scopedCourseIds);
+
+    const filteredAnalyticsRows = analyticsRows.filter(
+      (row) => !scopedCourseIdSet.size || scopedCourseIdSet.has(Number(row?.course_id))
+    );
+    const filteredAlertRows = alertRows.filter(
+      (row) =>
+        !row?.related_course_id ||
+        !scopedCourseIdSet.size ||
+        scopedCourseIdSet.has(Number(row.related_course_id))
+    );
+    const filteredActivityRows = activityRows.filter(
+      (row) => !scopedCourseIdSet.size || scopedCourseIdSet.has(Number(row?.course_id))
+    );
+
+    const coursesMap = await fetchCoursesMap([
+      ...scopedCourseIds,
+      ...paths.map((path) => path?.course_id),
+      ...filteredAnalyticsRows.map((row) => row?.course_id),
+      ...filteredAlertRows.map((row) => row?.related_course_id),
+      ...filteredActivityRows.map((row) => row?.course_id)
     ]);
 
     const learningPaths = normalizeLearningPaths(paths, progressRows, coursesMap);
     const competencies = normalizeCompetencies(competenciesRows);
-    const analytics = normalizeAnalytics(analyticsRows, coursesMap);
-    const alerts = normalizeAlerts(alertRows, coursesMap);
+    const analytics = normalizeAnalytics(filteredAnalyticsRows, coursesMap);
+    const alerts = normalizeAlerts(filteredAlertRows, coursesMap);
+    const courseActivity = normalizeCourseActivity(filteredActivityRows, coursesMap);
+
+    const overdueActivities = courseActivity
+      .flatMap((course) =>
+        course.items
+          .filter((item) => item.status === 'overdue')
+          .map((item) => ({
+            ...item,
+            course: course.course
+          }))
+      )
+      .sort((left, right) => getDateValue(right) - getDateValue(left));
+
+    const progressSignals = [];
+
+    if (learningPaths.length) {
+      progressSignals.push(average(learningPaths.map((path) => path.progress)));
+    }
+
+    if (courseActivity.length) {
+      progressSignals.push(average(courseActivity.map((course) => course.averageProgress)));
+    }
 
     const summary = {
       activePaths: learningPaths.filter((path) => path.status !== 'completed').length,
-      averageProgress: average(learningPaths.map((path) => path.progress)),
+      averageProgress: progressSignals.length ? average(progressSignals) : 0,
+      totalActivities: courseActivity.reduce((sum, course) => sum + course.totalActivities, 0),
+      completedActivities: courseActivity.reduce((sum, course) => sum + course.completedActivities, 0),
+      overdueActivities: overdueActivities.length,
+      coursesInProgress: courseActivity.filter(
+        (course) => course.averageProgress > 0 && course.averageProgress < 100
+      ).length,
       competenciesCount: competencies.length,
       masteredCompetencies: competencies.filter((item) =>
         ['advanced', 'expert'].includes(item.level)
@@ -319,7 +527,9 @@ export const getStudentLearningProgress = async ({ profileId, studentId }) => {
       atRiskCourses: analytics.filter((item) => item.riskFlag).length,
       averageAttendance: average(analytics.map((item) => item.attendance)),
       predictedAverage: average(
-        analytics.map((item) => item.predictedGrade || item.finalGrade).filter(Boolean)
+        analytics
+          .map((item) => item.predictedGrade || item.finalGrade)
+          .filter((value) => Number.isFinite(value))
       ),
       totalLearningHours: analytics.reduce(
         (sum, item) => sum + (Number(item.learningHours) || 0),
@@ -333,7 +543,9 @@ export const getStudentLearningProgress = async ({ profileId, studentId }) => {
         learningPaths,
         competencies,
         analytics,
-        alerts
+        alerts,
+        courseActivity,
+        overdueActivities
       },
       error: null
     };

@@ -18,6 +18,7 @@ import {
   Typography
 } from '@mui/material';
 import {
+  AssignmentTurnedIn as AssignmentTurnedInIcon,
   AutoGraph as AutoGraphIcon,
   MenuBook as MenuBookIcon,
   MilitaryTech as MilitaryTechIcon,
@@ -52,6 +53,14 @@ const statusLabels = {
   active: 'Actif',
   completed: 'Termine',
   paused: 'En pause'
+};
+
+const activityStatusLabels = {
+  not_started: 'Non commence',
+  in_progress: 'En cours',
+  completed: 'Termine',
+  overdue: 'En retard',
+  failed: 'Echoue'
 };
 
 const formatDate = (value) => {
@@ -188,6 +197,10 @@ const StudentLearningProgressPage = () => {
   const summary = progressData?.summary || {
     activePaths: 0,
     averageProgress: 0,
+    totalActivities: 0,
+    completedActivities: 0,
+    overdueActivities: 0,
+    coursesInProgress: 0,
     competenciesCount: 0,
     masteredCompetencies: 0,
     activeAlerts: 0,
@@ -196,6 +209,8 @@ const StudentLearningProgressPage = () => {
     predictedAverage: 0,
     totalLearningHours: 0
   };
+  const courseActivityRows = progressData?.courseActivity || [];
+  const overdueActivities = progressData?.overdueActivities || [];
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, backgroundColor: '#F8FAFC', minHeight: '100vh' }}>
@@ -222,11 +237,20 @@ const StudentLearningProgressPage = () => {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} lg={3}>
           <SummaryCard
-            icon={<TimelineIcon />}
-            title="Parcours actifs"
-            value={summary.activePaths}
-            subtitle={`${Math.round(summary.averageProgress)}% de progression moyenne`}
+            icon={<TrendingUpIcon />}
+            title="Progression globale"
+            value={`${Math.round(summary.averageProgress)}%`}
+            subtitle={`${summary.activePaths} parcours actifs · ${summary.coursesInProgress} cours en cours`}
             accent={NAVY}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <SummaryCard
+            icon={<AssignmentTurnedInIcon />}
+            title="Activites"
+            value={`${summary.completedActivities}/${summary.totalActivities}`}
+            subtitle={`${summary.overdueActivities} activite(s) en retard`}
+            accent="#ED6C02"
           />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
@@ -245,15 +269,6 @@ const StudentLearningProgressPage = () => {
             value={summary.activeAlerts}
             subtitle={`${summary.atRiskCourses} cours marques a risque`}
             accent={RED}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} lg={3}>
-          <SummaryCard
-            icon={<AutoGraphIcon />}
-            title="Projection"
-            value={`${summary.predictedAverage ? summary.predictedAverage.toFixed(1) : '0.0'}/20`}
-            subtitle={`${summary.averageAttendance ? summary.averageAttendance.toFixed(0) : 0}% de presence moyenne`}
-            accent="#ED6C02"
           />
         </Grid>
       </Grid>
@@ -440,6 +455,126 @@ const StudentLearningProgressPage = () => {
                 </Typography>
               </Box>
             </Stack>
+          </Paper>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #E5E7EB' }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+              <MenuBookIcon sx={{ color: NAVY }} />
+              <Typography variant="h6" fontWeight={800}>
+                Progression par cours
+              </Typography>
+            </Stack>
+
+            {courseActivityRows.length ? (
+              <Stack spacing={2.5}>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Cours</TableCell>
+                        <TableCell sx={{ minWidth: 220 }}>Progression</TableCell>
+                        <TableCell align="right">Activites</TableCell>
+                        <TableCell align="right">En retard</TableCell>
+                        <TableCell align="right">Derniere activite</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {courseActivityRows.slice(0, 10).map((courseItem) => (
+                        <TableRow key={courseItem.id} hover>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={700}>
+                              {courseItem.course?.name || 'Cours'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {courseItem.course?.code || 'Sans code'}
+                              {courseItem.course?.semester ? ` · S${courseItem.course.semester}` : ''}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Stack spacing={0.75}>
+                              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                <Typography variant="caption" color="text.secondary">
+                                  {courseItem.completedActivities}/{courseItem.totalActivities} terminees
+                                </Typography>
+                                <Typography variant="body2" fontWeight={700}>
+                                  {Math.round(courseItem.averageProgress)}%
+                                </Typography>
+                              </Stack>
+                              <LinearProgress
+                                variant="determinate"
+                                value={courseItem.averageProgress}
+                                sx={{ height: 8, borderRadius: 4 }}
+                              />
+                            </Stack>
+                          </TableCell>
+                          <TableCell align="right">
+                            {courseItem.completedActivities}/{courseItem.totalActivities}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Chip
+                              size="small"
+                              color={courseItem.overdueActivities ? 'error' : 'success'}
+                              label={courseItem.overdueActivities ? `${courseItem.overdueActivities}` : '0'}
+                            />
+                          </TableCell>
+                          <TableCell align="right">{formatDate(courseItem.lastActivityAt)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                {overdueActivities.length ? (
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1.25, color: RED }}>
+                      Activites a relancer
+                    </Typography>
+                    <Stack spacing={1.25}>
+                      {overdueActivities.slice(0, 4).map((item) => (
+                        <Box
+                          key={item.id}
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            border: '1px solid #FECACA',
+                            backgroundColor: '#FEF2F2'
+                          }}
+                        >
+                          <Stack
+                            direction={{ xs: 'column', sm: 'row' }}
+                            justifyContent="space-between"
+                            spacing={1}
+                            sx={{ mb: 0.75 }}
+                          >
+                            <Box>
+                              <Typography variant="subtitle2" fontWeight={800}>
+                                {item.title}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {item.course?.name || 'Cours'} · {item.typeLabel}
+                              </Typography>
+                            </Box>
+                            <Chip size="small" color="error" label={activityStatusLabels[item.status] || item.status} />
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.dueAt
+                              ? `Echeance ${formatDate(item.dueAt)}`
+                              : `Derniere activite ${formatDate(item.lastActivityAt)}`}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Box>
+                ) : null}
+              </Stack>
+            ) : (
+              <EmptyState
+                title="Aucune activite tracee"
+                description="La progression par cours apparaitra ici des que vos interactions ESGIS seront calculees."
+              />
+            )}
           </Paper>
         </Grid>
 
