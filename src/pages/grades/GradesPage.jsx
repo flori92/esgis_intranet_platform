@@ -31,7 +31,8 @@ import {
   CardContent,
   Grid,
   Divider,
-  LinearProgress
+  LinearProgress,
+  alpha
 } from '@mui/material';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import SchoolIcon from '@mui/icons-material/School';
