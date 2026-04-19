@@ -99,6 +99,12 @@ const emptyForm = () => ({
 
 const SIGNED_URL_CACHE_TTL_MS = 55 * 60 * 1000;
 
+const blurActiveElement = () => {
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
+};
+
 const WeeklySchedulesPage = () => {
   const { authState } = useAuth();
   const fileInputRef = useRef(null);
@@ -253,6 +259,7 @@ const WeeklySchedulesPage = () => {
   };
 
   const handlePreview = async (schedule) => {
+    blurActiveElement();
     setPreviewTitle(schedule.title);
     setPreviewOpen(true);
     setPreviewLoading(true);
@@ -321,7 +328,7 @@ const WeeklySchedulesPage = () => {
         <Button
           variant="contained"
           startIcon={<UploadIcon />}
-          onClick={() => { setDialogOpen(true); setError(null); setSuccess(null); }}
+          onClick={() => { blurActiveElement(); setDialogOpen(true); setError(null); setSuccess(null); }}
           sx={{ bgcolor: '#003366', borderRadius: 2, px: 3 }}
         >
           Publier un EDT
@@ -379,7 +386,7 @@ const WeeklySchedulesPage = () => {
       )}
 
       {/* Upload Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth disableRestoreFocus>
         <DialogTitle sx={{ fontFamily: 'Montserrat', fontWeight: 'bold', color: '#003366' }}>
           Publier un emploi du temps
         </DialogTitle>
@@ -483,7 +490,7 @@ const WeeklySchedulesPage = () => {
       </Dialog>
 
       {/* Preview Dialog */}
-      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="lg" fullWidth>
+      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="lg" fullWidth disableRestoreFocus>
         <DialogTitle sx={{ fontFamily: 'Montserrat', fontWeight: 'bold', color: '#003366' }}>
           {previewTitle}
         </DialogTitle>

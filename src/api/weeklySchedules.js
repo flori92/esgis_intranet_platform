@@ -19,6 +19,23 @@ const createPublishedSchedulesQuery = () =>
     .eq('status', 'published')
     .order('week_start_date', { ascending: false });
 
+const findExistingWeeklySchedule = async ({ departmentId, levelCode, filiereId, weekStartDate }) => {
+  let query = supabase
+    .from('weekly_schedules')
+    .select('id')
+    .eq('department_id', departmentId)
+    .eq('level_code', levelCode)
+    .eq('week_start_date', weekStartDate);
+
+  if (filiereId) {
+    query = query.eq('filiere_id', filiereId);
+  } else {
+    query = query.is('filiere_id', null);
+  }
+
+  return query.maybeSingle();
+};
+
 /**
  * List weekly schedules with optional filters.
  */
@@ -130,6 +147,14 @@ export const uploadWeeklySchedule = async ({
 }) => {
   try {
     const filePath = buildFilePath({ departmentId, levelCode, filiereId, academicYear, weekStartDate });
+    const { data: existing, error: existingError } = await findExistingWeeklySchedule({
+      departmentId,
+      levelCode,
+      filiereId,
+      weekStartDate
+    });
+
+    if (existingError) throw existingError;
 
     const { error: uploadError } = await uploadFile(BUCKET, filePath, file, {
       upsert: true,
@@ -137,20 +162,29 @@ export const uploadWeeklySchedule = async ({
     });
     if (uploadError) throw uploadError;
 
-    const { data, error } = await supabase
-      .from('weekly_schedules')
-      .insert({
-        title,
-        file_path: filePath,
-        department_id: departmentId,
-        level_code: levelCode,
-        filiere_id: filiereId || null,
-        week_start_date: weekStartDate,
-        academic_year: academicYear,
-        uploaded_by: uploadedBy,
-        notes,
-        status: 'published'
-      })
+    const payload = {
+      title,
+      file_path: filePath,
+      department_id: departmentId,
+      level_code: levelCode,
+      filiere_id: filiereId || null,
+      week_start_date: weekStartDate,
+      academic_year: academicYear,
+      uploaded_by: uploadedBy,
+      notes,
+      status: 'published'
+    };
+
+    const query = existing?.id
+      ? supabase
+          .from('weekly_schedules')
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq('id', existing.id)
+      : supabase
+          .from('weekly_schedules')
+          .insert(payload);
+
+    const { data, error } = await query
       .select()
       .single();
 
