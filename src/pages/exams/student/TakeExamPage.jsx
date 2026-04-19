@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Box, 
@@ -21,6 +21,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import Quiz from '../core/Quiz';
 import { getStudentExamLaunchData, markStudentExamStarted, verifyExamAccessCode } from '@/api/exams';
+import { formatCountdown, getExamEndTime, getExamTimerMode, getRemainingTimeParts } from '../utils/examTiming';
 
 /**
  * Page permettant à un étudiant de passer un examen
@@ -38,6 +39,7 @@ const TakeExamPage = () => {
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
   const [otpValue, setOtpValue] = useState('');
   const [otpError, setOtpError] = useState('');
+  const [roomCountdown, setRoomCountdown] = useState(null);
   
   useEffect(() => {
     const fetchExam = async () => {
@@ -73,6 +75,20 @@ const TakeExamPage = () => {
         if (studentExam.attempt_status === 'submitted') {
           throw new Error('Vous avez déjà soumis cet examen');
         }
+
+        const timerMode = getExamTimerMode(examData.settings || {});
+        if (timerMode === 'room' && studentExam.attempt_status !== 'in_progress') {
+          const roomEndTime = getExamEndTime({
+            examDate: examData.date,
+            duration: examData.duration,
+            settings: examData.settings || {}
+          });
+          const remaining = getRemainingTimeParts(roomEndTime, now);
+
+          if (remaining.isExpired) {
+            throw new Error("Le temps de composition est écoulé pour cette salle.");
+          }
+        }
         
         // Formater les données de l'examen
         const formattedExam = {
@@ -99,6 +115,33 @@ const TakeExamPage = () => {
     
     fetchExam();
   }, [id, authState]);
+
+  useEffect(() => {
+    if (!exam || examStarted || getExamTimerMode(exam.settings || {}) !== 'room') {
+      setRoomCountdown(null);
+      return undefined;
+    }
+
+    const roomEndTime = getExamEndTime({
+      examDate: exam.date,
+      duration: exam.duration,
+      settings: exam.settings || {}
+    });
+
+    const syncCountdown = () => {
+      setRoomCountdown(getRemainingTimeParts(roomEndTime, new Date()));
+    };
+
+    syncCountdown();
+    const intervalId = setInterval(syncCountdown, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [exam, examStarted]);
+
+  const isRoomTimer = useMemo(
+    () => getExamTimerMode(exam?.settings || {}) === 'room',
+    [exam]
+  );
   
   const handleStartExam = async () => {
     try {
@@ -222,9 +265,16 @@ const TakeExamPage = () => {
           
           <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
             <TimerIcon color="warning" />
-            <Typography variant="h6">
-              Durée: {exam.duration} minutes
-            </Typography>
+            <Box>
+              <Typography variant="h6">
+                Durée officielle: {exam.duration} minutes
+              </Typography>
+              {isRoomTimer && roomCountdown && (
+                <Typography variant="body2" color={roomCountdown.isExpired ? 'error.main' : 'text.secondary'}>
+                  Chrono commun à toute la salle. Temps restant: {formatCountdown(roomCountdown)}
+                </Typography>
+              )}
+            </Box>
           </Box>
           
           {exam.description && (
@@ -248,6 +298,7 @@ const TakeExamPage = () => {
             <Typography variant="body2">
               Une fois que vous aurez commencé l'examen, vous ne pourrez pas le quitter avant de l'avoir terminé.
               {exam.access_code_required && ' Le code d\'accès communiqué par le surveillant est obligatoire avant l\'entrée dans la copie.'}
+              {isRoomTimer && ' Le minuteur est commun à toute la salle: un retard ne redonne pas du temps supplémentaire.'}
               Toute tentative de quitter la page, changer d'onglet, ouvrir les outils techniques ou copier-coller déclenchera
               une alerte sonore et une carte rouge visible. À la {exam.max_cheating_alerts || 3}e alerte, l'examen sera arrêté puis soumis automatiquement.
             </Typography>

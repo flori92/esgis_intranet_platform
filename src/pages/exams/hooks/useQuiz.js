@@ -18,6 +18,8 @@ import {
   isExamQuestionAutoGradable,
   normalizeExamQuestion
 } from '@/utils/examQuestionUtils';
+import { randomizeExamQuestions } from '../utils/examRandomization';
+import { getExamEndTime, getExamTimerMode, getRemainingTimeParts } from '../utils/examTiming';
 
 const getInitialAnswerValue = (question) => {
   switch (question.question_type) {
@@ -234,6 +236,12 @@ export const useQuiz = () => {
         }
 
         const normalizedQuestions = fetchedQuestions.map((question) => normalizeExamQuestion(question));
+        const randomizedQuestions = randomizeExamQuestions({
+          questions: normalizedQuestions,
+          examId,
+          studentProfileId: authState.profile.id,
+          settings: exam.settings || {}
+        });
         
         // Priority: Local Storage > DB Answers > Default Empty
         const localBackup = localStorage.getItem(`exam_backup_${examId}`);
@@ -245,13 +253,13 @@ export const useQuiz = () => {
             
         const initialAnswers = {};
 
-        normalizedQuestions.forEach((question) => {
+        randomizedQuestions.forEach((question) => {
           initialAnswers[question.id] = existingAnswers[question.id] ?? getInitialAnswerValue(question);
         });
 
         setExamData(exam);
         setStudentExamId(studentExam.id);
-        setQuestions(normalizedQuestions);
+        setQuestions(randomizedQuestions);
         setAnswers(initialAnswers);
         setCheatingAttempts(0);
         cheatingAttemptsRef.current = 0;
@@ -260,8 +268,15 @@ export const useQuiz = () => {
         const now = new Date();
         const examStartedAt = studentExam.arrival_time ? new Date(studentExam.arrival_time) : null;
 
-        if (studentExam.attempt_status === 'in_progress' && examStartedAt) {
-          const resumeEndTime = new Date(examStartedAt.getTime() + Number(exam.duration || 0) * 60000);
+        const resumeEndTime = getExamEndTime({
+          examDate: exam.date,
+          duration: exam.duration,
+          arrivalTime: studentExam.arrival_time,
+          settings: exam.settings || {}
+        });
+        const timerMode = getExamTimerMode(exam.settings || {});
+
+        if (studentExam.attempt_status === 'in_progress' && resumeEndTime) {
           endTimeRef.current = resumeEndTime;
 
           if (resumeEndTime <= now) {
@@ -269,15 +284,33 @@ export const useQuiz = () => {
             setQuizStatus('IN_PROGRESS');
             setTimeout(() => submitQuiz({ reason: 'time_limit' }), 0);
           } else {
-            const diff = resumeEndTime.getTime() - now.getTime();
+            const remaining = getRemainingTimeParts(resumeEndTime, now);
             setTimer({
-              minutes: Math.floor(diff / 60000),
-              seconds: Math.floor((diff % 60000) / 1000)
+              minutes: Math.floor(remaining.totalMs / 60000),
+              seconds: Math.floor((remaining.totalMs % 60000) / 1000)
             });
             setQuizStatus('IN_PROGRESS');
           }
         } else {
-          setTimer({ minutes: Number(exam.duration || 0), seconds: 0 });
+          if (timerMode === 'room') {
+            const roomEndTime = getExamEndTime({
+              examDate: exam.date,
+              duration: exam.duration,
+              settings: exam.settings || {}
+            });
+            const remaining = getRemainingTimeParts(roomEndTime, now);
+
+            if (remaining.isExpired) {
+              throw new Error("Le temps de composition est écoulé pour cette salle.");
+            }
+
+            setTimer({
+              minutes: Math.floor(remaining.totalMs / 60000),
+              seconds: Math.floor((remaining.totalMs % 60000) / 1000)
+            });
+          } else {
+            setTimer({ minutes: Number(exam.duration || 0), seconds: 0 });
+          }
           setQuizStatus('NOT_STARTED');
         }
       } catch (loadError) {
@@ -365,8 +398,33 @@ export const useQuiz = () => {
     }
 
     const now = new Date();
-    endTimeRef.current = new Date(now.getTime() + Number(examData.duration || 0) * 60000);
+    const computedEndTime = getExamEndTime({
+      examDate: examData.date,
+      duration: examData.duration,
+      arrivalTime: now.toISOString(),
+      fallbackStartTime: now.toISOString(),
+      settings: examData.settings || {}
+    });
+
+    if (!computedEndTime) {
+      toast.error("Impossible de calculer la fin de l'épreuve.");
+      return;
+    }
+
+    endTimeRef.current = computedEndTime;
     setQuizStatus('IN_PROGRESS');
+
+    const remaining = getRemainingTimeParts(computedEndTime, now);
+    setTimer({
+      minutes: Math.floor(remaining.totalMs / 60000),
+      seconds: Math.floor((remaining.totalMs % 60000) / 1000)
+    });
+
+    if (remaining.isExpired) {
+      toast.error("Le temps de composition est écoulé pour cette salle.");
+      setTimeout(() => submitQuiz({ reason: 'room_timer_elapsed' }), 0);
+      return;
+    }
 
     await recordActiveStudent({
       student_id: authState.profile.id,

@@ -180,19 +180,24 @@ class AntiCheatService {
     // 5. Détection des raccourcis clavier suspects
     this._handlers.keydown = (e) => {
       if (!this.isActive) return;
+      const lowerKey = String(e.key || '').toLowerCase();
+      const hasCommandModifier = e.ctrlKey || e.metaKey;
 
       // Bloquer F12 (DevTools)
       if (e.key === 'F12') {
         e.preventDefault();
         this._recordIncident('devtools_attempt', 'Tentative d\'ouverture des DevTools (F12)');
       }
-      // Bloquer Ctrl+Shift+I (DevTools)
-      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+      // Bloquer Ctrl/Cmd + Shift + I/J/C (DevTools)
+      if (
+        (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(lowerKey))
+        || (e.metaKey && e.altKey && ['i', 'j', 'c'].includes(lowerKey))
+      ) {
         e.preventDefault();
-        this._recordIncident('devtools_attempt', 'Tentative d\'ouverture des DevTools (Ctrl+Shift+I)');
+        this._recordIncident('devtools_attempt', 'Tentative d\'ouverture des outils techniques');
       }
-      // Bloquer Ctrl+U (View Source)
-      if (e.ctrlKey && e.key === 'u') {
+      // Bloquer Ctrl/Cmd + U (View Source)
+      if (hasCommandModifier && lowerKey === 'u') {
         e.preventDefault();
         this._recordIncident('view_source_attempt', 'Tentative d\'affichage du code source');
       }
@@ -200,13 +205,45 @@ class AntiCheatService {
       if (e.altKey && e.key === 'Tab') {
         this._recordIncident('alt_tab', 'Alt+Tab détecté');
       }
-      // Bloquer Ctrl+P (Print)
-      if (e.ctrlKey && e.key === 'p') {
+      // Bloquer Ctrl/Cmd + C/V/X
+      if (hasCommandModifier && lowerKey === 'c') {
+        e.preventDefault();
+        this._recordIncident('copy_attempt', 'Tentative de copie clavier bloquée');
+      }
+      if (hasCommandModifier && lowerKey === 'v') {
+        e.preventDefault();
+        this._recordIncident('paste_attempt', 'Tentative de collage clavier bloquée');
+      }
+      if (hasCommandModifier && lowerKey === 'x') {
+        e.preventDefault();
+        this._recordIncident('cut_attempt', 'Tentative de coupe clavier bloquée');
+      }
+      // Bloquer Ctrl/Cmd + P (Print)
+      if (hasCommandModifier && lowerKey === 'p') {
         e.preventDefault();
         this._recordIncident('print_attempt', 'Tentative d\'impression bloquée');
       }
+      // Bloquer Ctrl/Cmd + S
+      if (hasCommandModifier && lowerKey === 's') {
+        e.preventDefault();
+        this._recordIncident('save_page_attempt', 'Tentative de sauvegarde de la page bloquée');
+      }
+      // Détecter PrintScreen
+      if (e.key === 'PrintScreen') {
+        this._recordIncident('screenshot_attempt', 'Tentative de capture écran détectée');
+      }
     };
     document.addEventListener('keydown', this._handlers.keydown);
+
+    this._handlers.dragstart = (e) => {
+      if (!this.isActive) {
+        return;
+      }
+
+      e.preventDefault();
+      this._recordIncident('drag_attempt', 'Tentative de glisser-déposer du contenu bloquée');
+    };
+    document.addEventListener('dragstart', this._handlers.dragstart);
 
     // 6. Mode plein écran
     if (this.requireFullscreen) {
@@ -247,6 +284,18 @@ class AntiCheatService {
       }
     };
     window.addEventListener('resize', this._handlers.resize);
+
+    this._handlers.beforeunload = (e) => {
+      if (!this.isActive) {
+        return undefined;
+      }
+
+      this._recordIncident('beforeunload_attempt', 'Tentative de quitter ou recharger la page');
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', this._handlers.beforeunload);
 
     // 8. Vérification périodique
     this._handlers.checkInterval = setInterval(() => {
@@ -338,12 +387,18 @@ class AntiCheatService {
     if (this._handlers.keydown) {
       document.removeEventListener('keydown', this._handlers.keydown);
     }
+    if (this._handlers.dragstart) {
+      document.removeEventListener('dragstart', this._handlers.dragstart);
+    }
     if (this._handlers.fullscreenChange) {
       document.removeEventListener('fullscreenchange', this._handlers.fullscreenChange);
     }
     this._detachFullscreenPromptListeners();
     if (this._handlers.resize) {
       window.removeEventListener('resize', this._handlers.resize);
+    }
+    if (this._handlers.beforeunload) {
+      window.removeEventListener('beforeunload', this._handlers.beforeunload);
     }
     if (this._handlers.checkInterval) {
       clearInterval(this._handlers.checkInterval);

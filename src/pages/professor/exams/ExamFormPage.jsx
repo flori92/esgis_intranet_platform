@@ -137,6 +137,7 @@ const ExamFormPage = () => {
     access_code_required: false,
     allow_direct_join: false,
     max_cheating_alerts: 3,
+    timer_mode: 'individual',
     access_code: '',
     has_access_code: false,
     existing_access_code_hash: null,
@@ -307,6 +308,7 @@ const ExamFormPage = () => {
       
       setExam({
         ...examData,
+        timer_mode: examData.settings?.timer_mode === 'room' ? 'room' : 'individual',
         access_code: '',
         has_access_code: Boolean(accessSettingsData?.access_code_hash),
         existing_access_code_hash: accessSettingsData?.access_code_hash || null,
@@ -471,10 +473,20 @@ const ExamFormPage = () => {
         access_code,
         has_access_code,
         existing_access_code_hash,
+        date,
+        type,
+        timer_mode,
+        settings: currentSettings,
         ...examPayload
       } = exam;
       const examData = {
         ...examPayload,
+        exam_date: date || exam.exam_date || null,
+        exam_type: type || exam.exam_type || 'exam',
+        settings: {
+          ...(currentSettings || {}),
+          timer_mode: timer_mode === 'room' ? 'room' : 'individual'
+        },
         status: publish ? 'published' : 'draft',
         updated_at: now
       };
@@ -600,7 +612,7 @@ const ExamFormPage = () => {
                 await notificationService.sendNewExamScheduled(
                   profileIds,
                   examData.title,
-                  examData.date
+                  examData.exam_date
                 );
               }
             }
@@ -758,6 +770,8 @@ const ExamFormPage = () => {
               setAllowDirectJoin={(value) => handleExamChange('allow_direct_join', value)}
               maxCheatingAlerts={exam.max_cheating_alerts}
               setMaxCheatingAlerts={(value) => handleExamChange('max_cheating_alerts', value)}
+              timerMode={exam.timer_mode}
+              setTimerMode={(value) => handleExamChange('timer_mode', value)}
               onGenerateAccessCode={handleGenerateAccessCode}
               courses={courses}
               allExams={allExams.filter(e => e.id !== exam.id)}
@@ -854,6 +868,10 @@ const ExamFormPage = () => {
                   
                   <Typography variant="body1" gutterBottom>
                     <strong>Durée:</strong> {exam.duration} minutes
+                  </Typography>
+
+                  <Typography variant="body1" gutterBottom>
+                    <strong>Minuteur:</strong> {exam.timer_mode === 'room' ? 'Commun à toute la salle' : 'Individuel par étudiant'}
                   </Typography>
                   
                   <Typography variant="body1" gutterBottom>

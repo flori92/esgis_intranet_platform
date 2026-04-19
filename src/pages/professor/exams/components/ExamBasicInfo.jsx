@@ -90,6 +90,8 @@ const ExamBasicInfo = ({
   setAllowDirectJoin,
   maxCheatingAlerts,
   setMaxCheatingAlerts,
+  timerMode,
+  setTimerMode,
   onGenerateAccessCode,
   shareToken,
   errors
@@ -405,6 +407,23 @@ const ExamBasicInfo = ({
             inputProps={{ min: 1, max: 5 }}
             helperText="À ce seuil, l'épreuve est stoppée puis soumise automatiquement."
           />
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <FormControl fullWidth>
+            <InputLabel>Mode du minuteur</InputLabel>
+            <Select
+              value={timerMode || 'individual'}
+              onChange={(event) => setTimerMode(event.target.value)}
+              label="Mode du minuteur"
+            >
+              <MenuItem value="individual">Individuel par étudiant</MenuItem>
+              <MenuItem value="room">Commun à toute la salle</MenuItem>
+            </Select>
+            <FormHelperText>
+              En mode salle, le temps restant est calculé depuis l&apos;heure officielle de l&apos;épreuve pour tout le monde.
+            </FormHelperText>
+          </FormControl>
         </Grid>
 
         <Grid item xs={12}>

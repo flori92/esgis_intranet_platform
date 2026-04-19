@@ -4,6 +4,7 @@
  */
 import { supabase } from '../supabase';
 import { normalizeExamQuestion } from '../utils/examQuestionUtils';
+import { randomizeExamQuestions } from '../pages/exams/utils/examRandomization';
 
 /**
  * Types pour les examens - remplacés par des commentaires JSDoc
@@ -589,6 +590,7 @@ export const getStudentExamLaunchData = async ({ examId, profileId }) => {
           access_code_required,
           allow_direct_join,
           max_cheating_alerts,
+          settings,
           room,
           total_points,
           passing_grade,
@@ -1030,6 +1032,7 @@ export const getProfessorExamMonitoringData = async (examId) => {
           duration,
           exam_type,
           category,
+          settings,
           share_token,
           room,
           total_points,
@@ -1450,11 +1453,19 @@ export const getStudentExamResultDetails = async ({ examId, studentId, profileId
       grades = gradeRows || [];
     }
 
+    const normalizedExam = normalizeExamRecord(examData);
+    const normalizedQuestions = (questionRows || []).map((question) => normalizeExamQuestion(question));
+
     return {
-      exam: normalizeExamRecord(examData),
+      exam: normalizedExam,
       studentExam,
       quizResult,
-      questions: (questionRows || []).map((question) => normalizeExamQuestion(question)),
+      questions: randomizeExamQuestions({
+        questions: normalizedQuestions,
+        examId: numericExamId,
+        studentProfileId: profileId,
+        settings: normalizedExam?.settings || {}
+      }),
       grades,
       error: null
     };

@@ -153,6 +153,10 @@ const Quiz = () => {
       'cut_attempt',
       'right_click',
       'print_attempt',
+      'save_page_attempt',
+      'screenshot_attempt',
+      'drag_attempt',
+      'beforeunload_attempt',
     ].includes(incidentType)
   ), []);
 
@@ -167,6 +171,10 @@ const Quiz = () => {
 
     if (['copy_attempt', 'paste_attempt', 'cut_attempt'].includes(incidentType)) {
       return 'clipboard';
+    }
+
+    if (['save_page_attempt', 'print_attempt', 'screenshot_attempt'].includes(incidentType)) {
+      return 'capture';
     }
 
     return incidentType;
@@ -210,6 +218,18 @@ const Quiz = () => {
         break;
       case 'right_click':
         detail = 'Le clic droit est interdit pendant cette épreuve.';
+        break;
+      case 'save_page_attempt':
+        detail = 'Une tentative de sauvegarde locale de la page a été bloquée.';
+        break;
+      case 'screenshot_attempt':
+        detail = "Une tentative de capture d'écran a été détectée.";
+        break;
+      case 'drag_attempt':
+        detail = "Une tentative d'extraction du contenu par glisser-déposer a été bloquée.";
+        break;
+      case 'beforeunload_attempt':
+        detail = "Une tentative de quitter ou recharger la page d'examen a été détectée.";
         break;
       case 'print_attempt':
         detail = "Une tentative d'impression a été bloquée.";
@@ -354,6 +374,11 @@ const Quiz = () => {
 
   const currentQuestion = questions[currentQuestionIndex];
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
+  const displayHours = Math.floor(Number(timer.minutes || 0) / 60);
+  const displayMinutes = Number(timer.minutes || 0) % 60;
+  const formattedTimer = displayHours > 0
+    ? `${String(displayHours).padStart(2, '0')}:${String(displayMinutes).padStart(2, '0')}:${String(timer.seconds || 0).padStart(2, '0')}`
+    : `${String(displayMinutes).padStart(2, '0')}:${String(timer.seconds || 0).padStart(2, '0')}`;
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'grey.100', display: 'flex', flexDirection: 'column' }}>
@@ -390,7 +415,7 @@ const Quiz = () => {
                   <Stack direction="row" spacing={1} alignItems="center">
                     <TimerIcon color={timer.minutes < 5 ? 'error' : 'action'} />
                     <Typography variant="h6" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 'bold', color: timer.minutes < 5 ? 'error.main' : 'text.primary' }}>
-                      {String(timer.minutes).padStart(2, '0')}:{String(timer.seconds).padStart(2, '0')}
+                      {formattedTimer}
                     </Typography>
                   </Stack>
                 </Paper>
