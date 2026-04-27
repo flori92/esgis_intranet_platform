@@ -29,13 +29,13 @@ import {
 } from '@/api/grades';
 
 const EVALUATION_TYPES = [
-  { value: 'cc1', label: 'Contrôle Continu 1' },
-  { value: 'cc2', label: 'Contrôle Continu 2' },
-  { value: 'cc3', label: 'Contrôle Continu 3' },
+  { value: 'presence', label: 'Note de Présence' },
   { value: 'tp', label: 'Travaux Pratiques' },
-  { value: 'td', label: 'Travaux Dirigés' },
+  { value: 'cc_final', label: 'Contrôle Continu (Total)' },
   { value: 'examen', label: 'Examen Final' },
   { value: 'rattrapage', label: 'Rattrapage' },
+  { value: 'cc1', label: 'CC1' },
+  { value: 'cc2', label: 'CC2' },
 ];
 
 /**
