@@ -31,7 +31,6 @@ import {
 const EVALUATION_TYPES = [
   { value: 'presence', label: 'Note de Présence' },
   { value: 'tp', label: 'Travaux Pratiques' },
-  { value: 'cc_final', label: 'Contrôle Continu (Total)' },
   { value: 'examen', label: 'Examen Final' },
   { value: 'rattrapage', label: 'Rattrapage' },
   { value: 'cc1', label: 'CC1' },
