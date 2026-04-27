@@ -471,7 +471,7 @@ const GradesManagementPage = () => {
               </TableCell>
             ))}
             <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: 100, bgcolor: '#003366', color: 'white' }}>
-              Moyenne
+              Contrôle Continu
             </TableCell>
             <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: 120, bgcolor: '#003366', color: 'white' }}>
               Mention
@@ -480,8 +480,12 @@ const GradesManagementPage = () => {
         </TableHead>
         <TableBody>
           {students.map(({ etudiant }, index) => {
-            const avg = calculateAverage(etudiant.id);
-            const mention = getMention(avg);
+            const studentGrades = grades[etudiant.id] || {};
+            // Calcul spécifique : Présence (10) + TP (10) = CC (20)
+            const presenceNote = studentGrades['presence']?.note || 0;
+            const tpNote = studentGrades['tp']?.note || 0;
+            const ccTotal = (studentGrades['cc_final']?.note) || (presenceNote + tpNote);
+            const mention = getMention(ccTotal);
 
             return (
               <TableRow
@@ -503,7 +507,12 @@ const GradesManagementPage = () => {
                       variant="outlined"
                       value={grades[etudiant.id]?.[col.key]?.note ?? ''}
                       onChange={(e) => handleGradeChange(etudiant.id, col.key, e.target.value)}
-                      inputProps={{ min: 0, max: 20, step: 0.25, style: { textAlign: 'center', padding: '6px 8px' } }}
+                      inputProps={{ 
+                        min: 0, 
+                        max: col.key === 'cc_final' ? 20 : 10, 
+                        step: 0.25, 
+                        style: { textAlign: 'center', padding: '6px 8px' } 
+                      }}
                       sx={{
                         width: 80,
                         '& .MuiOutlinedInput-root': {
@@ -518,9 +527,9 @@ const GradesManagementPage = () => {
                   <Typography
                     variant="body2"
                     fontWeight="bold"
-                    color={avg !== null && avg < 10 ? 'error.main' : 'success.main'}
+                    color={ccTotal < 10 ? 'error.main' : 'success.main'}
                   >
-                    {avg !== null ? `${avg.toFixed(2)}/20` : '-'}
+                    {ccTotal !== null ? `${ccTotal.toFixed(2)}/20` : '-'}
                   </Typography>
                 </TableCell>
                 <TableCell align="center">
