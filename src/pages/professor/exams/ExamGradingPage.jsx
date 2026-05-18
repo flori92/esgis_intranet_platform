@@ -46,6 +46,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
   getExamGradesByStudentExam,
   getExamGradingData,
+  syncOfficialExamGrade,
   updateStudentExam
 } from '@/api/exams';
 import notificationService from '@/services/NotificationService';
@@ -151,6 +152,11 @@ const ExamGradingPage = () => {
   const [studentsData, setStudentsData] = useState([]);
   const [studentExams, setStudentExams] = useState([]);
   const [isReviewing, setIsReviewing] = useState(false);
+
+  const toFiniteNumber = (value, fallback = null) => {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : fallback;
+  };
   
   // Gestion des onglets
   const handleTabChange = (event, newValue) => {
@@ -234,9 +240,14 @@ const ExamGradingPage = () => {
       setSelectedStudentExam(studentExam);
       
       // Récupérer les réponses de l'étudiant
-      const rawAnswers = typeof studentExam.answers === 'string'
-        ? JSON.parse(studentExam.answers || '{}')
-        : (studentExam.answers || {});
+      let rawAnswers = {};
+      try {
+        rawAnswers = typeof studentExam.answers === 'string'
+          ? JSON.parse(studentExam.answers || '{}')
+          : (studentExam.answers || {});
+      } catch (_parseError) {
+        rawAnswers = {};
+      }
 
       const { data: gradeRows, error: gradesError } = await getExamGradesByStudentExam(studentExamId);
       
@@ -249,18 +260,20 @@ const ExamGradingPage = () => {
         const normalizedQuestion = normalizeExamQuestion(question);
         const gradeRow = (gradeRows || []).find((row) => row.question_id === question.id);
         const answerValue = rawAnswers?.[question.id] ?? null;
+        const savedGrade = toFiniteNumber(gradeRow?.points_earned);
         const autoGrade = !gradeRow && isExamQuestionAutoGradable(normalizedQuestion)
           ? computeExamQuestionScore(normalizedQuestion, answerValue)
           : null;
+        const resolvedGrade = savedGrade ?? autoGrade;
         return {
           id: gradeRow?.id || `temp-${question.id}`,
           student_exam_id: studentExamId,
           question_id: question.id,
           answer_value: answerValue,
-          is_correct: typeof gradeRow?.points_earned === 'number'
-            ? gradeRow.points_earned >= Number(normalizedQuestion.points || 0)
+          is_correct: savedGrade !== null
+            ? savedGrade >= Number(normalizedQuestion.points || 0)
             : (typeof autoGrade === 'number' ? autoGrade >= Number(normalizedQuestion.points || 0) : null),
-          grade: typeof gradeRow?.points_earned === 'number' ? gradeRow.points_earned : autoGrade,
+          grade: resolvedGrade,
           feedback: gradeRow?.feedback || null,
           grade_record_id: gradeRow?.id || null
         };
@@ -296,7 +309,7 @@ const ExamGradingPage = () => {
    * Fonction pour vérifier si toutes les réponses sont notées
    */
   const areAllAnswersGraded = () => {
-    return studentAnswers.every(answer => answer.grade !== null);
+    return studentAnswers.every(answer => Number.isFinite(Number(answer.grade)));
   };
   
   /**
@@ -308,12 +321,12 @@ const ExamGradingPage = () => {
     }
     
     return studentAnswers.reduce((total, answer) => {
-      return total + (answer.grade || 0);
+      return total + (Number(answer.grade) || 0);
     }, 0);
   };
 
   const totalScore = calculateTotalScore();
-  const totalPoints = exam?.total_points || 0;
+  const totalPoints = exam?.total_points || questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
   const percentageScore = totalPoints > 0 ? (totalScore / totalPoints) * 100 : 0;
   const isPassing = exam ? totalScore >= (exam.passing_grade || 0) : false;
 
@@ -337,6 +350,18 @@ const ExamGradingPage = () => {
       
       if (updateError) {
         throw updateError;
+      }
+
+      const { error: gradebookError } = await syncOfficialExamGrade({
+        exam,
+        studentExam: selectedStudentExam,
+        grade: totalScore,
+        comments: gradingNote || null,
+        isPublished: true
+      });
+
+      if (gradebookError) {
+        throw gradebookError;
       }
       
       // Notifier l'étudiant via NotificationService (In-App, Push, Email)
@@ -406,7 +431,7 @@ const ExamGradingPage = () => {
       return 0;
     }
     
-    const gradedCount = studentAnswers.filter(answer => answer.grade !== null).length;
+    const gradedCount = studentAnswers.filter(answer => Number.isFinite(Number(answer.grade))).length;
     return (gradedCount / studentAnswers.length) * 100;
   };
   
@@ -556,7 +581,7 @@ const ExamGradingPage = () => {
                     color={areAllAnswersGraded() ? 'success' : 'primary'}
                   />
                   <Typography variant="body2" color="textSecondary">
-                    {Math.round(getGradingProgress())}% ({studentAnswers.filter(a => a.grade !== null).length}/{studentAnswers.length})
+                    {Math.round(getGradingProgress())}% ({studentAnswers.filter(a => Number.isFinite(Number(a.grade))).length}/{studentAnswers.length})
                   </Typography>
                 </Box>
               </Box>
@@ -590,7 +615,7 @@ const ExamGradingPage = () => {
                             onClick={() => goToQuestion(index)}
                             color={index === currentQuestionIndex ? 'primary' : 'default'}
                             sx={{
-                              backgroundColor: studentAnswers[index]?.grade !== null 
+                              backgroundColor: Number.isFinite(Number(studentAnswers[index]?.grade))
                                 ? 'rgba(76, 175, 80, 0.1)' 
                                 : 'transparent',
                               width: 30,

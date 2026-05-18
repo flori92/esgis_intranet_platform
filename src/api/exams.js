@@ -3,6 +3,7 @@
  * Centralise toutes les opérations liées aux examens
  */
 import { supabase } from '../supabase';
+import { upsertGrade } from './grades';
 import { normalizeExamQuestion } from '../utils/examQuestionUtils';
 import { randomizeExamQuestions } from '../pages/exams/utils/examRandomization';
 
@@ -474,6 +475,152 @@ const getStudentExamLookupCandidates = async (profileId) => {
   return [...new Set([profileId, studentId].filter(Boolean).map((value) => String(value)))];
 };
 
+const NON_GRADEBOOK_EXAM_CATEGORIES = new Set(['training', 'mock_exam', 'practice', 'challenge']);
+const NON_GRADEBOOK_EXAM_TYPES = new Set(['training', 'mock', 'mock_exam', 'practice', 'exam_blanc', 'quiz_blanc', 'white_exam']);
+
+const normalizeGradebookToken = (value) => String(value || '').trim().toLowerCase();
+
+const isOfficialGradebookExam = (exam) => {
+  if (!exam || exam.is_practice) {
+    return false;
+  }
+
+  const category = normalizeGradebookToken(exam.category || 'evaluation');
+  const examType = normalizeGradebookToken(exam.exam_type || exam.type);
+
+  return !NON_GRADEBOOK_EXAM_CATEGORIES.has(category) && !NON_GRADEBOOK_EXAM_TYPES.has(examType);
+};
+
+const buildOfficialExamEvaluationType = (exam) => {
+  const examType = normalizeGradebookToken(exam?.exam_type || exam?.type);
+  const prefix = examType === 'final'
+    ? 'Examen final'
+    : examType === 'midterm'
+      ? 'Examen partiel'
+      : 'Examen';
+  const title = String(exam?.title || '').trim();
+
+  return title ? `${prefix} - ${title}` : prefix;
+};
+
+const getDateOnly = (value) => {
+  if (!value) {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  if (typeof value === 'string') {
+    return value.split('T')[0];
+  }
+
+  return new Date(value).toISOString().split('T')[0];
+};
+
+const resolveStudentEntityIdForGrade = async (studentIdOrProfileId) => {
+  if (studentIdOrProfileId === null || studentIdOrProfileId === undefined) {
+    return null;
+  }
+
+  const numericId = Number(studentIdOrProfileId);
+  if (Number.isInteger(numericId) && String(studentIdOrProfileId).trim() !== '') {
+    return numericId;
+  }
+
+  const { data, error } = await supabase
+    .from('students')
+    .select('id')
+    .eq('profile_id', studentIdOrProfileId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.id || null;
+};
+
+export const syncOfficialExamGrade = async ({
+  exam: providedExam = null,
+  examId = null,
+  studentExam: providedStudentExam = null,
+  studentExamId = null,
+  studentProfileId = null,
+  grade,
+  comments = null,
+  isPublished = true
+}) => {
+  try {
+    const numericGrade = Number(grade);
+    if (!Number.isFinite(numericGrade)) {
+      return { data: null, error: null, skipped: true };
+    }
+
+    let exam = providedExam;
+    if (!exam?.id && examId) {
+      const { data, error } = await supabase
+        .from('exams')
+        .select('id, title, course_id, professor_id, professor_entity_id, exam_date, date, exam_type, type, category, is_practice, total_points')
+        .eq('id', Number(examId))
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+      exam = data;
+    }
+
+    if (!isOfficialGradebookExam(exam)) {
+      return { data: null, error: null, skipped: true };
+    }
+
+    let studentExam = providedStudentExam;
+    if (!studentExam?.id && studentExamId) {
+      const { data, error } = await supabase
+        .from('student_exams')
+        .select('id, student_id, student_entity_id, comments')
+        .eq('id', studentExamId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+      studentExam = data;
+    }
+
+    const studentEntityId =
+      studentExam?.student_entity_id ||
+      await resolveStudentEntityIdForGrade(studentExam?.student_id || studentProfileId);
+    const professorId = exam?.professor_entity_id || exam?.professor_id;
+    const maxValue = Math.max(Number(exam?.total_points || 20) || 20, 1);
+
+    if (!studentEntityId || !exam?.course_id || !professorId) {
+      return {
+        data: null,
+        error: new Error("Impossible de synchroniser la note officielle: données examen/étudiant/professeur incomplètes."),
+        skipped: false
+      };
+    }
+
+    const boundedGrade = Math.min(Math.max(numericGrade, 0), maxValue);
+    const { data, error } = await upsertGrade({
+      student_id: studentEntityId,
+      course_id: exam.course_id,
+      professor_id: professorId,
+      evaluation_type: buildOfficialExamEvaluationType(exam),
+      value: boundedGrade,
+      max_value: maxValue,
+      comment: comments ?? studentExam?.comments ?? null,
+      evaluation_date: getDateOnly(exam.exam_date || exam.date),
+      is_published: Boolean(isPublished),
+      published_at: isPublished ? new Date().toISOString() : null
+    });
+
+    return { data, error: error || null, skipped: false };
+  } catch (error) {
+    console.error('Erreur syncOfficialExamGrade:', error);
+    return { data: null, error, skipped: false };
+  }
+};
+
 const queryStudentExamsByCandidates = async ({ candidates, buildQuery, expectSingle = false }) => {
   const rows = [];
   const seenIds = new Set();
@@ -915,6 +1062,21 @@ export const finalizeStudentExamSubmission = async ({
       }
     }
 
+    if (!hasManualQuestions) {
+      const { error: officialGradeError } = await syncOfficialExamGrade({
+        examId: numericExamId,
+        studentExamId,
+        studentProfileId: profileId,
+        grade: normalizedScore,
+        comments: null,
+        isPublished: true
+      });
+
+      if (officialGradeError) {
+        console.error('Erreur synchronisation note officielle:', officialGradeError);
+      }
+    }
+
     return { success: true, error: null, status: studentStatus };
   } catch (error) {
     console.error('Erreur finalizeStudentExamSubmission:', error);
@@ -1304,12 +1466,33 @@ export const getExamGradingData = async (examId) => {
       throw studentExamsError;
     }
 
-    const studentIds = [...new Set((studentExamRows || []).map((item) => item.student_id).filter(Boolean))];
+    const studentIds = [
+      ...new Set(
+        (studentExamRows || [])
+          .flatMap((item) => [item.student_entity_id, item.student_id])
+          .filter(Boolean)
+      )
+    ];
     const { data: studentRows, error: studentsError } = await getStudentsByIds(studentIds);
 
     if (studentsError) {
       throw studentsError;
     }
+
+    const studentsById = new Map((studentRows || []).map((student) => [Number(student.id), student]));
+    const studentsByProfileId = new Map((studentRows || []).map((student) => [student.profile_id, student]));
+    const normalizedStudentExams = (studentExamRows || []).map((studentExam) => {
+      const profileStudent = studentsByProfileId.get(studentExam.student_id);
+      const numericStudentId = Number(studentExam.student_id);
+      const entityStudent = studentsById.get(Number(studentExam.student_entity_id || numericStudentId));
+      const resolvedStudent = profileStudent || entityStudent || null;
+
+      return {
+        ...studentExam,
+        student_profile_id: resolvedStudent?.profile_id || studentExam.student_id,
+        student_id: resolvedStudent?.id || studentExam.student_entity_id || studentExam.student_id
+      };
+    });
 
     return {
       exam: examData ? {
@@ -1319,9 +1502,13 @@ export const getExamGradingData = async (examId) => {
         course_name: getRelation(examData.courses)?.name || 'Cours inconnu',
         course_code: getRelation(examData.courses)?.code || '',
         professor_id: examData.professor_id,
-        date: examData.exam_date,
+        professor_entity_id: examData.professor_entity_id,
+        date: examData.exam_date || examData.date,
         duration: examData.duration,
         type: examData.exam_type,
+        exam_type: examData.exam_type,
+        category: examData.category,
+        is_practice: examData.is_practice,
         room: examData.room,
         total_points: examData.total_points,
         passing_grade: examData.passing_grade,
@@ -1329,7 +1516,7 @@ export const getExamGradingData = async (examId) => {
         description: examData.description || ''
       } : null,
       questions: (questionRows || []).map((question) => normalizeExamQuestion(question)),
-      studentExams: studentExamRows || [],
+      studentExams: normalizedStudentExams,
       students: (studentRows || []).map((student) => normalizeStudentRecord(student)),
       error: null
     };
@@ -1801,10 +1988,15 @@ export const getExamWithDetails = async (examId) => {
         course_id,
         courses(name, code),
         professor_id,
+        professor_entity_id,
         professor:profiles!professor_id(full_name),
         exam_date,
+        date,
         duration,
         exam_type,
+        type,
+        category,
+        is_practice,
         room,
         total_points,
         passing_grade,
@@ -1833,12 +2025,59 @@ export const getStudentsByIds = async (studentIds) => {
       return { data: [], error: null };
     }
 
-    const { data, error } = await supabase
-      .from('students')
-      .select('id, profile_id, profiles(full_name, email, avatar_url)')
-      .in('id', studentIds);
+    const numericIds = [];
+    const profileIds = [];
 
-    if (error) throw error;
+    studentIds.forEach((value) => {
+      const numericValue = Number(value);
+      if (Number.isInteger(numericValue) && String(value).trim() !== '') {
+        numericIds.push(numericValue);
+      } else if (value) {
+        profileIds.push(value);
+      }
+    });
+
+    const queries = [];
+    if (numericIds.length > 0) {
+      queries.push(
+        supabase
+          .from('students')
+          .select('id, profile_id, profiles(full_name, email, avatar_url)')
+          .in('id', [...new Set(numericIds)])
+      );
+    }
+
+    if (profileIds.length > 0) {
+      queries.push(
+        supabase
+          .from('students')
+          .select('id, profile_id, profiles(full_name, email, avatar_url)')
+          .in('profile_id', [...new Set(profileIds)])
+      );
+    }
+
+    if (queries.length === 0) {
+      return { data: [], error: null };
+    }
+
+    const results = await Promise.all(queries);
+    const failedResult = results.find((result) => result.error);
+
+    if (failedResult?.error) {
+      throw failedResult.error;
+    }
+
+    const seen = new Set();
+    const data = results
+      .flatMap((result) => result.data || [])
+      .filter((student) => {
+        if (seen.has(student.id)) {
+          return false;
+        }
+        seen.add(student.id);
+        return true;
+      });
+
     return { data: data || [], error: null };
   } catch (error) {
     console.error('Erreur getStudentsByIds:', error);
