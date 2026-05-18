@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from 'react-router-dom';
 import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
 import QuestionCard from "./QuestionCard";
@@ -36,6 +37,7 @@ import {
  * @returns {JSX.Element} Composant principal du quiz
  */
 const Quiz = () => {
+  const navigate = useNavigate();
   const { appState } = useAuth();
   const { 
     questions, 
@@ -337,17 +339,27 @@ const Quiz = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (quizStatus === 'COMPLETED' && scoreSummary?.resultPath) {
+      const timer = setTimeout(() => {
+        navigate(scoreSummary.resultPath, { replace: true });
+      }, 1500); // Court délai pour montrer que c'est fini
+      return () => clearTimeout(timer);
+    }
+  }, [quizStatus, scoreSummary, navigate]);
+
   if (quizStatus === 'COMPLETED') {
     return (
-      <QuizResults
-        questions={questions}
-        userAnswers={userAnswers}
-        calculateScore={calculateScore}
-        cheatingAttempts={cheatingAttempts}
-        scoreSummary={scoreSummary}
-        correctAnswersCount={countCorrectAnswers()}
-        examData={examData}
-      />
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', p: 3 }}>
+        <CheckCircleOutlineIcon color="success" sx={{ fontSize: 64, mb: 2 }} />
+        <Typography variant="h5" gutterBottom fontWeight="bold">
+          Examen soumis avec succès !
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 4, textAlign: 'center' }}>
+          Préparation de votre page de statistiques...
+        </Typography>
+        <CircularProgress />
+      </Box>
     );
   }
 
