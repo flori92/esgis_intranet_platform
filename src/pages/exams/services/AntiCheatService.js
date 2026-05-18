@@ -51,6 +51,7 @@ class AntiCheatService {
     this.questionDurations = {};
     this.startTime = null;
     this.isActive = false;
+    this.isPaused = false;
     this.isFullscreen = false;
     this.lastFullscreenDeniedAt = 0;
 
@@ -95,6 +96,11 @@ class AntiCheatService {
    * Enregistre un incident
    */
   _recordIncident(type, details) {
+    // Si le service est en pause, ignorer tous les incidents
+    if (this.isPaused) {
+      return null;
+    }
+
     const incident = {
       type,
       timestamp: new Date().toISOString(),
@@ -117,7 +123,7 @@ class AntiCheatService {
 
     // 1. Détection de changement de visibilité (sortie d'onglet)
     this._handlers.visibilityChange = () => {
-      if (document.visibilityState === 'hidden' && this.isActive) {
+      if (document.visibilityState === 'hidden' && this.isActive && !this.isPaused) {
         this.tabSwitchCount++;
         const incident = this._recordIncident('tab_switch', 
           `Sortie d'onglet détectée (${this.tabSwitchCount}/${this.maxTabSwitches})`
@@ -322,6 +328,20 @@ class AntiCheatService {
         }
       });
     }
+  }
+
+  /**
+   * Met en pause la détection anti-triche (pour les actions intentionnelles comme la soumission)
+   */
+  pause() {
+    this.isPaused = true;
+  }
+
+  /**
+   * Reprend la détection anti-triche
+   */
+  resume() {
+    this.isPaused = false;
   }
 
   _detachFullscreenPromptListeners() {

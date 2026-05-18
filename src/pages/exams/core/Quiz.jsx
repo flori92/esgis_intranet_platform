@@ -252,7 +252,7 @@ const Quiz = () => {
   }, [maxCheatingAttempts]);
 
   useEffect(() => {
-    const shouldProtectExam = quizStatus === 'IN_PROGRESS' && examData && examData.category !== 'training';
+    const shouldProtectExam = quizStatus === 'IN_PROGRESS' && examData && !['training', 'mock_exam'].includes(examData.category);
 
     if (!shouldProtectExam) {
       antiCheatServiceRef.current?.stop();
@@ -542,7 +542,20 @@ const Quiz = () => {
             userAnswers={userAnswers}
             goToNextQuestion={goToNextQuestion}
             goToPreviousQuestion={goToPreviousQuestion}
-            endQuiz={endQuiz}
+            endQuiz={() => {
+              // Arrêter l'anti-triche avant la soumission effective
+              antiCheatServiceRef.current?.stop();
+              endQuiz();
+            }}
+            onSubmitIntent={() => {
+              // Mettre en pause l'anti-triche pendant le dialogue de confirmation
+              antiCheatServiceRef.current?.pause();
+            }}
+            onSubmitCancel={() => {
+              // Reprendre l'anti-triche si l'étudiant annule
+              antiCheatServiceRef.current?.resume();
+              requestSecureFullscreen();
+            }}
           />
         </Box>
       </Container>
