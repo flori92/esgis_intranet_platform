@@ -73,6 +73,11 @@ const TakeExamPage = () => {
         }
         
         if (studentExam.attempt_status === 'submitted') {
+          // Pour les examens blancs et entraînements, rediriger vers les résultats
+          if (['training', 'mock_exam'].includes(examData.category)) {
+            navigate(`/student/exams/${id}/results`, { replace: true });
+            return;
+          }
           throw new Error('Vous avez déjà soumis cet examen');
         }
 

@@ -287,8 +287,18 @@ const StudentExamsList = () => {
             startIcon={<AssignmentIcon />}
             onClick={() => handleViewExam(exam)}
           >
-            {isSubmitted ? 'Voir resultat et correction' : 'Détails'}
+            {isSubmitted ? 'Voir résultat et correction' : 'Détails'}
           </Button>
+          {isSubmitted && isImmediateAccessExam && (
+            <Button
+              size="small"
+              variant="contained"
+              color="success"
+              onClick={() => navigate(`/student/exams/${exam.exam_id}/results`)}
+            >
+              📝 Voir la correction
+            </Button>
+          )}
           {canStart && (
             <Button
               size="small"

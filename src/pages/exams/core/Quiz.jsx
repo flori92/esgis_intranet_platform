@@ -346,6 +346,7 @@ const Quiz = () => {
         cheatingAttempts={cheatingAttempts}
         scoreSummary={scoreSummary}
         correctAnswersCount={countCorrectAnswers()}
+        examData={examData}
       />
     );
   }
