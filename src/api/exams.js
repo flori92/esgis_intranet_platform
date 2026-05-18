@@ -1342,12 +1342,20 @@ export const getExamGradingData = async (examId) => {
 export const getStudentExamResultDetails = async ({ examId, studentId, profileId }) => {
   try {
     const numericExamId = Number(examId);
+    const lookupCandidates = await getStudentExamLookupCandidates(profileId || studentId);
+    const studentCandidates = [
+      ...new Set([
+        ...lookupCandidates,
+        profileId,
+        studentId
+      ].filter(Boolean).map((value) => String(value)))
+    ];
 
     const [
       { data: examData, error: examError },
-      { data: studentExam, error: studentExamError },
-      { data: quizResult, error: quizResultError },
-      { data: questionRows, error: questionsError }
+      { data: questionRows, error: questionsError },
+      studentExamLookup,
+      quizResultLookup
     ] = await Promise.all([
       supabase
         .from('exams')
@@ -1377,50 +1385,64 @@ export const getStudentExamResultDetails = async ({ examId, studentId, profileId
         .eq('id', numericExamId)
         .single(),
       supabase
-        .from('student_exams')
-        .select(`
-          id,
-          exam_id,
-          student_id,
-          seat_number,
-          attendance,
-          attempt_status,
-          status,
-          grade,
-          comments,
-          answers,
-          arrival_time,
-          departure_time,
-          created_at,
-          updated_at
-        `)
-        .eq('exam_id', numericExamId)
-        .eq('student_id', profileId)
-        .maybeSingle(),
-      supabase
-        .from('quiz_results')
-        .select(`
-          id,
-          student_id,
-          exam_id,
-          score,
-          total_questions,
-          completion_time,
-          answers,
-          cheating_attempts,
-          completed_at,
-          created_at,
-          updated_at
-        `)
-        .eq('exam_id', numericExamId)
-        .eq('student_id', profileId)
-        .maybeSingle(),
-      supabase
         .from('exam_questions')
         .select('*')
         .eq('exam_id', numericExamId)
-        .order('question_number', { ascending: true })
+        .order('question_number', { ascending: true }),
+      queryStudentExamsByCandidates({
+        candidates: studentCandidates,
+        expectSingle: true,
+        buildQuery: (candidate) => supabase
+          .from('student_exams')
+          .select(`
+            id,
+            exam_id,
+            student_id,
+            seat_number,
+            attendance,
+            attempt_status,
+            status,
+            grade,
+            comments,
+            answers,
+            arrival_time,
+            departure_time,
+            created_at,
+            updated_at
+          `)
+          .eq('exam_id', numericExamId)
+          .eq('student_id', candidate)
+          .maybeSingle()
+      }),
+      queryStudentExamsByCandidates({
+        candidates: studentCandidates,
+        expectSingle: true,
+        buildQuery: (candidate) => supabase
+          .from('quiz_results')
+          .select(`
+            id,
+            student_id,
+            exam_id,
+            score,
+            total_questions,
+            completion_time,
+            answers,
+            cheating_attempts,
+            completed_at,
+            created_at,
+            updated_at
+          `)
+          .eq('exam_id', numericExamId)
+          .eq('student_id', candidate)
+          .order('updated_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      })
     ]);
+
+    const { data: studentExam, error: studentExamError } = studentExamLookup;
+    const { data: quizResult, error: quizResultError } = quizResultLookup;
 
     if (examError) {
       return { exam: null, studentExam: null, quizResult: null, questions: [], grades: [], error: examError };
@@ -1463,7 +1485,7 @@ export const getStudentExamResultDetails = async ({ examId, studentId, profileId
       questions: randomizeExamQuestions({
         questions: normalizedQuestions,
         examId: numericExamId,
-        studentProfileId: profileId,
+        studentProfileId: profileId || studentId,
         settings: normalizedExam?.settings || {}
       }),
       grades,

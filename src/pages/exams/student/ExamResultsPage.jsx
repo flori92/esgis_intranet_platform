@@ -27,6 +27,26 @@ import {
   isExamQuestionAutoGradable
 } from '@/utils/examQuestionUtils';
 
+const parseStudentAnswers = (value) => {
+  if (!value) {
+    return {};
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value || '{}');
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  return {};
+};
+
 const ExamResultsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -83,9 +103,7 @@ const ExamResultsPage = () => {
       return [];
     }
 
-    const rawAnswers = typeof payload.studentExam.answers === 'string'
-      ? JSON.parse(payload.studentExam.answers || '{}')
-      : (payload.studentExam.answers || {});
+    const rawAnswers = parseStudentAnswers(payload.studentExam.answers || payload.quizResult?.answers);
 
     const gradesByQuestionId = new Map(
       (payload.grades || []).map((grade) => [grade.question_id, grade])
@@ -94,19 +112,24 @@ const ExamResultsPage = () => {
     return (payload.questions || []).map((question) => {
       const rawAnswer = rawAnswers[question.id] ?? null;
       const gradeRow = gradesByQuestionId.get(question.id) || null;
-      const autoPoints = isExamQuestionAutoGradable(question)
+      const autoGradable = isExamQuestionAutoGradable(question);
+      const autoPoints = autoGradable
         ? computeExamQuestionScore(question, rawAnswer)
         : null;
       const pointsEarned = gradeRow?.points_earned ?? autoPoints;
-      const isPendingManual = !isExamQuestionAutoGradable(question) && gradeRow?.points_earned === undefined;
+      const numericPointsEarned = pointsEarned === null || pointsEarned === undefined
+        ? null
+        : Number(pointsEarned);
+      const isPendingManual = !autoGradable && (gradeRow?.points_earned === undefined || gradeRow?.points_earned === null);
 
       return {
         question,
         rawAnswer,
         displayAnswer: formatExamAnswer(question, rawAnswer),
         correctAnswerLabel: getExamCorrectAnswerLabel(question),
-        pointsEarned: typeof pointsEarned === 'number' ? pointsEarned : null,
+        pointsEarned: Number.isFinite(numericPointsEarned) ? numericPointsEarned : null,
         feedback: gradeRow?.feedback || null,
+        autoGradable,
         isPendingManual
       };
     });
@@ -117,7 +140,8 @@ const ExamResultsPage = () => {
       return null;
     }
 
-    const totalPoints = Number(payload.exam.total_points || 0);
+    const questionTotalPoints = questionResults.reduce((sum, item) => sum + Number(item.question.points || 0), 0);
+    const totalPoints = Number(payload.exam.total_points || questionTotalPoints || 0);
     const fallbackScore = questionResults.reduce((sum, item) => sum + Number(item.pointsEarned || 0), 0);
     const score = Number(
       payload.studentExam.grade ??
@@ -240,13 +264,18 @@ const ExamResultsPage = () => {
         <Typography variant="h6" gutterBottom>
           Détail par question
         </Typography>
+        {questionResults.length === 0 && (
+          <Alert severity="info">
+            Aucune question n'est disponible pour cette copie.
+          </Alert>
+        )}
         {questionResults.map((item, index) => (
           <Box key={item.question.id}>
             {index > 0 && <Divider sx={{ my: 3 }} />}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>
               <Box sx={{ flex: 1 }}>
                 <Typography variant="subtitle1" fontWeight="bold">
-                  Q{item.question.question_number}. {item.question.question_text}
+                  Q{item.question.question_number || index + 1}. {item.question.question_text}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                   Type: {item.question.question_type} • {item.question.points} pt{Number(item.question.points) > 1 ? 's' : ''}
@@ -263,7 +292,7 @@ const ExamResultsPage = () => {
               <Typography variant="body1">{item.displayAnswer}</Typography>
             </Box>
 
-            {isExamQuestionAutoGradable(item.question) && (
+            {item.autoGradable && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle2">Réponse correcte</Typography>
                 <Typography variant="body1">{item.correctAnswerLabel}</Typography>

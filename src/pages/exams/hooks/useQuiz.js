@@ -180,7 +180,12 @@ export const useQuiz = () => {
         maxScore,
         percentage,
         passed: hasManualQuestions ? null : autoScore >= Number(currentExam.passing_grade || 0),
-        hasManualQuestions
+        hasManualQuestions,
+        examId,
+        examTitle: currentExam.title,
+        category: currentExam.category,
+        passingGrade: Number(currentExam.passing_grade || 0),
+        resultPath: `/student/exams/${examId}/results`
       });
       setQuizStatus('COMPLETED');
       localStorage.removeItem(`exam_backup_${examId}`);

@@ -190,6 +190,11 @@ const StudentExamsList = () => {
     }
   };
 
+  const formatScore = (value) => {
+    const numericValue = Number(value || 0);
+    return Number.isInteger(numericValue) ? String(numericValue) : numericValue.toFixed(2);
+  };
+
   // Rendu d'un examen
   const renderExam = (exam) => {
     const isImmediateAccessExam = ['training', 'mock_exam'].includes(exam.category);
@@ -256,6 +261,13 @@ const StudentExamsList = () => {
               <Typography variant="body2">
                 Note de passage: {exam.passing_grade}/{exam.total_points}
               </Typography>
+              {isSubmitted && (
+                <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 'bold' }}>
+                  {exam.grade !== null && exam.grade !== undefined
+                    ? `Score: ${formatScore(exam.grade)}/${formatScore(exam.total_points)}`
+                    : 'Score: en attente de correction'}
+                </Typography>
+              )}
             </Grid>
           </Grid>
           {exam.description && (
@@ -275,7 +287,7 @@ const StudentExamsList = () => {
             startIcon={<AssignmentIcon />}
             onClick={() => handleViewExam(exam)}
           >
-            Détails
+            {isSubmitted ? 'Voir resultat et correction' : 'Détails'}
           </Button>
           {canStart && (
             <Button
