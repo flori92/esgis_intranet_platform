@@ -42,6 +42,12 @@ const TakeExamPage = () => {
   const [roomCountdown, setRoomCountdown] = useState(null);
   
   useEffect(() => {
+    // Ne pas recharger l'examen si le Quiz est déjà en cours — 
+    // Quiz gère son propre cycle de vie (soumission, résultats)
+    if (examStarted) {
+      return;
+    }
+
     const fetchExam = async () => {
       try {
         setLoading(true);
@@ -119,7 +125,7 @@ const TakeExamPage = () => {
     };
     
     fetchExam();
-  }, [id, authState]);
+  }, [id, authState, examStarted]);
 
   useEffect(() => {
     if (!exam || examStarted || getExamTimerMode(exam.settings || {}) !== 'room') {
