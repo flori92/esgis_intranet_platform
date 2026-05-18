@@ -86,7 +86,8 @@ const GradeQuestionItem = ({
   // Initialiser les valeurs lors du montage ou lors d'un changement de réponse
   useEffect(() => {
     if (currentAnswer) {
-      const currentGrade = typeof currentAnswer.grade === 'number' ? currentAnswer.grade : 0;
+      const numericGrade = Number(currentAnswer.grade);
+      const currentGrade = Number.isFinite(numericGrade) ? numericGrade : 0;
       const currentFeedback = currentAnswer.feedback || '';
       const currentIsCorrect = currentAnswer.is_correct === true;
       
