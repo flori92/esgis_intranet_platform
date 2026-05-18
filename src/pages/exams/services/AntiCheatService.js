@@ -141,7 +141,7 @@ class AntiCheatService {
 
     // 2. Détection de perte de focus (changement de fenêtre)
     this._handlers.blur = () => {
-      if (this.isActive) {
+      if (this.isActive && !this.isPaused) {
         this._recordIncident('window_blur', 'Perte de focus de la fenêtre détectée');
       }
     };
@@ -256,8 +256,10 @@ class AntiCheatService {
       this._handlers.fullscreenChange = () => {
         if (!document.fullscreenElement && this.isActive) {
           this.isFullscreen = false;
-          this._recordIncident('fullscreen_exit', 'Sortie du mode plein écran');
-          this.onFullscreenExit();
+          const incident = this._recordIncident('fullscreen_exit', 'Sortie du mode plein écran');
+          if (incident) {
+            this.onFullscreenExit();
+          }
         } else {
           this.isFullscreen = true;
           this._detachFullscreenPromptListeners();
