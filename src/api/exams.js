@@ -742,6 +742,7 @@ export const getStudentExamLaunchData = async ({ examId, profileId }) => {
           total_points,
           passing_grade,
           status,
+          category,
           parent_exam:exams!parent_exam_id(id, title),
           courses(id, name, code),
           profiles!professor_id(id, full_name, email),
