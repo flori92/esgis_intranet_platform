@@ -138,11 +138,7 @@ const StudentExamsList = () => {
     let nextExams = [...exams];
 
     if (tabValue === 0) {
-      nextExams = nextExams.filter((exam) => {
-        const isRetakableExam = isRetakableExamCategory(exam.category);
-        const retakableStatusIsAvailable = ['published', 'in_progress', 'grading', 'graded', 'completed'].includes(exam.status);
-        return (new Date(exam.date) >= now && exam.attempt_status !== 'submitted') || (isRetakableExam && retakableStatusIsAvailable);
-      });
+      nextExams = nextExams.filter((exam) => new Date(exam.date) >= now && exam.attempt_status !== 'submitted');
     } else if (tabValue === 1) {
       nextExams = nextExams.filter((exam) => new Date(exam.date) < now || exam.attempt_status === 'submitted');
     }
