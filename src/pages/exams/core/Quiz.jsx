@@ -4,7 +4,6 @@ import { useQuiz } from "../hooks/useQuiz";
 import { useAuth } from "../hooks/useAuth";
 import QuestionCard from "./QuestionCard";
 import QuizNavigation from "./QuizNavigation";
-import QuizResults from "./QuizResults";
 import { Toaster } from 'react-hot-toast';
 import AntiCheatService from '../services/AntiCheatService';
 import {
@@ -28,7 +27,8 @@ import {
   Timer as TimerIcon,
   Person as PersonIcon,
   GppBad as WarningIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  CheckCircleOutline as CheckCircleOutlineIcon
 } from '@mui/icons-material';
 
 /**
