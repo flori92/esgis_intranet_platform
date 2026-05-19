@@ -342,8 +342,12 @@ const Quiz = () => {
   useEffect(() => {
     if (quizStatus === 'COMPLETED' && scoreSummary?.resultPath) {
       const timer = setTimeout(() => {
+        // Redirection forcée (HashRouter fallback)
         navigate(scoreSummary.resultPath, { replace: true });
-      }, 1500); // Court délai pour montrer que c'est fini
+        if (window.location.hash !== `#${scoreSummary.resultPath}`) {
+          window.location.hash = scoreSummary.resultPath;
+        }
+      }, 1500);
       return () => clearTimeout(timer);
     }
   }, [quizStatus, scoreSummary, navigate]);
@@ -358,7 +362,19 @@ const Quiz = () => {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 4, textAlign: 'center' }}>
           Préparation de votre page de statistiques...
         </Typography>
-        <CircularProgress />
+        <CircularProgress sx={{ mb: 4 }} />
+        
+        {scoreSummary?.resultPath && (
+          <Button 
+            variant="outlined" 
+            onClick={() => {
+              navigate(scoreSummary.resultPath, { replace: true });
+              window.location.hash = scoreSummary.resultPath;
+            }}
+          >
+            Si la redirection tarde, cliquez ici
+          </Button>
+        )}
       </Box>
     );
   }
