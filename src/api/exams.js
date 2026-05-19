@@ -558,7 +558,7 @@ export const syncOfficialExamGrade = async ({
     if (!exam?.id && examId) {
       const { data, error } = await supabase
         .from('exams')
-        .select('id, title, course_id, professor_id, professor_entity_id, exam_date, date, exam_type, type, category, is_practice, total_points')
+        .select('id, title, course_id, professor_id, exam_date, date, exam_type, type, category, is_practice, total_points')
         .eq('id', Number(examId))
         .maybeSingle();
 
@@ -589,7 +589,7 @@ export const syncOfficialExamGrade = async ({
     const studentEntityId =
       studentExam?.student_entity_id ||
       await resolveStudentEntityIdForGrade(studentExam?.student_id || studentProfileId);
-    const professorId = exam?.professor_entity_id || exam?.professor_id;
+    const professorId = exam?.professor_id;
     const maxValue = Math.max(Number(exam?.total_points || 20) || 20, 1);
 
     if (!studentEntityId || !exam?.course_id || !professorId) {
@@ -742,7 +742,6 @@ export const getStudentExamLaunchData = async ({ examId, profileId }) => {
           total_points,
           passing_grade,
           status,
-          category,
           parent_exam:exams!parent_exam_id(id, title),
           courses(id, name, code),
           profiles!professor_id(id, full_name, email),
