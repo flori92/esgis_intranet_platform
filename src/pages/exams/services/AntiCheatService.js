@@ -254,7 +254,7 @@ class AntiCheatService {
     // 6. Mode plein écran
     if (this.requireFullscreen) {
       this._handlers.fullscreenChange = () => {
-        if (!document.fullscreenElement && this.isActive) {
+        if (!document.fullscreenElement && this.isActive && !this.isPaused) {
           this.isFullscreen = false;
           const incident = this._recordIncident('fullscreen_exit', 'Sortie du mode plein écran');
           if (incident) {
@@ -282,7 +282,7 @@ class AntiCheatService {
 
     // 7. Détection de redimensionnement suspect
     this._handlers.resize = () => {
-      if (this.isActive) {
+      if (this.isActive && !this.isPaused) {
         const { innerWidth, innerHeight } = window;
         if (innerWidth < 800 || innerHeight < 500) {
           this._recordIncident('window_resize', 
@@ -294,7 +294,7 @@ class AntiCheatService {
     window.addEventListener('resize', this._handlers.resize);
 
     this._handlers.beforeunload = (e) => {
-      if (!this.isActive) {
+      if (!this.isActive || this.isPaused) {
         return undefined;
       }
 
@@ -376,6 +376,7 @@ class AntiCheatService {
    * Désactive toutes les mesures et nettoie les listeners
    */
   stop() {
+    this.isPaused = true;
     this.isActive = false;
 
     // Finaliser la durée de la dernière question

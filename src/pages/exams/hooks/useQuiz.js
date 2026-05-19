@@ -20,6 +20,7 @@ import {
 } from '@/utils/examQuestionUtils';
 import { randomizeExamQuestions } from '../utils/examRandomization';
 import { getExamEndTime, getExamTimerMode, getRemainingTimeParts } from '../utils/examTiming';
+import { isRetakableExamCategory } from '../utils/examCategories';
 
 const getInitialAnswerValue = (question) => {
   switch (question.question_type) {
@@ -127,11 +128,11 @@ export const useQuiz = () => {
 
   const submitQuiz = useCallback(async (options = {}) => {
     if (!examDataRef.current || !studentExamIdRef.current || !authState.profile?.id || !authState.student?.id) {
-      return;
+      return { success: false, skipped: true };
     }
 
     if (submitLockRef.current || quizStatus === 'COMPLETED') {
-      return;
+      return { success: false, skipped: true };
     }
 
     submitLockRef.current = true;
@@ -198,10 +199,13 @@ export const useQuiz = () => {
           window.location.hash = resultPath;
         }
       }, 500);
+
+      return { success: true, resultPath };
     } catch (submitError) {
       submitLockRef.current = false;
       console.error("Erreur lors de la soumission de l'examen:", submitError);
       toast.error("Erreur lors de la soumission de l'examen.");
+      return { success: false, error: submitError };
     }
   }, [
     authState.profile?.id,
@@ -236,6 +240,10 @@ export const useQuiz = () => {
         }
 
         if (studentExam.attempt_status === 'submitted') {
+          if (isRetakableExamCategory(exam.category)) {
+            throw new Error("Cette tentative est déjà soumise. Utilisez le bouton Retenter pour ouvrir une nouvelle copie.");
+          }
+
           throw new Error("Cet examen a déjà été soumis.");
         }
 
@@ -509,7 +517,7 @@ export const useQuiz = () => {
       detected_at: incident.detected_at || new Date().toISOString()
     });
 
-    if (shouldIncrementCounter && cheatingAttemptsRef.current >= cheatingAlertLimit) {
+    if (shouldIncrementCounter && cheatingAttemptsRef.current >= cheatingAlertLimit && !incident.deferAutoSubmit) {
       toast.error("Trop de tentatives de triche detectees. Soumission automatique.");
       submitQuiz({ reason: 'anti_cheat_limit' });
     }

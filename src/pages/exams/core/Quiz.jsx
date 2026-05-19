@@ -6,6 +6,7 @@ import QuestionCard from "./QuestionCard";
 import QuizNavigation from "./QuizNavigation";
 import { Toaster } from 'react-hot-toast';
 import AntiCheatService from '../services/AntiCheatService';
+import { isRetakableExamCategory } from '../utils/examCategories';
 import {
   Box,
   Typography,
@@ -53,7 +54,6 @@ const Quiz = () => {
     answerQuestion,
     goToNextQuestion,
     goToPreviousQuestion,
-    endQuiz,
     submitQuiz,
     calculateScore,
     cheatingAttempts,
@@ -140,6 +140,20 @@ const Quiz = () => {
     setIncidentAlert(null);
     restoreExamFocus();
   }, [incidentAlert, requestSecureFullscreen, restoreExamFocus]);
+
+  const handleSubmitQuiz = useCallback(async (options = {}) => {
+    const activeService = antiCheatServiceRef.current;
+    activeService?.pause();
+
+    const result = await submitQuiz(options);
+
+    if (result?.success === false && !result?.skipped && quizStatus === 'IN_PROGRESS' && antiCheatServiceRef.current === activeService) {
+      activeService?.resume();
+      requestSecureFullscreen();
+    }
+
+    return result;
+  }, [quizStatus, requestSecureFullscreen, submitQuiz]);
 
   const isMajorIncident = useCallback((incidentType) => (
     [
@@ -254,7 +268,7 @@ const Quiz = () => {
   }, [maxCheatingAttempts]);
 
   useEffect(() => {
-    const shouldProtectExam = quizStatus === 'IN_PROGRESS' && examData && !['training', 'mock_exam'].includes(examData.category);
+    const shouldProtectExam = quizStatus === 'IN_PROGRESS' && examData && !isRetakableExamCategory(examData.category);
 
     if (!shouldProtectExam) {
       antiCheatServiceRef.current?.stop();
@@ -291,12 +305,13 @@ const Quiz = () => {
           details: `[${incident.type}] ${incident.details}`,
           detected_at: incident.timestamp,
           incrementCounter,
+          deferAutoSubmit: true,
         });
       },
       onAutoSubmit: () => {
         displayedCheatingCountRef.current = maxCheatingAttempts;
         showCustomAlert(buildIncidentAlert('tab_switch', maxCheatingAttempts, true));
-        setTimeout(() => submitQuiz({ reason: 'anti_cheat_limit' }), 1200);
+        setTimeout(() => handleSubmitQuiz({ reason: 'anti_cheat_limit' }), 1200);
       },
       onFullscreenExit: () => {}
     });
@@ -311,7 +326,7 @@ const Quiz = () => {
         antiCheatServiceRef.current = null;
       }
     };
-  }, [buildIncidentAlert, examData, isDesktopSecureMode, isMajorIncident, maxCheatingAttempts, quizStatus, reportCheatingAttempt, shouldIgnoreIncident, showCustomAlert, submitQuiz]);
+  }, [buildIncidentAlert, examData, handleSubmitQuiz, isDesktopSecureMode, isMajorIncident, maxCheatingAttempts, quizStatus, reportCheatingAttempt, shouldIgnoreIncident, showCustomAlert]);
 
   useEffect(() => {
     if (!antiCheatServiceRef.current) {
@@ -571,9 +586,7 @@ const Quiz = () => {
             goToNextQuestion={goToNextQuestion}
             goToPreviousQuestion={goToPreviousQuestion}
             endQuiz={() => {
-              // Arrêter l'anti-triche avant la soumission effective
-              antiCheatServiceRef.current?.stop();
-              endQuiz();
+              handleSubmitQuiz();
             }}
             onSubmitIntent={() => {
               // Mettre en pause l'anti-triche pendant le dialogue de confirmation

@@ -35,6 +35,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getStudentExamsListData } from '@/api/exams';
+import { isRetakableExamCategory } from '../utils/examCategories';
 
 /**
  * @typedef {Object} ExamData
@@ -137,7 +138,11 @@ const StudentExamsList = () => {
     let nextExams = [...exams];
 
     if (tabValue === 0) {
-      nextExams = nextExams.filter((exam) => new Date(exam.date) >= now && exam.attempt_status !== 'submitted');
+      nextExams = nextExams.filter((exam) => {
+        const isRetakableExam = isRetakableExamCategory(exam.category);
+        const retakableStatusIsAvailable = ['published', 'in_progress', 'grading', 'graded', 'completed'].includes(exam.status);
+        return (new Date(exam.date) >= now && exam.attempt_status !== 'submitted') || (isRetakableExam && retakableStatusIsAvailable);
+      });
     } else if (tabValue === 1) {
       nextExams = nextExams.filter((exam) => new Date(exam.date) < now || exam.attempt_status === 'submitted');
     }
@@ -197,13 +202,25 @@ const StudentExamsList = () => {
 
   // Rendu d'un examen
   const renderExam = (exam) => {
-    const isImmediateAccessExam = ['training', 'mock_exam'].includes(exam.category);
+    const isImmediateAccessExam = isRetakableExamCategory(exam.category);
+    const isRetakableExam = isRetakableExamCategory(exam.category);
+    const availableStatuses = isRetakableExam
+      ? ['published', 'in_progress', 'grading', 'graded', 'completed']
+      : ['published', 'in_progress'];
     const isPast = new Date(exam?.date || new Date().toISOString()) < new Date();
     const isSubmitted = exam.attempt_status === 'submitted' || ['passed', 'failed'].includes(exam.result_status) || exam.grade !== null;
-    const canStart = ['published', 'in_progress'].includes(exam.status) && !isSubmitted;
+    const canStart = availableStatuses.includes(exam.status) && (!isSubmitted || isRetakableExam);
     const canLaunchNow = canStart && (isImmediateAccessExam || !isPast);
     const statusColor = isSubmitted ? 'primary' : isImmediateAccessExam ? 'success' : isPast ? 'error' : 'success';
-    const statusText = isSubmitted ? 'Soumis' : isImmediateAccessExam ? 'Disponible' : isPast ? 'Passé' : 'À venir';
+    const statusText = isSubmitted && isRetakableExam
+      ? 'Soumis - retentable'
+      : isSubmitted
+        ? 'Soumis'
+        : isImmediateAccessExam
+          ? 'Disponible'
+          : isPast
+            ? 'Passé'
+            : 'À venir';
 
     // Libellé de catégorie
     const categoryLabels = {
@@ -289,17 +306,18 @@ const StudentExamsList = () => {
           >
             {isSubmitted ? 'Voir résultat et correction' : 'Détails'}
           </Button>
-          {isSubmitted && isImmediateAccessExam && (
+          {isSubmitted && isRetakableExam && (
             <Button
               size="small"
               variant="contained"
               color="success"
-              onClick={() => navigate(`/student/exams/${exam.exam_id}/results`)}
+              startIcon={<PlayArrowIcon />}
+              onClick={() => navigate(`/student/exams/${exam.exam_id}/take`)}
             >
-              📝 Voir la correction
+              Retenter
             </Button>
           )}
-          {canStart && (
+          {canStart && !isSubmitted && (
             <Button
               size="small"
               variant="contained"

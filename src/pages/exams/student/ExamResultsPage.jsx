@@ -26,6 +26,7 @@ import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { getStudentExamResultDetails } from '@/api/exams';
+import { isRetakableExamCategory } from '../utils/examCategories';
 import {
   computeExamQuestionScore,
   formatExamAnswer,
@@ -97,7 +98,7 @@ const ExamResultsPage = () => {
         });
 
         // Pour les examens blancs et entraînements, tout déplier par défaut
-        if (['training', 'mock_exam'].includes(exam.category)) {
+        if (isRetakableExamCategory(exam.category)) {
           setExpandedQuestions(new Set((questions || []).map((_, idx) => idx)));
         }
       } catch (loadResultsError) {
@@ -229,7 +230,7 @@ const ExamResultsPage = () => {
   }
 
   const { exam, studentExam } = payload;
-  const isMockOrTraining = ['training', 'mock_exam'].includes(exam.category);
+  const isMockOrTraining = isRetakableExamCategory(exam.category);
   const scoreColor = summary.percentage >= 70 ? 'success' : summary.percentage >= 50 ? 'warning' : 'error';
 
   return (
@@ -246,9 +247,16 @@ const ExamResultsPage = () => {
             {exam.course_name || 'Cours inconnu'} {exam.course_code ? `(${exam.course_code})` : ''}
           </Typography>
         </Box>
-        <Button variant="outlined" onClick={() => navigate('/student/exams')}>
-          Retour aux examens
-        </Button>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          {isMockOrTraining && (
+            <Button variant="contained" onClick={() => navigate(`/student/exams/${id}/take`)}>
+              Retenter
+            </Button>
+          )}
+          <Button variant="outlined" onClick={() => navigate('/student/exams')}>
+            Retour aux examens
+          </Button>
+        </Stack>
       </Box>
 
       <Grid container spacing={3} sx={{ mb: 3 }}>

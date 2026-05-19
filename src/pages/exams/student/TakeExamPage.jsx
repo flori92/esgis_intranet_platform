@@ -21,6 +21,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import Quiz from '../core/Quiz';
 import { getStudentExamLaunchData, markStudentExamStarted, verifyExamAccessCode } from '@/api/exams';
+import { getRetakableExamLabel, isRetakableExamCategory } from '../utils/examCategories';
 import { formatCountdown, getExamEndTime, getExamTimerMode, getRemainingTimeParts } from '../utils/examTiming';
 
 /**
@@ -40,6 +41,7 @@ const TakeExamPage = () => {
   const [otpValue, setOtpValue] = useState('');
   const [otpError, setOtpError] = useState('');
   const [roomCountdown, setRoomCountdown] = useState(null);
+  const [retakeAvailable, setRetakeAvailable] = useState(false);
   
   useEffect(() => {
     // Ne pas recharger l'examen si le Quiz est déjà en cours — 
@@ -68,9 +70,12 @@ const TakeExamPage = () => {
         // Vérifier si l'examen est disponible
         const examDate = new Date(examData.date);
         const now = new Date();
-        const isImmediateAccessExam = ['training', 'mock_exam'].includes(examData.category);
+        const isImmediateAccessExam = isRetakableExamCategory(examData.category);
+        const availableStatuses = isImmediateAccessExam
+          ? ['published', 'in_progress', 'grading', 'graded', 'completed']
+          : ['published', 'in_progress'];
 
-        if (!['published', 'in_progress'].includes(examData.status)) {
+        if (!availableStatuses.includes(examData.status)) {
           throw new Error('Cet examen n\'est pas encore disponible');
         }
         
@@ -78,7 +83,8 @@ const TakeExamPage = () => {
           throw new Error('Cet examen n\'est pas encore disponible');
         }
         
-        if (studentExam.attempt_status === 'submitted') {
+        const canRetakeExam = isRetakableExamCategory(examData.category);
+        if (studentExam.attempt_status === 'submitted' && !canRetakeExam) {
           // Si l'examen est déjà soumis, rediriger automatiquement vers la page de résultats
           navigate(`/student/exams/${id}/results`, { replace: true });
           return;
@@ -109,6 +115,7 @@ const TakeExamPage = () => {
         };
         
         setExam(formattedExam);
+        setRetakeAvailable(studentExam.attempt_status === 'submitted' && canRetakeExam);
 
         if (studentExam.attempt_status === 'in_progress') {
           setExamStarted(true);
@@ -160,6 +167,8 @@ const TakeExamPage = () => {
       });
 
       if (error) throw error;
+
+      localStorage.removeItem(`exam_backup_${id}`);
       
       // Marquer l'examen comme commencé
       setExamStarted(true);
@@ -167,6 +176,7 @@ const TakeExamPage = () => {
       // Fermer les boîtes de dialogue
       setConfirmDialogOpen(false);
       setOtpDialogOpen(false);
+      setRetakeAvailable(false);
     } catch (error) {
       console.error('Erreur lors du démarrage de l\'examen:', error);
       setError(error.message || 'Impossible de démarrer l\'examen. Veuillez réessayer.');
@@ -261,6 +271,13 @@ const TakeExamPage = () => {
           <Typography variant="h4" gutterBottom>
             {exam.title}
           </Typography>
+
+          {retakeAvailable && (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Vous pouvez consulter votre dernier résultat ou retenter {getRetakableExamLabel(exam.category)}.
+              La nouvelle tentative remplacera la copie précédente dans les statistiques.
+            </Alert>
+          )}
           
           <Box sx={{ mb: 4 }}>
             <Typography variant="subtitle1" color="text.secondary">
@@ -318,12 +335,17 @@ const TakeExamPage = () => {
             </Button>
             
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              {retakeAvailable && (
+                <Button variant="outlined" onClick={handleViewResults}>
+                  Voir le dernier résultat
+                </Button>
+              )}
               <Button 
                 variant="contained" 
                 color="primary"
                 onClick={handleConfirmStart}
               >
-                Commencer l'examen
+                {retakeAvailable ? 'Retenter' : "Commencer l'examen"}
               </Button>
             </Box>
           </Box>
@@ -380,7 +402,9 @@ const TakeExamPage = () => {
         <DialogContent>
           <DialogContentText>
             Êtes-vous sûr de vouloir commencer l'examen maintenant ? 
-            Une fois commencé, vous ne pourrez pas l'interrompre et le chronomètre démarrera.
+            {retakeAvailable
+              ? ' Une nouvelle tentative sera ouverte et le chronomètre redémarrera.'
+              : " Une fois commencé, vous ne pourrez pas l'interrompre et le chronomètre démarrera."}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
