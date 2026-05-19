@@ -714,6 +714,11 @@ const persistQuizResult = async (payload) => {
   return { error: insertError || null };
 };
 
+const isMissingSubmitStudentExamRpcError = (error) => (
+  error?.code === '42883' ||
+  /submit_student_exam_attempt|function .* does not exist/i.test(`${error?.message || ''} ${error?.details || ''}`)
+);
+
 export const getStudentExamLaunchData = async ({ examId, profileId }) => {
   try {
     const numericExamId = Number(examId);
@@ -992,6 +997,50 @@ export const finalizeStudentExamSubmission = async ({
       : normalizedScore >= Number(passingGrade || 0)
         ? 'passed'
         : 'failed';
+
+    const { data: submitData, error: submitRpcError } = await supabase.rpc('submit_student_exam_attempt', {
+      p_exam_id: numericExamId,
+      p_student_exam_id: Number(studentExamId),
+      p_profile_id: profileId,
+      p_answers: answers || {},
+      p_score: normalizedScore,
+      p_total_questions: Number(totalQuestions || 0),
+      p_completion_time: Number(completionTime || 0),
+      p_cheating_attempts: Number(cheatingAttempts || 0),
+      p_has_manual_questions: Boolean(hasManualQuestions),
+      p_passing_grade: Number(passingGrade || 0),
+      p_submission_reason: submissionReason
+    });
+
+    if (!submitRpcError) {
+      if (!submitData?.success) {
+        return {
+          success: false,
+          error: new Error(submitData?.message || 'Impossible de soumettre la copie.')
+        };
+      }
+
+      if (!hasManualQuestions) {
+        const { error: officialGradeError } = await syncOfficialExamGrade({
+          examId: numericExamId,
+          studentExamId,
+          studentProfileId: profileId,
+          grade: normalizedScore,
+          comments: null,
+          isPublished: true
+        });
+
+        if (officialGradeError) {
+          console.error('Erreur synchronisation note officielle:', officialGradeError);
+        }
+      }
+
+      return { success: true, error: null, status: submitData.status || studentStatus };
+    }
+
+    if (!isMissingSubmitStudentExamRpcError(submitRpcError)) {
+      return { success: false, error: submitRpcError };
+    }
 
     const quizResultPayload = {
       student_id: profileId,

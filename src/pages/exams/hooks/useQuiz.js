@@ -175,6 +175,7 @@ export const useQuiz = () => {
 
       await updateActiveStudent(authState.profile.id, examId, false);
 
+      const resultPath = `/student/exams/${examId}/results`;
       setScoreSummary({
         score: autoScore,
         maxScore,
@@ -185,11 +186,18 @@ export const useQuiz = () => {
         examTitle: currentExam.title,
         category: currentExam.category,
         passingGrade: Number(currentExam.passing_grade || 0),
-        resultPath: `/student/exams/${examId}/results`
+        resultPath
       });
       setQuizStatus('COMPLETED');
       localStorage.removeItem(`exam_backup_${examId}`);
       toast.success('Examen soumis avec succès.');
+
+      window.setTimeout(() => {
+        navigate(resultPath, { replace: true });
+        if (window.location.hash !== `#${resultPath}`) {
+          window.location.hash = resultPath;
+        }
+      }, 500);
     } catch (submitError) {
       submitLockRef.current = false;
       console.error("Erreur lors de la soumission de l'examen:", submitError);
@@ -200,6 +208,7 @@ export const useQuiz = () => {
     authState.student?.id,
     clearRuntimeIntervals,
     examId,
+    navigate,
     quizStatus,
   ]);
 
