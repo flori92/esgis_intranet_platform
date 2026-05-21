@@ -902,6 +902,7 @@ export const getStudentExamsListData = async (profileId) => {
         };
       })
       .filter(Boolean)
+      .filter((exam) => !['archived', 'cancelled'].includes(String(exam.status || '').toLowerCase()))
       .sort((left, right) => new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime());
 
     return { data: exams, error: null };
