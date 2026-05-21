@@ -469,6 +469,10 @@ const isStudentIdTypeMismatchError = (error) => {
   return error?.code === '22P02' || /invalid input syntax for type (uuid|integer)/i.test(message);
 };
 
+const isUuidLike = (value) => (
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim())
+);
+
 const getStudentExamLookupCandidates = async (profileId) => {
   const studentId = await resolveStudentId(profileId);
 
@@ -627,7 +631,12 @@ const queryStudentExamsByCandidates = async ({ candidates, buildQuery, expectSin
   let lastTypeMismatchError = null;
 
   for (const candidate of candidates) {
-    const { data, error } = await buildQuery(candidate);
+    const normalizedCandidate = String(candidate || '').trim();
+    if (!isUuidLike(normalizedCandidate)) {
+      continue;
+    }
+
+    const { data, error } = await buildQuery(normalizedCandidate);
 
     if (error) {
       if (isStudentIdTypeMismatchError(error)) {

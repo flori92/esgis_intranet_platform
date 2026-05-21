@@ -217,6 +217,14 @@ export const useQuiz = () => {
   ]);
 
   useEffect(() => {
+    if (
+      submitLockRef.current ||
+      quizStatus === 'COMPLETED' ||
+      (quizStatus === 'IN_PROGRESS' && questionsRef.current.length > 0)
+    ) {
+      return undefined;
+    }
+
     const fetchQuizData = async () => {
       setLoading(true);
       setError(null);
@@ -360,6 +368,7 @@ export const useQuiz = () => {
     clearRuntimeIntervals,
     examId,
     navigate,
+    quizStatus,
     submitQuiz
   ]);
 
