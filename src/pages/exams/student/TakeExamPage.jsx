@@ -21,6 +21,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import Quiz from '../core/Quiz';
 import { getStudentExamLaunchData, markStudentExamStarted, verifyExamAccessCode } from '@/api/exams';
+import { getEffectiveExamTimerSettings, hasExamEarlyAccess } from '../utils/examAccess';
 import { getRetakableExamLabel, isRetakableExamCategory } from '../utils/examCategories';
 import { formatCountdown, getExamEndTime, getExamTimerMode, getRemainingTimeParts } from '../utils/examTiming';
 
@@ -70,7 +71,9 @@ const TakeExamPage = () => {
         // Vérifier si l'examen est disponible
         const examDate = new Date(examData.date);
         const now = new Date();
+        const profileId = authState.user.id || authState.profile.id;
         const isImmediateAccessExam = isRetakableExamCategory(examData.category);
+        const hasEarlyAccess = hasExamEarlyAccess(examData, profileId);
         const availableStatuses = isImmediateAccessExam
           ? ['published', 'in_progress', 'grading', 'graded', 'completed']
           : ['published', 'in_progress'];
@@ -79,7 +82,7 @@ const TakeExamPage = () => {
           throw new Error('Cet examen n\'est pas encore disponible');
         }
         
-        if (!isImmediateAccessExam && examDate > now) {
+        if (!isImmediateAccessExam && examDate > now && !hasEarlyAccess) {
           throw new Error('Cet examen n\'est pas encore disponible');
         }
         
@@ -90,12 +93,13 @@ const TakeExamPage = () => {
           return;
         }
 
-        const timerMode = getExamTimerMode(examData.settings || {});
+        const effectiveTimerSettings = getEffectiveExamTimerSettings(examData, profileId, now);
+        const timerMode = getExamTimerMode(effectiveTimerSettings);
         if (timerMode === 'room' && studentExam.attempt_status !== 'in_progress') {
           const roomEndTime = getExamEndTime({
             examDate: examData.date,
             duration: examData.duration,
-            settings: examData.settings || {}
+            settings: effectiveTimerSettings
           });
           const remaining = getRemainingTimeParts(roomEndTime, now);
 
@@ -111,6 +115,7 @@ const TakeExamPage = () => {
           professor_name: examData.professor_name || 'Professeur inconnu',
           student_exam_id: studentExam.id,
           attempt_status: studentExam.attempt_status,
+          has_early_access: hasEarlyAccess,
           access_verified_at: studentExam.access_verified_at || null
         };
         
@@ -132,7 +137,10 @@ const TakeExamPage = () => {
   }, [id, authState, examStarted]);
 
   useEffect(() => {
-    if (!exam || examStarted || getExamTimerMode(exam.settings || {}) !== 'room') {
+    const profileId = authState.user?.id || authState.profile?.id;
+    const effectiveTimerSettings = getEffectiveExamTimerSettings(exam, profileId);
+
+    if (!exam || examStarted || getExamTimerMode(effectiveTimerSettings) !== 'room') {
       setRoomCountdown(null);
       return undefined;
     }
@@ -140,7 +148,7 @@ const TakeExamPage = () => {
     const roomEndTime = getExamEndTime({
       examDate: exam.date,
       duration: exam.duration,
-      settings: exam.settings || {}
+      settings: effectiveTimerSettings
     });
 
     const syncCountdown = () => {
@@ -151,11 +159,11 @@ const TakeExamPage = () => {
     const intervalId = setInterval(syncCountdown, 1000);
 
     return () => clearInterval(intervalId);
-  }, [exam, examStarted]);
+  }, [exam, examStarted, authState.user?.id, authState.profile?.id]);
 
   const isRoomTimer = useMemo(
-    () => getExamTimerMode(exam?.settings || {}) === 'room',
-    [exam]
+    () => getExamTimerMode(getEffectiveExamTimerSettings(exam, authState.user?.id || authState.profile?.id)) === 'room',
+    [exam, authState.user?.id, authState.profile?.id]
   );
   
   const handleStartExam = async () => {

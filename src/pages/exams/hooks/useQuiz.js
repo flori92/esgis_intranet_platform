@@ -18,6 +18,7 @@ import {
   isExamQuestionAutoGradable,
   normalizeExamQuestion
 } from '@/utils/examQuestionUtils';
+import { getEffectiveExamTimerSettings } from '../utils/examAccess';
 import { randomizeExamQuestions } from '../utils/examRandomization';
 import { getExamEndTime, getExamTimerMode, getRemainingTimeParts } from '../utils/examTiming';
 import { isRetakableExamCategory } from '../utils/examCategories';
@@ -272,6 +273,8 @@ export const useQuiz = () => {
           studentProfileId: authState.profile.id,
           settings: exam.settings || {}
         });
+        const now = new Date();
+        const effectiveTimerSettings = getEffectiveExamTimerSettings(exam, authState.profile.id, now);
         
         // Priority: Local Storage > DB Answers > Default Empty
         const localBackup = localStorage.getItem(`exam_backup_${examId}`);
@@ -295,16 +298,15 @@ export const useQuiz = () => {
         cheatingAttemptsRef.current = 0;
         setCurrentQuestionIndex(0);
 
-        const now = new Date();
         const examStartedAt = studentExam.arrival_time ? new Date(studentExam.arrival_time) : null;
 
         const resumeEndTime = getExamEndTime({
           examDate: exam.date,
           duration: exam.duration,
           arrivalTime: studentExam.arrival_time,
-          settings: exam.settings || {}
+          settings: effectiveTimerSettings
         });
-        const timerMode = getExamTimerMode(exam.settings || {});
+        const timerMode = getExamTimerMode(effectiveTimerSettings);
 
         if (studentExam.attempt_status === 'in_progress' && resumeEndTime) {
           endTimeRef.current = resumeEndTime;
@@ -326,7 +328,7 @@ export const useQuiz = () => {
             const roomEndTime = getExamEndTime({
               examDate: exam.date,
               duration: exam.duration,
-              settings: exam.settings || {}
+              settings: effectiveTimerSettings
             });
             const remaining = getRemainingTimeParts(roomEndTime, now);
 
