@@ -1030,12 +1030,14 @@ export const finalizeStudentExamSubmission = async ({
         };
       }
 
+      const officialScore = Number(submitData?.score ?? normalizedScore);
+
       if (!hasManualQuestions) {
         const { error: officialGradeError } = await syncOfficialExamGrade({
           examId: numericExamId,
           studentExamId,
           studentProfileId: profileId,
-          grade: normalizedScore,
+          grade: officialScore,
           comments: null,
           isPublished: true
         });
@@ -1284,7 +1286,7 @@ export const getProfessorExamMonitoringData = async (examId) => {
           answers,
           created_at,
           updated_at,
-          students(
+          students!student_exams_student_entity_id_fkey(
             id,
             profile_id,
             student_number,

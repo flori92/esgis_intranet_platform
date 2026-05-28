@@ -231,6 +231,10 @@ const ExamResultsPage = () => {
 
   const { exam, studentExam } = payload;
   const isMockOrTraining = isRetakableExamCategory(exam.category);
+  const officialEndAt = exam.date
+    ? new Date(new Date(exam.date).getTime() + Number(exam.duration || 0) * 60000)
+    : null;
+  const canShowQuestionDetails = isMockOrTraining || (officialEndAt && officialEndAt <= new Date());
   const scoreColor = summary.percentage >= 70 ? 'success' : summary.percentage >= 50 ? 'warning' : 'error';
 
   return (
@@ -324,7 +328,14 @@ const ExamResultsPage = () => {
         </Alert>
       )}
 
+      {!canShowQuestionDetails && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Votre note est enregistrée. Le détail des réponses et la correction seront disponibles après la fin officielle de l'épreuve.
+        </Alert>
+      )}
+
       {/* Détail par question */}
+      {canShowQuestionDetails && (
       <Paper sx={{ p: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
           <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
@@ -484,6 +495,7 @@ const ExamResultsPage = () => {
           );
         })}
       </Paper>
+      )}
     </Box>
   );
 };

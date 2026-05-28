@@ -21,7 +21,30 @@ import { normalizeExamQuestion, serializeExamQuestion } from '../utils/examQuest
  */
 export const getExamQuestions = async (examId) => {
   try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError) {
+      throw userError;
+    }
+
+    const profileId = userData?.user?.id || null;
     const { data, error } = await supabase
+      .rpc('get_student_exam_questions', {
+        p_exam_id: Number(examId),
+        p_profile_id: profileId
+      });
+
+    if (error && error.code !== '42883') {
+      console.error(`Erreur lors de la récupération sécurisée des questions de l'examen ${examId}:`, error);
+      return { data: [], questions: [], error };
+    }
+
+    if (!error) {
+      const formattedQuestions = (data || []).map((item) => normalizeExamQuestion(item));
+      return { data: formattedQuestions, questions: formattedQuestions, error: null };
+    }
+
+    const { data: fallbackData, error: fallbackError } = await supabase
       .from('exam_questions')
       .select(`
         id,
@@ -37,12 +60,12 @@ export const getExamQuestions = async (examId) => {
       .eq('exam_id', examId)
       .order('question_number');
 
-    if (error) {
-      console.error(`Erreur lors de la récupération des questions de l'examen ${examId}:`, error);
-      return { data: [], questions: [], error };
+    if (fallbackError) {
+      console.error(`Erreur lors de la récupération des questions de l'examen ${examId}:`, fallbackError);
+      return { data: [], questions: [], error: fallbackError };
     }
 
-    const formattedQuestions = (data || []).map((item) => normalizeExamQuestion(item));
+    const formattedQuestions = (fallbackData || []).map((item) => normalizeExamQuestion(item));
 
     return { data: formattedQuestions, questions: formattedQuestions, error: null };
   } catch (err) {
