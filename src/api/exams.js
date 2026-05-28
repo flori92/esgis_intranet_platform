@@ -1030,23 +1030,6 @@ export const finalizeStudentExamSubmission = async ({
         };
       }
 
-      const officialScore = Number(submitData?.score ?? normalizedScore);
-
-      if (!hasManualQuestions) {
-        const { error: officialGradeError } = await syncOfficialExamGrade({
-          examId: numericExamId,
-          studentExamId,
-          studentProfileId: profileId,
-          grade: officialScore,
-          comments: null,
-          isPublished: true
-        });
-
-        if (officialGradeError) {
-          console.error('Erreur synchronisation note officielle:', officialGradeError);
-        }
-      }
-
       return { success: true, error: null, status: submitData.status || studentStatus };
     }
 
