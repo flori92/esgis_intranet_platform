@@ -6,7 +6,6 @@ import QuestionCard from "./QuestionCard";
 import QuizNavigation from "./QuizNavigation";
 import { Toaster } from 'react-hot-toast';
 import AntiCheatService from '../services/AntiCheatService';
-import { isRetakableExamCategory } from '../utils/examCategories';
 import {
   Box,
   Typography,
@@ -90,6 +89,17 @@ const Quiz = () => {
   }, [cheatingAttempts]);
 
   const maxCheatingAttempts = Math.max(1, Number(examData?.max_cheating_alerts || 3));
+
+  const isExamAntiCheatEnabled = useCallback(() => {
+    if (!examData) {
+      return false;
+    }
+
+    const category = String(examData.category || 'evaluation').toLowerCase();
+    const antiCheatSetting = examData.settings?.anti_cheat;
+
+    return category !== 'training' && antiCheatSetting !== false && antiCheatSetting !== 'false';
+  }, [examData]);
 
   const isDesktopSecureMode = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -268,7 +278,7 @@ const Quiz = () => {
   }, [maxCheatingAttempts]);
 
   useEffect(() => {
-    const shouldProtectExam = quizStatus === 'IN_PROGRESS' && examData && !isRetakableExamCategory(examData.category);
+    const shouldProtectExam = quizStatus === 'IN_PROGRESS' && isExamAntiCheatEnabled();
 
     if (!shouldProtectExam) {
       antiCheatServiceRef.current?.stop();
@@ -326,7 +336,7 @@ const Quiz = () => {
         antiCheatServiceRef.current = null;
       }
     };
-  }, [buildIncidentAlert, examData, handleSubmitQuiz, isDesktopSecureMode, isMajorIncident, maxCheatingAttempts, quizStatus, reportCheatingAttempt, shouldIgnoreIncident, showCustomAlert]);
+  }, [buildIncidentAlert, examData, handleSubmitQuiz, isDesktopSecureMode, isExamAntiCheatEnabled, isMajorIncident, maxCheatingAttempts, quizStatus, reportCheatingAttempt, shouldIgnoreIncident, showCustomAlert]);
 
   useEffect(() => {
     if (!antiCheatServiceRef.current) {
