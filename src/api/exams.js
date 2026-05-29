@@ -1288,7 +1288,6 @@ export const getProfessorExamMonitoringData = async (examId) => {
           start_time,
           last_ping,
           is_completed,
-          cheating_attempts,
           student:profiles!student_id(full_name, email, avatar_url)
         `)
         .eq('exam_id', numericExamId),
@@ -1385,12 +1384,14 @@ export const getProfessorExamMonitoringData = async (examId) => {
       const profile = getRelation(row.student);
       const lastPingAgeMs = row.last_ping ? Date.now() - new Date(row.last_ping).getTime() : Number.POSITIVE_INFINITY;
       const isOnline = Boolean(!row.is_completed && lastPingAgeMs <= MONITORING_ACTIVE_THRESHOLD_MS);
+      const incidentCount = incidentsByProfileId.get(row.student_id) || 0;
 
       return {
         ...row,
         student_name: profile?.full_name || 'Etudiant',
         student_email: profile?.email || '',
         student_avatar: profile?.avatar_url || null,
+        cheating_attempts: incidentCount,
         is_online: isOnline,
         is_stale: Boolean(!row.is_completed && !isOnline)
       };
