@@ -37,6 +37,26 @@ import { fr } from 'date-fns/locale';
 import { getStudentExamsListData } from '@/api/exams';
 import { isRetakableExamCategory } from '../utils/examCategories';
 
+const isSubmittedExam = (exam) => (
+  exam.attempt_status === 'submitted' ||
+  ['passed', 'failed'].includes(exam.result_status) ||
+  exam.grade !== null
+);
+
+const getExamWindowState = (exam, referenceDate = new Date()) => {
+  const start = new Date(exam?.date || referenceDate.toISOString());
+  const durationMs = Math.max(Number(exam?.duration || 0), 0) * 60 * 1000;
+  const end = new Date(start.getTime() + durationMs);
+  const isBeforeStart = start > referenceDate;
+  const isEnded = durationMs > 0 ? end <= referenceDate : start < referenceDate;
+
+  return {
+    isBeforeStart,
+    isActive: !isBeforeStart && !isEnded,
+    isEnded
+  };
+};
+
 /**
  * @typedef {Object} ExamData
  * @property {number} id - ID de l'examen
@@ -138,9 +158,15 @@ const StudentExamsList = () => {
     let nextExams = [...exams];
 
     if (tabValue === 0) {
-      nextExams = nextExams.filter((exam) => new Date(exam.date) >= now && exam.attempt_status !== 'submitted');
+      nextExams = nextExams.filter((exam) => {
+        const windowState = getExamWindowState(exam, now);
+        return !isSubmittedExam(exam) && (!windowState.isEnded || exam.attempt_status === 'in_progress');
+      });
     } else if (tabValue === 1) {
-      nextExams = nextExams.filter((exam) => new Date(exam.date) < now || exam.attempt_status === 'submitted');
+      nextExams = nextExams.filter((exam) => {
+        const windowState = getExamWindowState(exam, now);
+        return isSubmittedExam(exam) || (windowState.isEnded && exam.attempt_status !== 'in_progress');
+      });
     }
     // tabValue === 2 (Tous) : no filtering by date
 
@@ -203,16 +229,20 @@ const StudentExamsList = () => {
     const availableStatuses = isRetakableExam
       ? ['published', 'in_progress', 'grading', 'graded', 'completed']
       : ['published', 'in_progress'];
-    const isPast = new Date(exam?.date || new Date().toISOString()) < new Date();
-    const isSubmitted = exam.attempt_status === 'submitted' || ['passed', 'failed'].includes(exam.result_status) || exam.grade !== null;
+    const windowState = getExamWindowState(exam);
+    const isSubmitted = isSubmittedExam(exam);
+    const isActiveWindow = windowState.isActive || exam.attempt_status === 'in_progress';
+    const isPast = windowState.isEnded && exam.attempt_status !== 'in_progress';
     const canStart = availableStatuses.includes(exam.status) && (!isSubmitted || isRetakableExam);
-    const canLaunchNow = canStart && (isImmediateAccessExam || !isPast);
-    const statusColor = isSubmitted ? 'primary' : isImmediateAccessExam ? 'success' : isPast ? 'error' : 'success';
+    const canLaunchNow = canStart && (isImmediateAccessExam || isActiveWindow);
+    const statusColor = isSubmitted ? 'primary' : isActiveWindow ? 'warning' : isImmediateAccessExam ? 'success' : isPast ? 'error' : 'success';
     const statusText = isSubmitted && isRetakableExam
       ? 'Soumis - retentable'
       : isSubmitted
         ? 'Soumis'
-        : isImmediateAccessExam
+        : isActiveWindow
+          ? 'En cours'
+          : isImmediateAccessExam
           ? 'Disponible'
           : isPast
             ? 'Passé'
