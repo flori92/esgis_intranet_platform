@@ -246,7 +246,7 @@ const TakeExamPage = () => {
   // Si l'examen est commencé, afficher le composant Quiz
   if (examStarted) {
     return (
-      <Box sx={{ height: '100vh', overflow: 'hidden' }}>
+      <Box sx={{ height: '100vh', overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain' }}>
         <Quiz />
       </Box>
     );

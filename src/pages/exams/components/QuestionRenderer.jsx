@@ -281,32 +281,45 @@ const QuestionRenderer = ({
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Associez chaque élément de gauche avec l'élément correspondant à droite.
         </Typography>
-        {leftItems.map((leftItem, leftIdx) => (
-          <Paper key={leftIdx} variant="outlined" sx={{ p: 2, mb: 1.5, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ flex: 1, fontWeight: 'bold' }}>
-              <Typography variant="body1">{leftItem}</Typography>
-            </Box>
-            <Typography variant="body1" sx={{ mx: 1 }}>→</Typography>
-            <Box sx={{ flex: 1 }}>
-              <RadioGroup
+        <Box sx={{ display: 'grid', gap: 1 }}>
+          {leftItems.map((leftItem, leftIdx) => (
+            <Paper
+              key={leftIdx}
+              variant="outlined"
+              sx={{
+                p: { xs: 1.25, sm: 1.5 },
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) minmax(220px, 0.9fr)' },
+                alignItems: 'center',
+                gap: { xs: 1, sm: 1.5 }
+              }}
+            >
+              <Typography variant="body1" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+                {leftItem}
+              </Typography>
+              <TextField
+                select
+                fullWidth
+                size="small"
                 value={matchAnswers[leftIdx] ?? ''}
                 onChange={(e) => handleMatch(leftIdx, e.target.value)}
-                row
-                sx={{ flexWrap: 'wrap' }}
+                disabled={readOnly}
+                SelectProps={{ native: true }}
+                inputProps={{ 'aria-label': `Association ${leftIdx + 1}` }}
               >
+                <option value="">Choisir une correspondance</option>
                 {rightItems.map((rightItem, rightIdx) => (
-                  <FormControlLabel
+                  <option
                     key={rightIdx}
                     value={String(rightIdx)}
-                    control={<Radio size="small" disabled={readOnly} />}
-                    label={rightItem}
-                    sx={{ mr: 2 }}
-                  />
+                  >
+                    {rightItem}
+                  </option>
                 ))}
-              </RadioGroup>
-            </Box>
-          </Paper>
-        ))}
+              </TextField>
+            </Paper>
+          ))}
+        </Box>
       </Box>
     );
   };
@@ -454,7 +467,7 @@ const QuestionRenderer = ({
   };
 
   return (
-    <Paper elevation={2} sx={{ p: 3, mb: 2 }}>
+    <Paper elevation={2} sx={{ p: { xs: 2, md: 2.5 }, mb: 2 }}>
       {/* En-tête de la question */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
