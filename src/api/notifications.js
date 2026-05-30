@@ -1,11 +1,25 @@
 import { supabase } from '../supabase';
 
+const normalizePriority = (priority) => {
+  const normalized = String(priority || 'info').toLowerCase();
+
+  if (['info', 'warning', 'success', 'error'].includes(normalized)) {
+    return normalized;
+  }
+
+  if (['high', 'critical'].includes(normalized)) {
+    return 'warning';
+  }
+
+  return 'info';
+};
+
 const normalizeNotification = (row = {}) => ({
   id: row.id,
   title: row.title || 'Notification',
   content: row.content || row.message || '',
   message: row.message || row.content || '',
-  priority: row.priority || row.type || 'medium',
+  priority: normalizePriority(row.priority || row.type),
   type: row.type || row.priority || 'info',
   read: row.read ?? row.is_read ?? false,
   is_read: row.is_read ?? row.read ?? false,
@@ -21,7 +35,7 @@ const normalizeInsertPayload = (payload = {}) => ({
   sender_id: payload.sender_id ?? null,
   title: payload.title ?? payload.titre ?? 'Notification',
   content: payload.content ?? payload.message ?? payload.contenu ?? '',
-  priority: payload.priority ?? payload.type ?? 'medium',
+  priority: normalizePriority(payload.priority ?? payload.type),
   read: Boolean(payload.read ?? payload.is_read)
 });
 

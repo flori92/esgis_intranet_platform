@@ -606,7 +606,7 @@ export const publishGrades = async (courseId, evaluationTypes, professorProfileI
         sender_id: professorProfileId,
         title: 'Nouvelle note publiée',
         content: `Votre note "${row.evaluation_type}" pour ${courseName} est maintenant disponible.`,
-        priority: 'medium'
+        priority: 'success'
       }));
 
     await sendNotifications(notifications);
@@ -714,7 +714,7 @@ export const submitGradeCorrection = async (correctionData) => {
         sender_id: correctionData.professorId,
         title: 'Demande de correction de note',
         content: 'Un professeur a soumis une demande de correction de note.',
-        priority: 'medium'
+        priority: 'info'
       }
     ]);
 
