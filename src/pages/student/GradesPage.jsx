@@ -43,6 +43,15 @@ const getGradeColor = (value, maxValue) => {
   return 'error';
 };
 
+const EVALUATION_LABELS = {
+  cc_final: 'Contrôle continu',
+  presence: 'Présence',
+  tp: 'TP',
+  examen: 'Examen final'
+};
+
+const getEvaluationLabel = (type) => EVALUATION_LABELS[type] || type || 'Évaluation';
+
 const StudentGradesPage = () => {
   const { authState } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -287,7 +296,7 @@ const StudentGradesPage = () => {
                     <TableCell align="center">
                       <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap>
                         {item.grades.map(g => (
-                          <Tooltip key={g.id} title={`${g.type_evaluation || 'Évaluation'} (Coef ${g.coefficient || 1})`}>
+                          <Tooltip key={g.id} title={`${getEvaluationLabel(g.type_evaluation)} (Coef ${g.coefficient || 1})`}>
                             <Chip 
                               label={normalizeOn20(g.note, g.max_value).toFixed(1)}
                               size="small"

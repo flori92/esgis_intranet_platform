@@ -31,11 +31,20 @@ import {
 const EVALUATION_TYPES = [
   { value: 'presence', label: 'Note de Présence' },
   { value: 'tp', label: 'Travaux Pratiques' },
+  { value: 'cc_final', label: 'Contrôle Continu' },
   { value: 'examen', label: 'Examen Final' },
   { value: 'rattrapage', label: 'Rattrapage' },
   { value: 'cc1', label: 'CC1' },
   { value: 'cc2', label: 'CC2' },
 ];
+
+const COMPUTED_EVALUATION_TYPES = new Set(['cc_final']);
+
+const toOptionalNumber = (value) => {
+  if (value === '' || value === undefined || value === null) return null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+};
 
 /**
  * Page de gestion des notes pour les professeurs
@@ -117,13 +126,18 @@ const GradesManagementPage = () => {
           gradesMap[g.etudiant.id][g.type_evaluation] = {
             id: g.id,
             note: g.note,
-            commentaire: g.commentaire || ''
+            coefficient: g.coefficient || 1,
+            max_value: g.max_value || 20,
+            commentaire: g.commentaire || '',
+            is_published: g.is_published,
+            published_at: g.published_at || null
           };
         });
         setGrades(gradesMap);
 
         // Détecter les colonnes d'évaluation existantes
-        const existingTypes = [...new Set(gradesData.map(g => g.type_evaluation))];
+        const existingTypes = [...new Set(gradesData.map(g => g.type_evaluation))]
+          .filter(type => !COMPUTED_EVALUATION_TYPES.has(type));
         const detectedColumns = existingTypes.map(type => {
           const evalType = EVALUATION_TYPES.find(e => e.value === type);
           const sample = gradesData.find(g => g.type_evaluation === type);
@@ -131,7 +145,7 @@ const GradesManagementPage = () => {
             key: type,
             label: evalType?.label || type,
             coefficient: sample?.coefficient || 1,
-            maxNote: 20
+            maxNote: sample?.max_value || 20
           };
         });
         if (detectedColumns.length > 0) {
@@ -236,6 +250,11 @@ const GradesManagementPage = () => {
    */
   const handleAddColumn = () => {
     if (!newColumnType) return;
+    if (COMPUTED_EVALUATION_TYPES.has(newColumnType)) {
+      setError('Cette évaluation est calculée automatiquement.');
+      return;
+    }
+
     const evalType = EVALUATION_TYPES.find(e => e.value === newColumnType);
     if (!evalType) return;
 
@@ -280,9 +299,13 @@ const GradesManagementPage = () => {
 
     try {
       const gradesToSave = [];
+      const evaluationDate = new Date().toISOString().split('T')[0];
+      const professorProfileId = authState.profile?.id || authState.user?.id;
 
       students.forEach(({ etudiant }) => {
         evaluationColumns.forEach(col => {
+          if (COMPUTED_EVALUATION_TYPES.has(col.key)) return;
+
           const gradeData = grades[etudiant.id]?.[col.key];
           if (gradeData && gradeData.note !== '' && gradeData.note !== undefined) {
             gradesToSave.push({
@@ -292,12 +315,37 @@ const GradesManagementPage = () => {
               type_evaluation: col.key,
               note: gradeData.note,
               coefficient: col.coefficient,
+              max_value: gradeData.max_value || col.maxNote || 20,
               commentaire: gradeData.commentaire || null,
-              date_evaluation: new Date().toISOString().split('T')[0],
-              professeur_id: authState.user?.id
+              date_evaluation: evaluationDate,
+              professeur_id: professorProfileId,
+              ...(gradeData.is_published !== undefined ? { is_published: gradeData.is_published } : {}),
+              ...(gradeData.published_at !== undefined ? { published_at: gradeData.published_at } : {})
             });
           }
         });
+
+        const presenceNote = toOptionalNumber(grades[etudiant.id]?.presence?.note);
+        const tpNote = toOptionalNumber(grades[etudiant.id]?.tp?.note);
+        if (presenceNote !== null || tpNote !== null) {
+          const ccGrade = grades[etudiant.id]?.cc_final || {};
+          const ccTotal = Math.min(20, Math.max(0, (presenceNote || 0) + (tpNote || 0)));
+
+          gradesToSave.push({
+            ...(ccGrade.id ? { id: ccGrade.id } : {}),
+            etudiant_id: etudiant.id,
+            cours_id: selectedCourse,
+            type_evaluation: 'cc_final',
+            note: ccTotal,
+            coefficient: ccGrade.coefficient || 1,
+            max_value: 20,
+            commentaire: ccGrade.commentaire || 'Contrôle continu calculé automatiquement depuis la présence et le TP.',
+            date_evaluation: evaluationDate,
+            professeur_id: professorProfileId,
+            ...(ccGrade.is_published !== undefined ? { is_published: ccGrade.is_published } : {}),
+            ...(ccGrade.published_at !== undefined ? { published_at: ccGrade.published_at } : {})
+          });
+        }
       });
 
       if (gradesToSave.length === 0) {
@@ -332,7 +380,10 @@ const GradesManagementPage = () => {
     setError(null);
 
     try {
-      const evaluationKeys = evaluationColumns.map((column) => column.key);
+      const evaluationKeys = [...new Set([
+        ...evaluationColumns.map((column) => column.key),
+        'cc_final'
+      ])];
       const { error: publishError } = await publishGrades(
         selectedCourse,
         evaluationKeys,
@@ -822,6 +873,7 @@ const GradesManagementPage = () => {
               label="Type d'évaluation"
             >
               {EVALUATION_TYPES
+                .filter(t => !COMPUTED_EVALUATION_TYPES.has(t.value))
                 .filter(t => !evaluationColumns.find(c => c.key === t.value))
                 .map(type => (
                   <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>

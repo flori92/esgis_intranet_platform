@@ -189,7 +189,7 @@ const normalizeGradePayload = async (gradeData, professorIdCache = new Map()) =>
     professorIdCache
   );
 
-  return {
+  const payload = {
     id: gradeData.id || undefined,
     student_id: Number(gradeData.student_id ?? gradeData.etudiant_id),
     course_id: Number(gradeData.course_id ?? gradeData.cours_id),
@@ -202,10 +202,18 @@ const normalizeGradePayload = async (gradeData, professorIdCache = new Map()) =>
     evaluation_date:
       gradeData.evaluation_date ??
       gradeData.date_evaluation ??
-      new Date().toISOString().split('T')[0],
-    is_published: Boolean(gradeData.is_published),
-    published_at: gradeData.published_at || null
+      new Date().toISOString().split('T')[0]
   };
+
+  if (gradeData.is_published !== undefined) {
+    payload.is_published = Boolean(gradeData.is_published);
+  }
+
+  if (gradeData.published_at !== undefined) {
+    payload.published_at = gradeData.published_at || null;
+  }
+
+  return payload;
 };
 
 /**
