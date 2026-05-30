@@ -39,6 +39,7 @@ const EVALUATION_TYPES = [
 ];
 
 const COMPUTED_EVALUATION_TYPES = new Set(['cc_final']);
+const SELECTED_COURSE_STORAGE_PREFIX = 'professor.grades.selectedCourse';
 
 const toOptionalNumber = (value) => {
   if (value === '' || value === undefined || value === null) return null;
@@ -52,6 +53,7 @@ const toOptionalNumber = (value) => {
  */
 const GradesManagementPage = () => {
   const { authState } = useAuth();
+  const selectedCourseStorageKey = `${SELECTED_COURSE_STORAGE_PREFIX}.${authState.profile?.id || authState.user?.id || 'default'}`;
 
   // États principaux
   const [courses, setCourses] = useState([]);
@@ -167,6 +169,44 @@ const GradesManagementPage = () => {
   useEffect(() => {
     loadCourses();
   }, [loadCourses]);
+
+  useEffect(() => {
+    if (courses.length === 0) return;
+
+    const courseExists = (courseId) => (
+      courses.some(course => String(course.id) === String(courseId))
+    );
+
+    if (selectedCourse && courseExists(selectedCourse)) {
+      return;
+    }
+
+    let storedCourse = null;
+    try {
+      storedCourse = window.localStorage.getItem(selectedCourseStorageKey);
+    } catch (storageError) {
+      storedCourse = null;
+    }
+
+    if (storedCourse && courseExists(storedCourse)) {
+      setSelectedCourse(String(storedCourse));
+      return;
+    }
+
+    if (selectedCourse) {
+      setSelectedCourse('');
+    }
+  }, [courses, selectedCourse, selectedCourseStorageKey]);
+
+  useEffect(() => {
+    if (!selectedCourse) return;
+
+    try {
+      window.localStorage.setItem(selectedCourseStorageKey, String(selectedCourse));
+    } catch (storageError) {
+      // Le choix du cours reste fonctionnel même si le navigateur bloque le stockage.
+    }
+  }, [selectedCourse, selectedCourseStorageKey]);
 
   useEffect(() => {
     if (selectedCourse) {
@@ -708,7 +748,7 @@ const GradesManagementPage = () => {
     );
   }
 
-  const selectedCourseData = courses.find(c => c.id === selectedCourse);
+  const selectedCourseData = courses.find(c => String(c.id) === String(selectedCourse));
 
   return (
     <Box sx={{ p: { xs: 1, md: 2 } }}>
@@ -728,11 +768,11 @@ const GradesManagementPage = () => {
               <InputLabel>Sélectionner un cours</InputLabel>
               <Select
                 value={selectedCourse}
-                onChange={(e) => setSelectedCourse(e.target.value)}
+                onChange={(e) => setSelectedCourse(String(e.target.value))}
                 label="Sélectionner un cours"
               >
                 {courses.map(course => (
-                  <MenuItem key={course.id} value={course.id}>
+                  <MenuItem key={course.id} value={String(course.id)}>
                     <Box>
                       <Typography variant="body1" fontWeight="bold">{course.name}</Typography>
                       <Typography variant="caption" color="text.secondary">
