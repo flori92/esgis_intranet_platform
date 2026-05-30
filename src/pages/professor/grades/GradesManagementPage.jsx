@@ -534,7 +534,7 @@ const GradesManagementPage = () => {
             // Calcul spécifique : Présence (10) + TP (10) = CC (20)
             const presenceNote = studentGrades['presence']?.note || 0;
             const tpNote = studentGrades['tp']?.note || 0;
-            const ccTotal = (studentGrades['cc_final']?.note) || (presenceNote + tpNote);
+            const ccTotal = studentGrades['cc_final']?.note ?? (presenceNote + tpNote);
             const mention = getMention(ccTotal);
 
             return (
